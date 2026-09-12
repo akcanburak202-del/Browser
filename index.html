@@ -379,6 +379,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
+const VERSION="1.3", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1492,6 +1493,7 @@ APPS.term={ name:"Terminal", icon:">_", w:640, h:420, desk:true, single:true,
   <b>odak</b>                odak moduna gir
   <b>durum</b>               bugünün özeti
   <b>seri</b>                çalışma serisi
+  <b>surum</b>               sürüm ve cihaz bilgisi
   <b>tema</b>                açık/koyu geçiş
   <b>yedek</b>               JSON dışa aktar
   <b>temizle</b>             ekranı temizle`); break;
@@ -1516,6 +1518,10 @@ açık görev: <b>${DB.tasks.filter(t=>!t.done).length}</b>
 tekrar bekleyen kart: <b>${dueCards().length}</b>
 seri: <b>${streak()} gün</b>`); break; }
         case "seri": out(`🔥 ${streak()} gün`); break;
+        case "surum": out(`StudyOS <b>${VERSION}</b> (${VERSION_DATE})
+kaynak: ${esc(location.href.slice(0,60))}
+depolama: metin ${bytesFmt(storageUsed())} · medya ${bytesFmt(IDB_BYTES)}
+cihaz dosyasına bağlanma: ${canLinkFiles()?"<b>var</b>":"yok"}`); break;
         case "tema": toggleTheme(); out("tema değişti"); break;
         case "yedek": exportJSON(); out(`<span class="ok">yedek indirildi</span>`); break;
         case "temizle": s.log=[]; break;
@@ -1871,6 +1877,11 @@ APPS.glossary={ name:"Sözlük", icon:"📖", w:720, h:560, desk:true, single:tr
 APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
   render(w){
     w.body.innerHTML=`<div class="app"><div class="grow scroll pad col">
+      <div class="card" style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:26px">🎓</span>
+        <div class="grow"><b>StudyOS ${VERSION}</b><div class="sub">${VERSION_DATE} · ${location.protocol.startsWith("http")?"web sürümü":"yerel dosya"}</div></div>
+        <button class="btn sm" data-a="upd">↻ Güncelle</button>
+      </div>
       <div class="card"><div class="h2">Kişisel</div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Adın</span>
           <input class="inp" data-a="name" value="${esc(DB.settings.name)}" placeholder="Örn. Burak" style="width:180px"></div>
@@ -1917,6 +1928,13 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       </div>
     </div></div>`;
     const A=a=>$(`[data-a="${a}"]`,w.body);
+    A("upd").onclick=async()=>{
+      flush();
+      try{ const r=await navigator.serviceWorker?.getRegistration(); if(r){ await r.update(); } }catch(e){}
+      try{ if(window.caches) for(const k of await caches.keys()) if(k!=="studyos-share") await caches.delete(k); }catch(e){}
+      toast("Önbellek temizlendi, yeniden yükleniyor…");
+      setTimeout(()=>location.reload(),900);
+    };
     A("name").oninput=e=>{DB.settings.name=e.target.value;save();};
     A("goal").onchange=e=>{DB.settings.goal=Math.max(5,+e.target.value||120);saveAnd("pomodoro","stats");};
     A("theme").onclick=()=>{toggleTheme();this.render(w);};
