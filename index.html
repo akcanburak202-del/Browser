@@ -390,7 +390,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.5", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.6", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1046,7 +1046,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
           <button class="btn sm" data-a="img" title="Görsel ekle">🖼</button>
           <button class="btn sm" data-a="file" title="Dosyayı içine göm (kopyasını alır)">📎</button>
           <button class="btn sm" data-a="link" title="Cihazdaki dosyaya bağlan (kopya almaz)">🔗</button>
-          <button class="btn sm" data-a="tocards" title="Karta çevir (Soru :: Cevap satırları)">🗂</button>
+          <button class="btn sm" data-a="tocards" title="Karta çevir — “Soru :: Cevap” satırları ve {{c1::boşluk}} kalıbı">🗂</button>
           <button class="btn" data-a="prev">${s.prev?"✏️ Yaz":"👁 Önizle"}</button>
           <button class="btn danger sm" data-a="del">Sil</button>
         </div>
@@ -1127,18 +1127,41 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       else toast("⚠️ Dosya bulunamadı"); });
   }};
 
-/* not içindeki "Soru :: Cevap" satırlarından deste üret */
+/* {{c1::...}} boşluk doldurma. Bir satırda birden çok numara varsa her numara
+   için ayrı kart çıkar; o kartta yalnızca kendi boşluğu gizlenir, diğerleri açık kalır. */
+const CLOZE_RX=/\{\{c(\d+)::([\s\S]*?)\}\}/g;
+const hasCloze=l=>/\{\{c\d+::/.test(l);
+function clozeCards(line){
+  const nums=[...new Set([...line.matchAll(CLOZE_RX)].map(m=>+m[1]))].sort((a,b)=>a-b);
+  if(!nums.length) return [];
+  const acik=line.replace(CLOZE_RX,(m,i,t)=>t).trim();
+  return nums.map(no=>({
+    front: line.replace(CLOZE_RX,(m,i,t)=>+i===no?"[…]":t).trim(),
+    back: acik
+  })).filter(c=>c.front&&c.back&&c.front!==c.back);
+}
+/* not gövdesinden kart çifti çıkar: "Soru :: Cevap" satırları ve {{c1::…}} boşlukları */
+function noteCardPairs(body){
+  const out=[];
+  for(const raw of String(body||"").split("\n")){
+    const l=raw.trim().replace(/^[-*]\s+/,"");
+    if(!l) continue;
+    if(hasCloze(l)){ out.push(...clozeCards(l)); continue; }   /* cloze içinde :: var, önce o bakılır */
+    const i=l.indexOf("::"); if(i<0) continue;
+    const f=l.slice(0,i).trim(), b=l.slice(i+2).trim();
+    if(f&&b) out.push({front:f,back:b});
+  }
+  return out;
+}
 function noteToCards(n){
-  const pairs=n.body.split("\n").map(l=>l.trim()).filter(l=>l.includes("::"))
-    .map(l=>{ const i=l.indexOf("::"); return [l.slice(0,i).replace(/^[-*]\s*/,"").trim(), l.slice(i+2).trim()]; })
-    .filter(([a,b])=>a&&b);
-  if(!pairs.length){ toast('Bu notta "Soru :: Cevap" satırı yok'); return; }
+  const pairs=noteCardPairs(n.body);
+  if(!pairs.length){ toast('Bu notta "Soru :: Cevap" ya da {{c1::…}} satırı yok'); return; }
   const name="Not: "+(n.title||"Adsız");
   let dk=DB.decks.find(d=>d.name===name);
   if(!dk){ dk={id:uid(),name,courseId:n.courseId}; DB.decks.push(dk); }
   let add=0;
-  pairs.forEach(([f,b])=>{ if(DB.cards.some(c=>c.deckId===dk.id&&c.front===f)) return;
-    DB.cards.push({id:uid(),deckId:dk.id,front:f,back:b,ef:2.5,int:0,reps:0,lapses:0,due:today()}); add++; });
+  pairs.forEach(({front,back})=>{ if(DB.cards.some(c=>c.deckId===dk.id&&c.front===front)) return;
+    DB.cards.push({id:uid(),deckId:dk.id,front,back,ef:2.5,int:0,reps:0,lapses:0,due:today()}); add++; });
   save(); rerender("cards"); updateMenubar();
   toast(add?`${add} yeni kart → "${name}"`:"Tüm satırlar zaten kartta");
 }
@@ -1207,8 +1230,28 @@ APPS.tasks={ name:"Görevler", icon:"✅", w:640, h:520, desk:true, single:true,
   }};
 
 /* ---------------- Kartlar (aralıklı tekrar / SM-2) ---------------- */
-function dueCards(deckId){ const t=today();
-  return DB.cards.filter(c=>(!deckId||c.deckId===deckId)&&(!c.due||c.due<=t)); }
+/* Yeni kart = hiç değerlendirilmemiş. sm2() her değerlendirmede "seen" yazar,
+   bu yüzden bilinemeyen bir kart da ikinci kez "yeni" sayılmaz. */
+const isNewCard=c=>!c.seen;
+const NEW_PER_DAY=20;
+function newLimit(){ const v=DB.settings.newPerDay; return v==null?NEW_PER_DAY:Math.max(0,v); }
+function newSeenToday(){ const v=DB.settings.newSeen; return v&&v.date===today()?(v.n||0):0; }
+function markNewSeen(){ DB.settings.newSeen={date:today(),n:newSeenToday()+1}; }
+function newQuota(){ return Math.max(0,newLimit()-newSeenToday()); }
+/* Bekleyen yeni kartlar — kuyruğa alınmayanlar dahil (arayüzde "sınıra ulaşıldı" der) */
+function newWaiting(deckId){ const t=today();
+  return DB.cards.filter(c=>(!deckId||c.deckId===deckId)&&isNewCard(c)&&(!c.due||c.due<=t)).length; }
+/* Vadesi gelen kartlar. Günlük yeni kart kotası GLOBAL harcanır ve DB.cards
+   sırası sabit olduğu için deste deste çağrıldığında da aynı kartlar seçilir. */
+function dueCards(deckId){
+  const t=today(); let kota=newQuota(); const out=[];
+  for(const c of DB.cards){
+    if(c.due&&c.due>t) continue;
+    if(isNewCard(c)){ if(kota<=0) continue; kota--; }
+    out.push(c);
+  }
+  return deckId?out.filter(c=>c.deckId===deckId):out;
+}
 function sm2(card,q){
   if(q<3){ card.reps=0; card.int=1; card.lapses=(card.lapses||0)+1; }
   else{ card.reps=(card.reps||0)+1;
@@ -1238,7 +1281,12 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
           <b class="grow">${esc(DB.decks.find(d=>d.id===s.deck)?.name||"—")}</b>
           <span class="tag">${cards.length} kart</span>
           <span class="tag" style="background:var(--accent);color:#fff">${dueCards(s.deck).length} tekrar</span>
+          ${(()=>{ const bekleyen=newWaiting(s.deck), alinan=dueCards(s.deck).filter(isNewCard).length;
+            return bekleyen>alinan
+              ? `<span class="tag" style="color:var(--warn)" title="Ayarlar → Kartlar'dan değiştirilebilir">${bekleyen-alinan} yeni bekliyor (günlük sınır)</span>`:""; })()}
           <button class="btn pri" data-a="study" ${dueCards(s.deck).length?"":"disabled"}>▶ Çalış</button>
+          <button class="btn sm" data-a="cram" title="Vadesine bakmadan hepsini göster — tekrar programı değişmez"
+            ${cards.length?"":"disabled"}>🔥 Hepsi</button>
           <button class="btn danger sm" data-a="deldeck">Deste sil</button>
         </div>
         <div class="toolbar">
@@ -1274,16 +1322,19 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
       s.pendingImg=null;
       A("f").value="";A("b").value="";saveAnd("cards");$('[data-a="f"]',w.body).focus();};
     A("add").onclick=add; A("b").onkeydown=e=>{if(e.key==="Enter")add();};
-    A("study").onclick=()=>{s.mode="study";s.queue=dueCards(s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
+    A("study").onclick=()=>{s.mode="study";s.cram=false;s.queue=dueCards(s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
+    A("cram").onclick=()=>{s.mode="study";s.cram=true;
+      s.queue=DB.cards.filter(c=>c.deckId===s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
   },
   study(w){
     const s=w.state; const c=DB.cards.find(x=>x.id===s.queue[0]);
     if(!c){ w.body.innerHTML=`<div class="app"><div class="empty"><div style="font-size:46px">🎉</div>
       <b>Tur bitti!</b><br>${s.done} kart tekrar edildi.<br><br>
       <button class="btn pri" data-a="back">Destelere dön</button></div></div>`;
-      $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;this.render(w);}; return; }
+      $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;s.cram=false;this.render(w);}; return; }
     w.body.innerHTML=`<div class="app">
       <div class="toolbar"><button class="btn sm" data-a="back">‹ Geri</button>
+        ${s.cram?`<span class="tag" style="color:var(--warn)">🔥 serbest tekrar — program değişmiyor</span>`:""}
         <span class="grow"></span><span class="sub">kalan ${s.queue.length} · bitti ${s.done}</span></div>
       <div class="flash grow">
         <div>
@@ -1302,8 +1353,12 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
         </div></div></div>`;
     const flip=()=>{s.show=true;this.render(w);};
     $('[data-a="flip"]',w.body).onclick=flip; $('[data-a="flip2"]',w.body)?.addEventListener("click",flip);
-    $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;this.render(w);};
-    const grade=g=>{ sm2(c,g); s.queue.shift(); if(g<3)s.queue.push(c.id); s.done++; s.show=false; save(); this.render(w); updateMenubar(); };
+    $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;s.cram=false;this.render(w);};
+    const grade=g=>{
+      /* serbest tekrarda SM-2 güncellenmez — yoksa tek oturumda program bozulur */
+      if(!s.cram){ if(isNewCard(c)) markNewSeen(); sm2(c,g); }
+      s.queue.shift(); if(g<3)s.queue.push(c.id); s.done++; s.show=false;
+      save(); this.render(w); updateMenubar(); };
     $$("[data-g]",w.body).forEach(b=>b.onclick=()=>grade(+b.dataset.g));
     w.keys=e=>{ if(!s.show&&(e.key===" "||e.key==="Enter")){e.preventDefault();flip();}
       else if(s.show&&["1","2","3","4"].includes(e.key)) grade([0,3,4,5][+e.key-1]); };
@@ -1432,16 +1487,23 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
         ${x.ch.map((c,j)=>`<div class="row" style="margin:4px 0">
           <input type="radio" name="a${i}" ${x.a===j?"checked":""} data-a2="${i}.${j}">
           <input class="inp grow" data-c="${i}.${j}" value="${esc(c)}" placeholder="Şık ${String.fromCharCode(65+j)}"></div>`).join("")}
-        <input class="inp" data-ex="${i}" value="${esc(x.ex||"")}" placeholder="Açıklama (opsiyonel)" style="margin-top:6px">
+        <div class="row" style="margin-top:6px">
+          <input class="inp grow" data-ex="${i}" value="${esc(x.ex||"")}" placeholder="Açıklama (opsiyonel)">
+          <select class="inp" data-tp="${i}" style="width:170px" title="Hangi konu? (zayıf konu istatistiği için)">
+            <option value="">— konu yok —</option>
+            ${topicOptions(q.courseId).map(t=>`<option value="${t.id}" ${x.topicId===t.id?"selected":""}>${esc(t.label)}</option>`).join("")}
+          </select>
+        </div>
       </div>`).join("")||`<div class="empty">Soru ekleyerek başla.</div>`;
     const A=a=>$(`[data-a="${a}"]`,w.body);
     A("back").onclick=()=>{s.mode=null;saveAnd("quiz");};
     A("name").oninput=e=>{q.name=e.target.value;save();};
-    A("course").onchange=e=>{q.courseId=e.target.value;save();};
+    A("course").onchange=e=>{q.courseId=e.target.value;saveAnd("quiz");};   /* konu seçicileri tazelensin */
     A("add").onclick=()=>{q.questions.push({q:"",ch:["","","",""],a:0,ex:""});saveAnd("quiz");};
     $$("[data-dq]",w.body).forEach(b=>b.onclick=()=>{q.questions.splice(+b.dataset.dq,1);saveAnd("quiz");});
     $$("[data-q]",w.body).forEach(i=>i.oninput=()=>{q.questions[+i.dataset.q].q=i.value;save();});
     $$("[data-ex]",w.body).forEach(i=>i.oninput=()=>{q.questions[+i.dataset.ex].ex=i.value;save();});
+    $$("[data-tp]",w.body).forEach(i=>i.onchange=()=>{q.questions[+i.dataset.tp].topicId=i.value||null;save();});
     $$("[data-c]",w.body).forEach(i=>i.oninput=()=>{const[a,b]=i.dataset.c.split(".").map(Number);q.questions[a].ch[b]=i.value;save();});
     $$("[data-a2]",w.body).forEach(i=>i.onchange=()=>{const[a,b]=i.dataset.a2.split(".").map(Number);q.questions[a].a=b;save();});
   },
@@ -1464,7 +1526,14 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
             ${ok?"":`<div class="sub">Doğru: <b>${esc(x.ch[x.a])}</b></div>`}
             ${x.ex?`<div class="sub" style="margin-top:4px">💡 ${esc(x.ex)}</div>`:""}</div>`;}).join("")}</div>
       </div></div>`;
-      if(!s.logged){DB.quizRuns.push({id:uid(),quizId:q.id,date:today(),correct,total:q.questions.length});s.logged=true;save();}
+      if(!s.logged){
+        /* konusu işaretli sorular için doğru/yanlış dökümü — "zayıf konular" bundan çıkar */
+        const topics={};
+        q.questions.forEach((x,i)=>{ if(!x.topicId) return;
+          const a=topics[x.topicId]||(topics[x.topicId]=[0,0]);
+          a[s.answers[i]===x.a?0:1]++; });
+        DB.quizRuns.push({id:uid(),quizId:q.id,date:today(),correct,total:q.questions.length,topics});
+        s.logged=true;save();}
       const A=a=>$(`[data-a="${a}"]`,w.body);
       A("again").onclick=()=>{s.i=0;s.answers=[];s.logged=false;s.locked=false;this.render(w);};
       A("back").onclick=()=>{s.mode=null;s.logged=false;this.render(w);};
@@ -1714,6 +1783,18 @@ APPS.stats={ name:"İstatistik", icon:"📊", w:760, h:600, desk:true, single:tr
               <div class="meter" style="margin-top:5px"><i style="width:${(r.m/mx*100).toFixed(1)}%;background:${ccolor(r.t.courseId)}"></i></div>
             </div>`).join("")}</div>`;
         })()}
+        ${(()=>{ const zayif=weakTopics();
+          if(!zayif.length) return DB.quizRuns.some(r=>r.topics&&Object.keys(r.topics).length) ? "" :
+            `<div class="card" style="margin-top:12px"><div class="h2">Zayıf konular</div>
+              <div class="sub" style="margin-top:6px">Quiz sorularına konu işaretlersen (Quiz → ✏️ → soru altındaki
+                konu seçici) burada hangi konuda yanlış yaptığın çıkar.</div></div>`;
+          return `<div class="card" style="margin-top:12px"><div class="h2">Zayıf konular</div>
+            <div class="sub" style="margin-top:4px">Quiz denemelerindeki yanlış oranına göre</div>
+            ${zayif.map(z=>`<div style="margin-top:9px">
+              <div class="row"><span class="grow">${esc(z.ad)}</span>
+                <span class="sub">${esc(cname(z.courseId))} · ${z.yanlis}/${z.toplam} yanlış · %${Math.round(z.oran*100)}</span></div>
+              <div class="meter" style="margin-top:5px"><i style="width:${(z.oran*100).toFixed(0)}%;background:var(--bad)"></i></div>
+            </div>`).join("")}</div>`; })()}
         <div class="card" style="margin-top:12px">
           <div class="h2">Günlük döküm</div>
           <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px">
@@ -1725,6 +1806,22 @@ APPS.stats={ name:"İstatistik", icon:"📊", w:760, h:600, desk:true, single:tr
         </div>
       </div></div>`;
   }, onResize(w){ this.render(w); }};
+/* Quiz denemelerinden konu bazlı yanlış oranı. Soruya konu işaretlenmemişse
+   hesaba girmez; az denenmiş konular gürültü yapmasın diye minAdet eşiği var. */
+function weakTopics(minAdet=3,limit=5){
+  const acc={};
+  for(const r of DB.quizRuns) for(const [tid,ar] of Object.entries(r.topics||{})){
+    const a=acc[tid]||(acc[tid]={d:0,y:0}); a.d+=ar[0]||0; a.y+=ar[1]||0;
+  }
+  return Object.entries(acc)
+    .map(([id,a])=>({id,ad:DB.topics.find(t=>t.id===id)?.name||"—",
+      courseId:DB.topics.find(t=>t.id===id)?.courseId,
+      dogru:a.d,yanlis:a.y,toplam:a.d+a.y,oran:a.y/Math.max(1,a.d+a.y)}))
+    .filter(x=>x.toplam>=minAdet&&x.yanlis>0)
+    .sort((a,b)=>b.oran-a.oran||b.toplam-a.toplam)
+    .slice(0,limit);
+}
+
 /* ---------------- Günlük plan — "Bugün ne çalışayım" ----------------
    Kural tabanlı ve açıklanabilir: her satır neden orada olduğunu yazar.
    Türetilmiştir, veriye yazılmaz — yalnızca "bugün yapıldı" işaretleri saklanır
@@ -1771,7 +1868,7 @@ function dailyPlan(){
     const gun=Math.max(0,dayDiff(t,e.date));
     for(const k of DB.topics.filter(k=>k.courseId===e.courseId&&k.status!=="known"))
       koy(k, (1/Math.max(1,gun))*(k.status==="new"?1.2:1),
-        gun===0?`${e.name} bugün`:`${e.name} sınavına ${gun} gün`);
+        gun===0?`${e.name} · bugün!`:`${e.name} · ${gun} gün kaldı`);   /* sınav adı zaten "sınav" içerebilir */
   }
   for(const k of DB.topics){
     if(k.status!=="learning"||sinavliDers.has(k.courseId)||sonHafta.has(k.id)) continue;
@@ -2435,6 +2532,10 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
           <input class="inp" data-a="name" value="${esc(DB.settings.name)}" placeholder="Örn. Burak" style="width:180px"></div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Günlük hedef (dk)</span>
           <input class="inp" type="number" data-a="goal" value="${DB.settings.goal}" style="width:100px"></div>
+        <div class="row" style="margin-top:8px"><span class="grow sub">Günlük yeni kart sınırı</span>
+          <input class="inp" type="number" min="0" data-a="newpd" value="${newLimit()}" style="width:100px"></div>
+        <div class="sub" style="margin-top:4px;font-size:11.5px">Bugün ${newSeenToday()} yeni kart gördün.
+          Sınır, bir anda 200 kart eklenince kuyruğun patlamasını önler; 0 = hiç yeni kart verme.</div>
       </div>
       <div class="card"><div class="h2">Görünüm</div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Tema</span>
@@ -2497,6 +2598,8 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
     };
     A("name").oninput=e=>{DB.settings.name=e.target.value;save();};
     A("goal").onchange=e=>{DB.settings.goal=Math.max(5,+e.target.value||120);saveAnd("pomodoro","stats");};
+    A("newpd").onchange=e=>{DB.settings.newPerDay=Math.max(0,Math.round(+e.target.value)||0);
+      saveAnd("cards","settings"); updateMenubar();};
     A("theme").onclick=()=>{toggleTheme();this.render(w);};
     A("wg").onclick=()=>{DB.settings.widgets=!DB.settings.widgets;save();paintWidgets();this.render(w);};
     A("auto").onchange=e=>{DB.settings.autoOpen=e.target.value;save();toast(e.target.value?"Açılışta bu uygulama açılacak":"Açılışta uygulama açılmayacak");};

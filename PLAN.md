@@ -205,19 +205,38 @@ sınav) ve denge noktası teste bağlandı, kazara kaymasın.
 
 ---
 
-## 4. parti — Öğrenme motoru  (hedef sürüm 2.6)
+## 4. parti — Öğrenme motoru  (sürüm 2.6) ✅ BİTTİ
 
-- ☐ **Günlük yeni kart sınırı.** `DB.settings.newPerDay` (varsayılan 20). `reps===0` yeni sayılır;
+- ☑ **Günlük yeni kart sınırı.** `DB.settings.newPerDay` (varsayılan 20). `reps===0` yeni sayılır;
   kuyruk kurulurken sınırlanır, sayaç `DB.settings.newSeen={date,n}`. 200 kart eklenince
   kuyruğun patlaması bununla biter.
-- ☐ **Cram modu.** Deste ekranında "🔥 Hepsini çalış (vadesiz)". **SM-2 güncellemesi yapmaz** —
+- ☑ **Cram modu.** Deste ekranında "🔥 Hepsini çalış (vadesiz)". **SM-2 güncellemesi yapmaz** —
   yoksa tekrar programı bozulur. Yalnızca gösterir.
-- ☐ **Boşluk doldurma `{{c1::…}}`.** `noteToCards` (`index.html:898`) genişletilir; mevcut
+- ☑ **Boşluk doldurma `{{c1::…}}`.** `noteToCards` (`index.html:898`) genişletilir; mevcut
   `Soru :: Cevap` dönüştürücüsünün yanına. Her `c<n>` numarası için bir kart; `front` metinde
   hedef `[…]` ile gizlenir, `back` açık hali.
-- ☐ **Quiz sorusuna `topicId`.** Soru düzenleyicide konu seçici; `quizRuns`'a `wrongTopics:[]`.
-  İstatistik'e "Zayıf konular" listesi (yanlış oranına göre). Bugün "hangi konuda yanlış
-  yapıyorum" verisi hiç yok.
+- ☑ **Quiz sorusuna `topicId`.** Soru düzenleyicide konu seçici;
+  `quizRuns[].topics={<topicId>:[doğru,yanlış]}` — planda `wrongTopics:[]` denmişti, doğru/yanlış
+  ikilisi tutmak yanlış *oranı* hesaplamayı mümkün kıldı; yalnız yanlış listesi yetmezdi.
+  İstatistik'e "Zayıf konular" listesi eklendi; hiç konu işaretlenmemişse nasıl işaretleneceğini anlatıyor.
+
+### 4. parti sonucu ✅
+`node tests/unit.mjs` (4 zaman dilimi × 111 kontrol) ve `node tests/smoke.mjs` (73 kontrol) geçiyor ·
+`VERSION=2.6` · `sw.js` `C="studyos-v11"`
+
+**Tasarım kararı:** "yeni kart" ölçütü `reps===0` değil `!c.seen` oldu. `sm2()` bilinemeyen kartta
+`reps`'i sıfırladığı için `reps===0` ölçütüyle o kart her gün yeniden "yeni" sayılır, kotayı
+sonsuza kadar yerdi.
+
+**Kota global harcanıyor:** `dueCards(deckId)` önce tüm kartları gezip kotayı düşüyor, sonra desteye
+süzüyor. Deste deste çağrılsa da aynı kartlar seçiliyor, rozetlerin toplamı genel toplamı aşmıyor.
+
+**Görsel kontrolde yakalanan metin kusuru:** plan satırı "Matematik deneme sınavı **sınavına** 14 gün"
+yazıyordu. `${ad} · ${gun} gün kaldı` biçimine geçildi, iki test bunu sabitliyor.
+
+**Kapsam dışı:** zayıf konuların günlük plana ağırlık olarak beslenmesi. Doğal bir sonraki adım ama
+plan ağırlıkları teste bağlı; ayrı bir iş olarak konuşulmalı.
+
 
 ---
 

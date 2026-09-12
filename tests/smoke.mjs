@@ -251,7 +251,7 @@ await p2.waitForTimeout(300);
 const wg = () => p2.evaluate(() => document.querySelector("#widgets").textContent);
 check("plan widget'ı çiziliyor", (await wg()).includes("BUGÜN NE ÇALIŞAYIM"));
 check("plan satırı konuyu ve gerekçesini gösteriyor",
-  (await wg()).includes("Hücre bölünmesi") && (await wg()).includes("Bio yazılı sınavına 3 gün"));
+  (await wg()).includes("Hücre bölünmesi") && (await wg()).includes("Bio yazılı · 3 gün kaldı"));
 
 /* ▶ kronometreyi o konu için başlatıyor */
 await p2.evaluate(() => document.querySelector("[data-plg]").click());
@@ -296,6 +296,92 @@ await p2.evaluate(() => document.querySelector("[data-plg]").click());
 await p2.waitForTimeout(400);
 check("plandan kart turu başlıyor",
   await p2.evaluate(() => [...WINS.values()].some(w => w.appId === "cards" && w.state.mode === "study")));
+
+/* ---------- kart ve quiz iyileştirmeleri (sürüm 2.6) ---------- */
+await p2.goto(URL); await p2.waitForTimeout(700);
+
+/* nottan boşluk doldurma kartı üretiliyor */
+const cloze = await p2.evaluate(() => {
+  DB.courses = [{ id: "k1", name: "Tarih", color: "#eb6834" }];
+  DB.decks = []; DB.cards = []; DB.notes = [{ id: "nc", courseId: "k1", title: "Cloze",
+    body: "Başkent {{c1::Ankara}} oldu\nKurtuluş :: 1923\n{{c1::Atatürk}} ve {{c2::İnönü}}",
+    created: today(), updated: today() }];
+  saveNow();
+  noteToCards(DB.notes[0]);
+  return DB.cards.map(c => c.front);
+});
+check("nottan hem :: hem {{c1::}} kartı çıkıyor", cloze.length === 4, cloze.join(" | "));
+check("boşluk doldurma kartı gizleniyor", cloze.includes("Başkent […] oldu"));
+check("iki numaralı satır iki kart veriyor",
+  cloze.includes("[…] ve İnönü") && cloze.includes("Atatürk ve […]"));
+
+/* günlük yeni kart sınırı kuyruğu kırpıyor */
+const sinir = await p2.evaluate(() => {
+  DB.decks = [{ id: "d1", name: "Deste", courseId: "k1" }];
+  DB.cards = [...Array(30)].map((_, i) => ({ id: "s" + i, deckId: "d1", front: "ö" + i, back: "a" + i,
+    ef: 2.5, int: 0, reps: 0, lapses: 0, due: today() }));
+  DB.settings.newPerDay = 4; DB.settings.newSeen = null; saveNow();
+  const w = openApp("cards"); w.state.deck = "d1"; APPS.cards.render(w);
+  return { kuyruk: dueCards("d1").length, bekleyen: newWaiting("d1"),
+    uyari: w.body.textContent.includes("yeni bekliyor") };
+});
+check("yeni kart sınırı kuyruğu kırpıyor", sinir.kuyruk === 4 && sinir.bekleyen === 30);
+check("sınıra takılan kartlar arayüzde söyleniyor", sinir.uyari === true);
+
+/* değerlendirme kotayı harcıyor */
+const kota = await p2.evaluate(() => {
+  const w = [...WINS.values()].find(x => x.appId === "cards");
+  w.state.mode = "study"; w.state.cram = false;
+  w.state.queue = dueCards("d1").map(c => c.id); w.state.show = false; w.state.done = 0;
+  APPS.cards.render(w);
+  w.body.querySelector('[data-a="flip"]').click();
+  w.body.querySelector('[data-g="4"]').click();
+  return { gorulen: newSeenToday(), kalan: newQuota(), kart: DB.cards[0].seen === today() };
+});
+check("değerlendirilen yeni kart kotadan düşüyor",
+  kota.gorulen === 1 && kota.kalan === 3 && kota.kart === true);
+
+/* serbest tekrar (cram) SM-2'yi değiştirmiyor */
+const cram = await p2.evaluate(() => {
+  const c = DB.cards.find(x => x.id === "s9");
+  c.seen = addDays(today(), -10); c.reps = 4; c.int = 30; c.ef = 2.5; c.due = addDays(today(), 20);
+  const once = { due: c.due, int: c.int, reps: c.reps, ef: c.ef };
+  const w = [...WINS.values()].find(x => x.appId === "cards");
+  w.state.mode = "study"; w.state.cram = true; w.state.queue = ["s9"]; w.state.show = false; w.state.done = 0;
+  APPS.cards.render(w);
+  const bant = w.body.textContent.includes("serbest tekrar");
+  w.body.querySelector('[data-a="flip"]').click();
+  w.body.querySelector('[data-g="5"]').click();
+  const c2 = DB.cards.find(x => x.id === "s9");
+  return { bant, degismedi: c2.due === once.due && c2.int === once.int && c2.reps === once.reps && c2.ef === once.ef };
+});
+check("serbest tekrar bandı görünüyor", cram.bant === true);
+check("serbest tekrar SM-2 programını değiştirmiyor", cram.degismedi === true);
+
+/* quiz sorusuna konu seçici + zayıf konu istatistiği */
+const zayif = await p2.evaluate(() => {
+  DB.topics = [{ id: "t1", courseId: "k1", parentId: null, name: "Kurtuluş Savaşı", status: "learning" }];
+  DB.quizzes = [{ id: "q1", name: "Test", courseId: "k1", questions: [
+    { q: "s1", ch: ["a", "b", "c", "d"], a: 0, ex: "", topicId: "t1" },
+    { q: "s2", ch: ["a", "b", "c", "d"], a: 1, ex: "", topicId: "t1" },
+    { q: "s3", ch: ["a", "b", "c", "d"], a: 2, ex: "", topicId: "t1" }] }];
+  DB.quizRuns = []; saveNow();
+  const w = openApp("quiz");
+  w.state.quiz = "q1"; w.state.mode = "edit"; APPS.quiz.render(w);
+  const secici = w.body.querySelectorAll("[data-tp]").length;
+  /* üçünü de yanlış cevapla */
+  w.state.mode = "run"; w.state.i = 3; w.state.answers = [3, 3, 3]; w.state.logged = false;
+  APPS.quiz.render(w);
+  const r = DB.quizRuns[0];
+  return { secici, dokum: r.topics, zayif: weakTopics().map(z => z.ad + " " + z.yanlis + "/" + z.toplam) };
+});
+check("her soruda konu seçici var", zayif.secici === 3);
+check("deneme kaydı konu dökümü tutuyor", JSON.stringify(zayif.dokum) === JSON.stringify({ t1: [0, 3] }));
+check("zayıf konular hesaplanıyor", zayif.zayif.join() === "Kurtuluş Savaşı 3/3", zayif.zayif.join());
+await p2.evaluate(() => { const w = openApp("stats"); APPS.stats.render(w); });
+await p2.waitForTimeout(300);
+check("zayıf konular İstatistik'te görünüyor",
+  await p2.evaluate(() => [...WINS.values()].find(w => w.appId === "stats").body.textContent.includes("Zayıf konular")));
 
 check("veri güvenliği bölümünde konsol hatası yok", errs2.length === 0, errs2.slice(0, 3).join(" | "));
 

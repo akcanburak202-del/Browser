@@ -39,6 +39,8 @@ const kaynak = bloklar.slice(0, 3).join("\n") + `
 globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueCards, minutesByDay,
   toTrash, trimTrash, restoreTrash, dropTrash, trashRefs, COP_GUN, COP_BAYT,
   dailyPlan, planDone, planToggle, PLAN_BLOK, PLAN_SATIR, PLAN_IHMAL,
+  isNewCard, newLimit, newQuota, newSeenToday, newWaiting, NEW_PER_DAY,
+  clozeCards, noteCardPairs, weakTopics,
   setDB: v => { DB = v; }, getDB: () => DB };`;
 
 const bosDugum = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {} },
@@ -210,6 +212,93 @@ es("çöp: destedeki kartların görselleri bulunuyor",
   T.trashRefs({ type: "deck", data: { cards: [{ img: "idb:k1" }, {}, { img: "idb:k2" }] } }), ["idb:k1", "idb:k2"]);
 es("çöp: görevde görsel yok", T.trashRefs({ type: "task", data: { title: "x" } }), []);
 
+/* ---------- günlük yeni kart sınırı ---------- */
+const kartDB = (kartlar, ayar = {}) => ({ settings: { goal: 120, ...ayar }, trash: [], notes: [],
+  decks: [], cards: kartlar, tasks: [], sessions: [], topics: [], courses: [], exams: [],
+  quizzes: [], quizRuns: [], terms: [] });
+const tazeKart = (id, deckId = "d1") => ({ id, deckId, front: id, back: id, ef: 2.5, int: 0, reps: 0, lapses: 0, due: bugun });
+
+es("yeni kart: hiç değerlendirilmemiş kart yenidir", T.isNewCard({ id: "a" }), true);
+es("yeni kart: değerlendirilmiş kart yeni değildir", T.isNewCard({ id: "a", seen: bugun }), false);
+es("yeni kart: bilinemeyip reps sıfırlanan kart yine yeni değildir",
+  T.isNewCard({ id: "a", reps: 0, seen: bugun }), false);
+
+T.setDB(kartDB([...Array(30)].map((_, i) => tazeKart("y" + i))));
+es("sınır: varsayılan günlük yeni kart sayısı", T.newLimit(), T.NEW_PER_DAY);
+es("sınır: kuyruk günlük sınıra kırpılır", T.dueCards().length, T.NEW_PER_DAY);
+es("sınır: bekleyen yeni kart sayısı tam sayılır", T.newWaiting(), 30);
+
+T.setDB(kartDB([...Array(30)].map((_, i) => tazeKart("y" + i)), { newPerDay: 5 }));
+es("sınır: ayardan okunur", T.dueCards().length, 5);
+T.setDB(kartDB([...Array(30)].map((_, i) => tazeKart("y" + i)),
+  { newPerDay: 5, newSeen: { date: bugun, n: 3 } }));
+es("sınır: bugün görülenler kotadan düşer", T.dueCards().length, 2);
+T.setDB(kartDB([...Array(30)].map((_, i) => tazeKart("y" + i)),
+  { newPerDay: 5, newSeen: { date: T.addDays(bugun, -1), n: 5 } }));
+es("sınır: dünkü sayaç bugünü etkilemez", T.dueCards().length, 5);
+
+/* sınır 0 olsa da vadesi gelen eski kartlar gelmeli */
+T.setDB(kartDB([
+  ...[...Array(5)].map((_, i) => tazeKart("y" + i)),
+  { id: "e1", deckId: "d1", due: bugun, seen: T.addDays(bugun, -3), reps: 2 },
+  { id: "e2", deckId: "d1", due: T.addDays(bugun, -1), seen: T.addDays(bugun, -5), reps: 3 },
+  { id: "e3", deckId: "d1", due: T.addDays(bugun, 4), seen: bugun, reps: 4 },
+], { newPerDay: 0 }));
+es("sınır: 0'da yeni kart verilmez, tekrar kartları gelir",
+  T.dueCards().map(c => c.id), ["e1", "e2"]);
+
+/* kota global harcanır: deste deste toplam, genel toplamla aynı olmalı */
+T.setDB(kartDB([
+  ...[...Array(8)].map((_, i) => tazeKart("a" + i, "dA")),
+  ...[...Array(8)].map((_, i) => tazeKart("b" + i, "dB")),
+], { newPerDay: 6 }));
+es("sınır: kota global, deste toplamı genel toplamı aşmaz",
+  T.dueCards("dA").length + T.dueCards("dB").length, T.dueCards().length);
+es("sınır: kota ilk gelen desteye harcanır", T.dueCards("dA").length, 6);
+
+/* ---------- boşluk doldurma ---------- */
+es("cloze: tek boşluk",
+  T.clozeCards("Hücrenin enerji merkezi {{c1::mitokondri}}dir."),
+  [{ front: "Hücrenin enerji merkezi […]dir.", back: "Hücrenin enerji merkezi mitokondridir." }]);
+es("cloze: iki numara iki kart, diğeri açık kalır",
+  T.clozeCards("{{c1::Ankara}} {{c2::1923}}'te başkent oldu.").map(c => c.front),
+  ["[…] 1923'te başkent oldu.", "Ankara […]'te başkent oldu."]);
+es("cloze: aynı numara birden çok yerde tek kart",
+  T.clozeCards("{{c1::a}} ve {{c1::b}}").map(c => c.front), ["[…] ve […]"]);
+es("cloze: boşluk yoksa kart yok", T.clozeCards("düz metin"), []);
+
+es("kart çıkarma: Soru :: Cevap",
+  T.noteCardPairs("Türev nedir :: Anlık değişim oranı"),
+  [{ front: "Türev nedir", back: "Anlık değişim oranı" }]);
+es("kart çıkarma: liste imi kırpılır",
+  T.noteCardPairs("- Türev :: Değişim").map(c => c.front), ["Türev"]);
+es("kart çıkarma: cloze satırı Soru::Cevap sanılmaz",
+  T.noteCardPairs("Başkent {{c1::Ankara}}"),
+  [{ front: "Başkent […]", back: "Başkent Ankara" }]);
+es("kart çıkarma: ikisi bir arada",
+  T.noteCardPairs("Türev :: Değişim\nboş satır yok\nBaşkent {{c1::Ankara}}\n\n- Hız :: Yol/zaman").map(c => c.front),
+  ["Türev", "Başkent […]", "Hız"]);
+
+/* ---------- zayıf konular ---------- */
+T.setDB({ ...kartDB([]), topics: [
+    { id: "t1", courseId: "k1", name: "Türev" },
+    { id: "t2", courseId: "k1", name: "İntegral" },
+    { id: "t3", courseId: "k1", name: "Limit" }],
+  courses: [{ id: "k1", name: "Matematik" }],
+  quizRuns: [
+    { id: "r1", topics: { t1: [1, 3], t2: [4, 0], t3: [1, 1] } },
+    { id: "r2", topics: { t1: [0, 2], t2: [2, 1] } }] });
+let zy = T.weakTopics();
+es("zayıf konu: en yüksek yanlış oranı başta", zy.map(z => z.ad), ["Türev", "İntegral"]);
+es("zayıf konu: denemeler toplanıyor", [zy[0].dogru, zy[0].yanlis], [1, 5]);
+es("zayıf konu: az denenen konu elenir (t3 yalnızca 2 soru)", zy.some(z => z.ad === "Limit"), false);
+es("zayıf konu: eşik düşürülünce görünür", T.weakTopics(2).map(z => z.ad), ["Türev", "Limit", "İntegral"]);
+es("zayıf konu: hiç yanlışı olmayan listeye girmez",
+  T.weakTopics(1).some(z => z.yanlis === 0), false);
+es("zayıf konu: sınır uygulanıyor", T.weakTopics(1, 1).length, 1);
+T.setDB({ ...kartDB([]), quizRuns: [{ id: "r1", correct: 3, total: 4 }] });
+es("zayıf konu: konu işaretlenmemişse boş", T.weakTopics(), []);
+
 /* ---------- günlük plan ---------- */
 const planDB = (x = {}) => ({ settings: { goal: 120 }, trash: [], notes: [], decks: [],
   cards: [], tasks: [], sessions: [], topics: [], courses: [], exams: [], quizzes: [], terms: [], ...x });
@@ -248,7 +337,16 @@ T.setDB(planDB({
            { id: "t2", courseId: "k2", name: "Osmanlı", status: "learning" }] }));
 pl = T.dailyPlan();
 es("plan: yakın sınavın konusu önce", pl.map(r => r.baslik), ["Osmanlı", "Hücre"]);
-es("plan: gerekçe sınavı ve kalan günü söylüyor", pl[0].neden, "Tarih sınavına 2 gün");
+es("plan: gerekçe sınavı ve kalan günü söylüyor", pl[0].neden, "Tarih · 2 gün kaldı");
+/* sınav adı "sınav" içerdiğinde metin tekrarlanmamalı */
+T.setDB(planDB({ courses: [{ id: "k1", name: "Mat" }],
+  exams: [{ id: "s1", name: "Matematik deneme sınavı", date: T.addDays(bugun, 5), courseId: "k1" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Türev", status: "learning" }] }));
+es("plan: sınav adı tekrarlanmıyor", T.dailyPlan()[0].neden, "Matematik deneme sınavı · 5 gün kaldı");
+T.setDB(planDB({ courses: [{ id: "k1", name: "Mat" }],
+  exams: [{ id: "s1", name: "Yazılı", date: bugun, courseId: "k1" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Türev", status: "learning" }] }));
+es("plan: bugünkü sınav ayrı yazılıyor", T.dailyPlan()[0].neden, "Yazılı · bugün!");
 es("plan: satır başlatılabilir bilgiyi taşıyor", [pl[0].tip, pl[0].courseId, pl[0].topicId], ["konu", "k2", "t2"]);
 
 /* "biliyorum" konular plana girmez */
