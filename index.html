@@ -386,7 +386,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="1.8", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="1.9", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1716,6 +1716,23 @@ async function renderPdf(file,box,info){
   }
   if(doc.numPages>max) box.appendChild(el("div","sub","… ilk "+max+" sayfa gösterildi"));
 }
+/* Dosyayı cihazdaki uygulamalara ver: Android'in "aç/paylaş" sayfası
+   açılır ve dosya seçtiğin uygulamaya gider — indirme yapılmaz.
+   Paylaşım desteklenmiyorsa (masaüstü) yeni sekmede açmaya düşer. */
+async function openElsewhere(file,name){
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:name||file.name});
+      return true;
+    }
+  }catch(e){ if(e&&e.name==="AbortError") return true; toast("Cihazda açılamadı"); }
+  const u=URL.createObjectURL(file);
+  const win=window.open(u,"_blank");
+  if(!win) toast("Tarayıcı yeni sekmeyi engelledi");
+  setTimeout(()=>URL.revokeObjectURL(u),60000);
+  return false;
+}
+const canOpenElsewhere=f=>{ try{ return !!(navigator.canShare&&navigator.canShare({files:[f]})); }catch(e){ return false; } };
 function openViewer(file,name){
   const w=openApp("viewer",{state:{file,name:name||file.name||"dosya",type:file.type||"",size:file.size}});
   return w;
@@ -1741,10 +1758,10 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
     w.body.innerHTML=`<div class="app">
       <div class="toolbar"><b class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</b>
         <span class="tag">${s.size?bytesFmt(s.size):""}</span>
-        <button class="btn sm" data-a="new">↗ Tarayıcıda aç</button>
+        <button class="btn sm" data-a="new" title="${canOpenElsewhere(s.file)?"Cihazındaki uygulamalarla aç":"Yeni sekmede aç"}">${canOpenElsewhere(s.file)?"📤 Cihazda aç":"↗ Tarayıcıda aç"}</button>
         <button class="btn sm" data-a="dl">⬇ İndir</button></div>
       <div class="grow" style="position:relative;min-height:0">${body}</div></div>`;
-    $('[data-a="new"]',w.body).onclick=()=>window.open(s.url,"_blank");
+    $('[data-a="new"]',w.body).onclick=()=>openElsewhere(s.file,s.name);
     $('[data-a="dl"]',w.body).onclick=()=>{ const a=el("a"); a.href=s.url; a.download=s.name;
       document.body.appendChild(a); a.click(); a.remove(); };
     if(isTxt) s.file.text().then(x=>{ const n=$('[data-a="txt"]',w.body); if(n) n.textContent=x.slice(0,200000); });
@@ -1754,7 +1771,7 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
         box.innerHTML=`<div class="empty"><div style="font-size:40px">📕</div>
           <b>PDF uygulama içinde açılamadı</b><br>
           <span class="sub">Görüntüleyici bileşeni yüklenemedi (${esc(String(err&&err.message||err).slice(0,60))}).</span><br><br>
-          <span class="sub">⬇ İndir ile cihazının PDF uygulamasında açabilirsin.</span></div>`;
+          <span class="sub">📤 Cihazda aç ile PDF uygulamana gönderebilirsin.</span></div>`;
       });
     }
   },
