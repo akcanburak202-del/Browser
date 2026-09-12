@@ -63,6 +63,9 @@ Ayrıca: **masaüstü widget'ları** (bugünkü hedef, tekrar kuyruğu, sınav g
 
 ## Dosyalar
 
+- `CLAUDE.md` — proje durumu, mimari ve devam notları (yeni bir sohbete başlarken önce bunu oku)
+- `tests/smoke.mjs` — `node tests/smoke.mjs` ile çalışan duman testi
+
 - `index.html` — uygulamanın tamamı (tek başına çalışır)
 - `vendor/pdf.min.js`, `vendor/pdf.worker.min.js` — [pdf.js](https://mozilla.github.io/pdf.js/) (Mozilla, Apache-2.0). PDF'leri uygulama içinde göstermek için; yalnızca bir PDF açıldığında yüklenir. Tarayıcısında yerleşik PDF görüntüleyici olmayan cihazlar için gerekli
 

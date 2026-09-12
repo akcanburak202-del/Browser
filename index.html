@@ -386,7 +386,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.0", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.1", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -423,7 +423,7 @@ function load(){
   save();
 }
 function blank(){
-  return {v:2, terms:[], settings:{theme:"dark", wall:"mesh", name:"", pomo:25, brk:5, goal:120, widgets:true},
+  return {v:2, terms:[], settings:{theme:"dark", wall:"mesh", name:"", pomo:25, brk:5, goal:120, widgets:true, autoOpen:""},
     courses:[], notes:[], decks:[], cards:[], tasks:[], sessions:[], topics:[],
     quizzes:[], quizRuns:[], events:[], journal:[], exams:[], files:[]};
 }
@@ -916,10 +916,11 @@ APPS.tasks={ name:"Görevler", icon:"✅", w:640, h:520, desk:true, single:true,
     const t=today();
     const list=all.filter(x=> s.filter==="all"||(s.filter==="open"&&!x.done)||(s.filter==="today"&&!x.done&&x.due&&x.due<=t)||(s.filter==="done"&&x.done));
     w.body.innerHTML=`<div class="app">
-      <div class="toolbar">
-        <input class="inp grow" data-a="new" placeholder="Yeni görev yaz, Enter'a bas…">
-        <select class="inp" data-a="nc" style="width:120px">${DB.courses.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
-      </div>
+      <form class="toolbar" data-a="form" onsubmit="return false">
+        <input class="inp grow" data-a="new" placeholder="Yeni görev…" enterkeyhint="done" autocomplete="off">
+        ${DB.courses.length?`<select class="inp" data-a="nc" style="width:120px">${DB.courses.map(c=>`<option value="${c.id}" ${DB.settings.lastCourse===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>`:""}
+        <button class="btn pri" data-a="add" type="submit">+ Ekle</button>
+      </form>
       <div class="toolbar">
         ${[["open","Açık"],["today","Bugün"],["all","Hepsi"],["done","Bitti"]].map(([k,l])=>
           `<button class="btn sm ${s.filter===k?"pri":""}" data-f="${k}">${l}</button>`).join("")}
@@ -950,13 +951,21 @@ APPS.tasks={ name:"Görevler", icon:"✅", w:640, h:520, desk:true, single:true,
     $$("[data-s]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.s);
       Pomo.start(x.courseId,x.title); openApp("pomodoro"); });
     const inp=$('[data-a="new"]',w.body);
-    inp.onkeydown=e=>{ if(e.key!=="Enter"||!inp.value.trim())return;
-      let title=inp.value.trim(), due=null, pri=1;
+    const addTask=()=>{
+      let title=inp.value.trim(); if(!title){ inp.focus(); return; }
+      let due=null, pri=1;
       if(/!$/.test(title)){pri=2;title=title.replace(/!+$/,"").trim();}
       if(/\bbugün\b/i.test(title)){due=today();title=title.replace(/\bbugün\b/i,"").trim();}
       if(/\byarın\b/i.test(title)){due=addDays(today(),1);title=title.replace(/\byarın\b/i,"").trim();}
-      DB.tasks.push({id:uid(),courseId:$('[data-a="nc"]',w.body).value,title,done:false,pri,due,created:today()});
-      inp.value=""; saveAnd("tasks"); $('[data-a="new"]',w.body).focus(); };
+      const sel=$('[data-a="nc"]',w.body);
+      if(sel) DB.settings.lastCourse=sel.value;
+      DB.tasks.push({id:uid(),courseId:sel?sel.value:(DB.courses[0]?.id||""),title,done:false,pri,due,created:today()});
+      inp.value=""; saveAnd("tasks");
+      const again=$('[data-a="new"]',w.body); if(again) again.focus();
+    };
+    $('[data-a="form"]',w.body).addEventListener("submit",e=>{ e.preventDefault(); addTask(); });
+    $('[data-a="add"]',w.body).onclick=e=>{ e.preventDefault(); addTask(); };
+    inp.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); addTask(); } };
   }};
 
 /* ---------------- Kartlar (aralıklı tekrar / SM-2) ---------------- */
@@ -1441,6 +1450,20 @@ APPS.stats={ name:"İstatistik", icon:"📊", w:760, h:600, desk:true, single:tr
             <div class="meter" style="margin-top:5px"><i style="width:${(x.m/totalAll*100).toFixed(1)}%;background:${x.c.color}"></i></div>
           </div>`).join("")||`<div class="empty">Henüz veri yok</div>`}
         </div>
+        ${(()=>{
+          const byTopic={};
+          DB.sessions.filter(x=>x.topicId).forEach(x=>{ byTopic[x.topicId]=(byTopic[x.topicId]||0)+x.min; });
+          const rows=Object.entries(byTopic).map(([id,m])=>({t:DB.topics.find(t=>t.id===id),m}))
+            .filter(r=>r.t).sort((a,b)=>b.m-a.m).slice(0,10);
+          if(!rows.length) return "";
+          const mx=Math.max(...rows.map(r=>r.m));
+          return `<div class="card" style="margin-top:12px"><div class="h2">Konulara göre</div>
+            ${rows.map(r=>`<div style="margin-top:9px">
+              <div class="row"><span class="grow">${esc(r.t.name)}</span>
+                <span class="sub">${esc(cname(r.t.courseId))} · ${fmtMin(r.m)}</span></div>
+              <div class="meter" style="margin-top:5px"><i style="width:${(r.m/mx*100).toFixed(1)}%;background:${ccolor(r.t.courseId)}"></i></div>
+            </div>`).join("")}</div>`;
+        })()}
         <div class="card" style="margin-top:12px">
           <div class="h2">Günlük döküm</div>
           <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px">
@@ -2030,6 +2053,11 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       <div class="card"><div class="h2">Görünüm</div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Tema</span>
           <button class="btn sm" data-a="theme">${DB.settings.theme==="dark"?"🌙 Koyu":"☀️ Açık"}</button></div>
+        <div class="row" style="margin-top:8px"><span class="grow sub">Açılışta aç</span>
+          <select class="inp" data-a="auto" style="width:150px">
+            <option value="">— hiçbiri —</option>
+            ${Object.entries(APPS).filter(([,a])=>a.desk).map(([id,a])=>`<option value="${id}" ${DB.settings.autoOpen===id?"selected":""}>${a.icon} ${esc(a.name)}</option>`).join("")}
+          </select></div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Masaüstü widget'ları</span>
           <button class="btn sm ${DB.settings.widgets?"pri":""}" data-a="wg">${DB.settings.widgets?"Açık":"Kapalı"}</button></div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Duvar kağıdı</span>
@@ -2078,6 +2106,7 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
     A("goal").onchange=e=>{DB.settings.goal=Math.max(5,+e.target.value||120);saveAnd("pomodoro","stats");};
     A("theme").onclick=()=>{toggleTheme();this.render(w);};
     A("wg").onclick=()=>{DB.settings.widgets=!DB.settings.widgets;save();paintWidgets();this.render(w);};
+    A("auto").onchange=e=>{DB.settings.autoOpen=e.target.value;save();toast(e.target.value?"Açılışta bu uygulama açılacak":"Açılışta uygulama açılmayacak");};
     $$("[data-w]",w.body).forEach(b=>b.onclick=()=>{DB.settings.wall=b.dataset.w;document.body.dataset.wall=b.dataset.w;saveAnd("settings");});
     A("courses").innerHTML=DB.courses.map(c=>`<div class="row" style="margin:6px 0">
       <input type="color" value="${c.color}" data-cc="${c.id}" style="width:30px;height:26px;border:none;background:none;padding:0">
@@ -2123,8 +2152,24 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       }catch(e){ toast("Bu tarayıcı desteklemiyor"); } };
     A("exp").onclick=exportJSON;
     A("imp").onclick=importJSON;
-    A("reset").onclick=()=>{ if(!confirm("TÜM veriler silinecek. Emin misin?"))return;
-      localStorage.removeItem(KEY); DB=seed(); save(); refreshAll(); toast("Sıfırlandı"); };
+    A("reset").onclick=async()=>{
+      const v=await dialog("Her şeyi sıfırla",[{k:"m",label:"Tüm notlar, kartlar, görevler, görseller silinecek. Nasıl başlansın?",
+        type:"select",value:"empty",options:[
+          {v:"empty",l:"Bomboş başla (kendi derslerimi gireceğim)"},
+          {v:"seed",l:"Örnek verilerle başla (deneme amaçlı)"}]}]);
+      if(!v) return;
+      if(!confirm("Emin misin? Bu işlem geri alınamaz. Önce yedek aldıysan sorun yok.")) return;
+      try{ for(const k of await idbKeys()) await idbDel(k); }catch(e){}
+      try{ await idbOp("readwrite",st=>st.clear(),"handles"); }catch(e){}
+      MEDIA_URL.clear(); HANDLE_CACHE.clear(); IDB_BYTES=0;
+      clearTimeout(_saveT); _dirty=false;
+      localStorage.removeItem(KEY);
+      DB = v.m==="seed" ? seed() : blank();
+      flush(); buildTerms(); applySettings();
+      for(const win of [...WINS.values()]) closeWin(win);
+      refreshAll(); paintWidgets();
+      toast(v.m==="seed"?"Örnek verilerle sıfırlandı":"Sıfırlandı — tertemiz başlayabilirsin");
+    };
   }};
 
 async function exportJSON(){
@@ -2242,6 +2287,42 @@ $("#foNoise").onclick=toggleNoise;
 $("#foToggle").onclick=()=>{ if(Pomo.running)Pomo.pause(); else { if(!Pomo.left)Pomo.start(Pomo.courseId,Pomo.label); else Pomo.run(); } paintFocus(); };
 
 /* ============================================================
+   ÇALIŞMA KRONOMETRESİ — widget'tan ders + konu seçip başlatılır
+   ============================================================ */
+function topicOptions(courseId){
+  const out=[];
+  const walk=(parent,depth)=>DB.topics.filter(t=>t.courseId===courseId&&t.parentId===parent)
+    .forEach(t=>{ out.push({id:t.id,label:"— ".repeat(depth)+t.name}); walk(t.id,depth+1); });
+  walk(null,0); return out;
+}
+const topicName=id=>DB.topics.find(t=>t.id===id)?.name||"";
+const Study={
+  on:false, start:0, courseId:null, topicId:null, tick:null,
+  begin(courseId,topicId){
+    this.on=true; this.start=Date.now(); this.courseId=courseId; this.topicId=topicId||null;
+    DB.settings.activeStudy={start:this.start,courseId,topicId:this.topicId};
+    DB.settings.lastCourse=courseId; DB.settings.lastTopic=this.topicId;
+    save(); this.run(); paintWidgets();
+  },
+  resume(a){ if(!a||!a.start) return; this.on=true; this.start=a.start;
+    this.courseId=a.courseId; this.topicId=a.topicId; this.run(); },
+  run(){ clearInterval(this.tick); this.tick=setInterval(()=>this.paint(),1000); this.paint(); },
+  elapsed(){ return Math.max(0,Math.floor((Date.now()-this.start)/1000)); },
+  paint(){ const n=$("#studyTime"); if(n) n.textContent=hms(this.elapsed()); },
+  end(){
+    clearInterval(this.tick); this.on=false;
+    const min=Math.max(1,Math.round(this.elapsed()/60));
+    DB.sessions.push({id:uid(),courseId:this.courseId,topicId:this.topicId,date:today(),min,kind:"study",
+      label:topicName(this.topicId)});
+    delete DB.settings.activeStudy;
+    save(); updateMenubar(); paintWidgets(); rerender("stats");
+    toast(`✅ ${fmtMin(min)} kaydedildi${this.topicId?" — "+topicName(this.topicId):""}`);
+  },
+  cancel(){ clearInterval(this.tick); this.on=false; delete DB.settings.activeStudy; save(); paintWidgets(); }
+};
+const hms=s=>`${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
+
+/* ============================================================
    MASAÜSTÜ WIDGET'LARI
    ============================================================ */
 function paintWidgets(){
@@ -2252,7 +2333,33 @@ function paintWidgets(){
   const due=dueCards().length;
   const open=DB.tasks.filter(t=>!t.done).sort((a,b)=>(b.pri-a.pri)||((a.due||"9")>(b.due||"9")?1:-1)).slice(0,4);
   const ex=examList()[0];
-  box.innerHTML=`
+  const sc=DB.settings.lastCourse&&course(DB.settings.lastCourse)?DB.settings.lastCourse:DB.courses[0]?.id;
+  const tops=sc?topicOptions(sc):[];
+  const studyWg = Study.on
+    ? `<div class="wg" style="border-color:var(--accent)">
+        <div class="wgh">⏱ ÇALIŞIYORSUN</div>
+        <div class="big" id="studyTime" style="color:var(--accent)">${hms(Study.elapsed())}</div>
+        <div class="sub" style="margin-top:5px">${esc(cname(Study.courseId))}${Study.topicId?" · "+esc(topicName(Study.topicId)):""}</div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn pri sm grow" data-st="stop">⏹ Bitir ve kaydet</button>
+          <button class="btn sm" data-st="cancel" title="Kaydetmeden vazgeç">✕</button></div>
+      </div>`
+    : DB.courses.length
+    ? `<div class="wg">
+        <div class="wgh">⏱ ÇALIŞMAYA BAŞLA</div>
+        <select class="inp" data-st="course" style="margin-bottom:6px">
+          ${DB.courses.map(c=>`<option value="${c.id}" ${c.id===sc?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+        <select class="inp" data-st="topic">
+          <option value="">— konu seçme —</option>
+          ${tops.map(t=>`<option value="${t.id}" ${t.id===DB.settings.lastTopic?"selected":""}>${esc(t.label)}</option>`).join("")}</select>
+        <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="start">▶ Başlat</button>
+      </div>`
+    : `<div class="wg">
+        <div class="wgh">⏱ ÇALIŞMAYA BAŞLA</div>
+        <div class="sub">Önce bir ders ekle.</div>
+        <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="newcourse">+ Ders ekle</button>
+      </div>`;
+  box.innerHTML=`${studyWg}
     <div class="wg clickable" data-wg="stats">
       <div class="wgh">🎯 Bugün</div>
       <div class="row"><span class="big">${fmtMin(min)}</span><span class="grow"></span><span class="sub">/ ${fmtMin(DB.settings.goal)}</span></div>
@@ -2278,7 +2385,14 @@ function paintWidgets(){
         ||`<div class="sub">Açık görev yok 🎉</div>`}
       <button class="btn sm" style="width:100%;margin-top:8px" data-wgo="tasks">Tümünü aç</button>
     </div>`;
-  $$("[data-wg]",box).forEach(n=>n.onclick=e=>{ if(e.target.closest("[data-wgo],[data-wgt]"))return; openApp(n.dataset.wg); });
+  const ST=k=>$(`[data-st="${k}"]`,box);
+  if(ST("start")) ST("start").onclick=()=>Study.begin(ST("course").value,ST("topic").value||null);
+  if(ST("course")) ST("course").onchange=()=>{ DB.settings.lastCourse=ST("course").value; DB.settings.lastTopic=null; save(); paintWidgets(); };
+  if(ST("topic")) ST("topic").onchange=()=>{ DB.settings.lastTopic=ST("topic").value||null; save(); };
+  if(ST("stop")) ST("stop").onclick=()=>Study.end();
+  if(ST("cancel")) ST("cancel").onclick=()=>{ if(confirm("Süre kaydedilmeden silinsin mi?")) Study.cancel(); };
+  if(ST("newcourse")) ST("newcourse").onclick=()=>openApp("topics");
+  $$("[data-wg]",box).forEach(n=>n.onclick=e=>{ if(e.target.closest("[data-wgo],[data-wgt],[data-st]"))return; openApp(n.dataset.wg); });
   $$("[data-wgt]",box).forEach(n=>n.onclick=()=>{ const t=DB.tasks.find(x=>x.id===n.dataset.wgt); t.done=true; saveAnd("tasks","stats"); });
   const study=$('[data-wgo="study"]',box);
   if(study) study.onclick=()=>{ const w=openApp("cards");
@@ -2430,7 +2544,9 @@ setTimeout(()=>{
   const hi=DB.settings.name?`Hoş geldin ${DB.settings.name}`:"Hoş geldin";
   toast(`${hi} 👋 ${due?`${due} kart tekrar bekliyor · `:""}${open} açık görev`);
 },600);
-openApp("pomodoro"); openApp("tasks");
+/* açılışta uygulama açma — istenirse Ayarlar'dan tek bir uygulama seçilebilir */
+if(DB.settings.autoOpen && APPS[DB.settings.autoOpen]) openApp(DB.settings.autoOpen);
+if(DB.settings.activeStudy) Study.resume(DB.settings.activeStudy);
 </script>
 </body>
 </html>
