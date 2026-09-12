@@ -321,6 +321,9 @@ textarea.inp{resize:none;line-height:1.6}
   box-shadow:var(--shadow);padding:12px 14px;display:none;font-size:13px}
 #termpop.on{display:block}
 /* bağlantı haritası */
+.vwrap{position:absolute;inset:0;display:grid;place-items:center;padding:10px;background:var(--surface-2)}
+.vframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.vtext{position:absolute;inset:0;margin:0;padding:14px;overflow:auto;font:12.5px/1.6 var(--mono);white-space:pre-wrap}
 .gedge{stroke:var(--border);stroke-width:1.5}
 .gnode{cursor:pointer}
 .gnode:hover circle{stroke:var(--accent);stroke-width:3}
@@ -379,7 +382,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="1.3", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="1.4", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -553,7 +556,7 @@ function openFileRef(a){
   if(a.type) i.accept=a.type;
   i.onchange=()=>{ const f=i.files[0]; if(!f) return;
     if(a.name&&f.name!==a.name) toast(`Farklı dosya seçtin: ${f.name}`);
-    window.open(URL.createObjectURL(f),"_blank"); };
+    openViewer(f); };
   i.click();
 }
 async function openDeviceFile(hid){
@@ -564,7 +567,7 @@ async function openDeviceFile(hid){
     if(perm!=="granted") perm=await h.requestPermission?.({mode:"read"});
     if(perm&&perm!=="granted"){ toast("Dosyaya erişim izni verilmedi"); return; }
     const f=await h.getFile();
-    window.open(URL.createObjectURL(f),"_blank");
+    openViewer(f);
   }catch(e){ toast("⚠️ Dosya bulunamadı — taşınmış veya silinmiş olabilir"); }
 }
 
@@ -835,19 +838,21 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       n.updated=today(); save(); this.render(w); toast("Dosya eklendi ("+bytesFmt(f.size)+")"); });
     on("link","click",async()=>{
       if(!n) return;
-      if(canLinkFiles()){
+      const opts=[];
+      if(canLinkFiles()) opts.push({v:"link",l:"🔗 Bağlan — kopya yok, hep güncel hali (önerilen)"});
+      opts.push({v:"ref",l:"📌 İşaretle — kopya yok, her açışta dosyayı seçersin"});
+      opts.push({v:"embed",l:"📎 Göm — kopyası saklanır, çevrimdışı da açılır"});
+      const v=await dialog("Dosya nasıl eklensin?",[{k:"m",label:
+        canLinkFiles()?"Bu cihaz canlı bağlantıyı destekliyor":"Bu tarayıcı canlı bağlantıyı desteklemiyor",
+        type:"select",value:opts[0].v,options:opts}]);
+      if(!v) return;
+      if(v.m==="embed"){ $('[data-a="file"]',w.body).click(); return; }
+      if(v.m==="link"){
         try{ const h=await pickDeviceFile(); (n.att=n.att||[]).push({name:h.name,hid:h.hid});
-          n.updated=today(); save(); this.render(w); toast("🔗 Bağlanıldı — kopya alınmadı, hep güncel hali açılır");
+          n.updated=today(); save(); this.render(w); toast("🔗 Bağlanıldı — dosya diskte kaldı");
         }catch(e){}
         return;
       }
-      /* API yoksa (Android) kullanıcıya kararı bırak */
-      const v=await dialog("Cihazdaki dosya",[{k:"m",label:"Bu tarayıcı dosyaya kalıcı bağlanamıyor. Ne yapılsın?",
-        type:"select",value:"ref",options:[
-          {v:"ref",l:"İşaretle — kopya alınmaz, açarken dosyayı seçersin (hep güncel)"},
-          {v:"embed",l:"İçine göm — kopyası saklanır, çevrimdışı açılır (donar)"}]}]);
-      if(!v) return;
-      if(v.m==="embed"){ $('[data-a="file"]',w.body).click(); return; }
       const f=await pickFile(); if(!f) return;
       (n.att=n.att||[]).push({name:f.name,type:f.type,size:f.size,manual:true});
       n.updated=today(); save(); this.render(w); toast("📌 İşaretlendi — içeriği saklanmadı"); });
@@ -862,8 +867,9 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       const a=n.att[+b.dataset.att];
       if(a.manual) return openFileRef(a);
       if(a.hid) return openDeviceFile(a.hid);
-      const u=await mediaURL(a.ref||a.data);
-      if(u) window.open(u,"_blank"); });
+      const blob=await mediaBlob(a.ref||a.data);
+      if(blob) openViewer(new File([blob],a.name,{type:a.type||blob.type}));
+      else toast("⚠️ Dosya bulunamadı"); });
   }};
 
 /* not içindeki "Soru :: Cevap" satırlarından deste üret */
@@ -1666,6 +1672,52 @@ APPS.graph={ name:"Bağlantı Haritası", icon:"🕸", w:820, h:600, desk:true, 
     $('[data-a="redo"]',w.body).onclick=()=>this.render(w);
   }, onResize(w){ this.render(w); } };
 
+/* ============================================================
+   GÖRÜNTÜLEYİCİ — dosyayı indirmek yerine pencerede aç
+   ============================================================ */
+async function mediaBlob(ref){
+  if(!ref) return null;
+  if(ref.startsWith("idb:")) return await idbGet(ref.slice(4));
+  if(ref.startsWith("data:")) return dataURLtoBlob(ref);
+  return null;
+}
+function openViewer(file,name){
+  const w=openApp("viewer",{state:{file,name:name||file.name||"dosya",type:file.type||"",size:file.size}});
+  return w;
+}
+APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
+  render(w){
+    const s=w.state;
+    if(!s.url&&s.file) s.url=URL.createObjectURL(s.file);
+    const t=s.type||"", isImg=t.startsWith("image/"), isPdf=t==="application/pdf"||/\.pdf$/i.test(s.name);
+    const isTxt=t.startsWith("text/")||/\.(md|txt|csv|json|log)$/i.test(s.name);
+    const isAud=t.startsWith("audio/"), isVid=t.startsWith("video/");
+    $(".wtitle",w.node).textContent="📄  "+s.name;
+    let body;
+    if(isImg)      body=`<div class="vwrap"><img src="${s.url}" style="max-width:100%;max-height:100%;object-fit:contain"></div>`;
+    else if(isVid) body=`<div class="vwrap"><video src="${s.url}" controls style="max-width:100%;max-height:100%"></video></div>`;
+    else if(isAud) body=`<div class="vwrap"><audio src="${s.url}" controls style="width:90%"></audio></div>`;
+    else if(isPdf) body=`<iframe src="${s.url}" class="vframe"></iframe>
+        <div class="sub" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;pointer-events:none">
+          PDF görünmüyorsa ↗ ile tarayıcıda aç</div>`;
+    else if(isTxt) body=`<pre class="vtext" data-a="txt">yükleniyor…</pre>`;
+    else           body=`<div class="empty"><div style="font-size:42px">📦</div>
+        Bu tür uygulama içinde gösterilemiyor.<br><b>${esc(s.name)}</b><br>
+        <span class="sub">${esc(t||"bilinmeyen tür")} · ${s.size?bytesFmt(s.size):""}</span><br><br>
+        Aşağıdaki düğmelerle tarayıcıda açabilir veya indirebilirsin.</div>`;
+    w.body.innerHTML=`<div class="app">
+      <div class="toolbar"><b class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</b>
+        <span class="tag">${s.size?bytesFmt(s.size):""}</span>
+        <button class="btn sm" data-a="new">↗ Tarayıcıda aç</button>
+        <button class="btn sm" data-a="dl">⬇ İndir</button></div>
+      <div class="grow" style="position:relative;min-height:0">${body}</div></div>`;
+    $('[data-a="new"]',w.body).onclick=()=>window.open(s.url,"_blank");
+    $('[data-a="dl"]',w.body).onclick=()=>{ const a=el("a"); a.href=s.url; a.download=s.name;
+      document.body.appendChild(a); a.click(); a.remove(); };
+    if(isTxt) s.file.text().then(x=>{ const n=$('[data-a="txt"]',w.body); if(n) n.textContent=x.slice(0,200000); });
+  },
+  onClose(w){ if(w.state.url) URL.revokeObjectURL(w.state.url); }};
+
 /* ---------------- Ayarlar ---------------- */
 /* ============================================================
    [[ ... ]] OTOMATİK TAMAMLAMA
@@ -2256,7 +2308,7 @@ async function importShared(){
     for(const f of files){
       const ref=await putMedia(f.blob);
       if((f.blob.type||"").startsWith("image/")) note.body+=`\n\n![${f.name}](${ref})\n`;
-      else (note.att=note.att||[]).push({name:f.name,type:f.blob.type,ref});
+      else (note.att=note.att||[]).push({name:f.name,type:f.blob.type,size:f.blob.size,ref});
     }
     note.updated=today(); save(); flush(); idbUsage();
     openNote(note.id,true);
