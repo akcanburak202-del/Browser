@@ -472,10 +472,21 @@ const acVeKapat = async (nasil) => {
   await p2.waitForTimeout(350);
   return acildi && (await p2.evaluate(() => !document.querySelector("canvas")));
 };
-check("Vazgeç kapatıyor",
-  await acVeKapat(() => p2.evaluate(() => document.querySelector('[data-a="vazgec"]').click())));
-check("✕ düğmesi kapatıyor",
+check("✕ Kapat düğmesi kapatıyor",
   await acVeKapat(() => p2.evaluate(() => document.querySelector('[data-a="kapat"]').click())));
+check("karartıya dokunmak kapatMIYOR (avuç değince kapanmasın)", await (async () => {
+  await p2.evaluate(() => {
+    const w = [...WINS.values()].find(x => x.appId === "notes");
+    w.body.querySelector('[data-a="draw"]').click();
+  });
+  await p2.waitForTimeout(250);
+  await p2.mouse.click(4, 4);
+  await p2.waitForTimeout(250);
+  const duruyor = await p2.evaluate(() => !!document.querySelector("canvas"));
+  await p2.evaluate(() => document.querySelector('[data-a="kapat"]').click());
+  await p2.waitForTimeout(250);
+  return duruyor;
+})());
 check("Esc kapatıyor", await acVeKapat(() => p2.keyboard.press("Escape")));
 check("cihazın geri tuşu kapatıyor", await acVeKapat(() => p2.goBack()));
 check("kapanış yolları nota bir şey eklemiyor",
@@ -518,6 +529,25 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* kritik düğmeler her ekran oranında görünür alanda kalmalı */
+for (const [ad, gw, gh] of [["dikey", 800, 1280], ["yatay", 1280, 800], ["alçak", 1024, 620]]) {
+  await p2.setViewportSize({ width: gw, height: gh });
+  await p2.evaluate(() => {
+    const w = [...WINS.values()].find(x => x.appId === "notes");
+    w.body.querySelector('[data-a="draw"]').click();
+  });
+  await p2.waitForTimeout(250);
+  const gorunur = await p2.evaluate(() => {
+    const r = s => document.querySelector(s).getBoundingClientRect();
+    const icinde = x => x.top >= 0 && x.bottom <= innerHeight && x.left >= 0 && x.right <= innerWidth && x.width > 0;
+    return icinde(r('[data-a="kapat"]')) && icinde(r('[data-a="ekle"]')) && icinde(r("canvas"));
+  });
+  check(`çizim düğmeleri görünür alanda (${ad} ${gw}×${gh})`, gorunur);
+  await p2.evaluate(() => document.querySelector('[data-a="kapat"]').click());
+  await p2.waitForTimeout(200);
+}
+await p2.setViewportSize({ width: 1200, height: 800 });
+
 check("görüntüleyici dosyasız açılınca düzgün boş durum gösteriyor", await p2.evaluate(() => {
   const w = openApp("viewer");
   return w.node.querySelector(".wtitle").textContent.includes("Görüntüleyici")

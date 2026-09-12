@@ -306,6 +306,23 @@ alt satırında bu yazıyor.
 - Tuval mantıksal boyu artık ekrana uyuyor (dikeyde 1200'e kadar), döndürmede içerik bozulmuyor.
 - "Temizle" artık onay soruyor.
 
+## İkinci cihaz turu (sürüm 2.9)
+
+- **El yazısı artık devreye girmiyor** ✅ — 2.8'deki odak bırakma + `inert` işe yaradı.
+- **Çizgi akıcılığı** yetersizdi: noktalar düz parçalarla bağlanıyordu ve yalnızca kare başına
+  bir nokta örnekleniyordu. Orta noktalardan geçen eğri (`quadraticCurveTo`) ve
+  `getCoalescedEvents()` eklendi.
+- **Kapatma düğmesi görünmüyordu.** Kök neden: Android'de adres çubuğu görünürken
+  `position:fixed; inset:0` bir katman **düzen görünümünü** kaplıyor, görünen alanı değil —
+  alttaki "Vazgeç / ✓ Nota ekle" çubuğu ekran dışında kalıyordu. Kullanıcı yalnızca karartıya
+  dokunarak çıkabildiği için "belirli bir yer yok" dedi, haklı.
+  **Çözüm:** kritik düğmeler üst çubuğa taşındı — solda `✕ Kapat`, sağda `✓ Nota ekle`;
+  katman `height:100dvh` alıyor; tuval boyu `visualViewport` yüksekliğinden hesaplanıyor.
+  Duman testi üç ekran oranında (800×1280, 1280×800, 1024×620) ikisinin de görünür alanda
+  kaldığını sınıyor.
+- **Karartıya dokunmak artık kapatmıyor** — çizerken avuç değince kapanmasın ve kapanış yeri
+  belirsiz kalmasın diye. Kapanış yolları: ✕ Kapat, Escape, cihazın geri tuşu.
+
 ## Reddedilen / ertelenen
 
 - **Kaynağı 4 dosyaya bölüp build betiğiyle birleştirmek.** "Klonla, `index.html`'i aç, çalışır"

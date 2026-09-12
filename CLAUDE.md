@@ -80,7 +80,15 @@ Script blokları sırayla:
   `visibilitychange/pageshow/focus/resize/contextrestored` olaylarında `paint()` ile yeniden
   çizilir — Android Chrome arka plana atılan sekmenin tuval belleğini atabiliyor.
   Mantıksal tuval boyu açılışta sabitlenir, ekran döndüğünde CSS ölçekler; `pos()` görünen
-  boyla mantıksal boy arasındaki oranı uygular.
+  boyla mantıksal boy arasındaki oranı uygular. Çizgiler orta noktalardan geçen eğrilerle
+  bağlanır ve `getCoalescedEvents()` ara noktaları da alınır — akıcılık bu ikisinden geliyor.
+- **Tam ekran bir katmanda kritik düğmeleri ALT çubuğa koyma.** Android'de adres çubuğu
+  görünürken `position:fixed; inset:0` düzen görünümünü kaplar, görünen alanı değil; alt
+  çubuk ekran dışında kalır. `drawPad` bu yüzden "✕ Kapat" ve "✓ Nota ekle"yi üst çubukta
+  tutuyor, katman `height:100dvh` alıyor ve duman testi üç ekran oranında düğmelerin
+  görünür alanda kaldığını sınıyor.
+- **Karartıya dokunmak kapatmaz.** Çizerken avuç değince kapanmasın ve kapanış yeri belirsiz
+  kalmasın diye kaldırıldı; kapanış yolları yalnızca ✕ Kapat, Escape ve cihazın geri tuşu.
 - **Kartlarda "yeni" demek `!c.seen` demek.** `sm2()` her değerlendirmede `seen` yazar, bu yüzden
   bilinemeyen bir kart ikinci kez yeni sayılmaz. `dueCards()` günlük yeni kart kotasını **global**
   harcar ve `DB.cards` sırası sabit olduğu için deste deste çağrılsa da aynı kartları seçer —

@@ -396,7 +396,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.8", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.9", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -879,30 +879,33 @@ function drawPad(){
        metin alanı varken devreye girip kalemi kapabiliyor. */
     try{ document.activeElement?.blur?.(); }catch(_){}
 
+    /* Kapat ve Nota ekle ÜST çubukta: Android'de adres çubuğu görünürken
+       position:fixed bir katmanın altı görünen alanın dışında kalabiliyor ve
+       alttaki düğmeler kayboluyor. Üst çubuk her zaman görünür. */
     const o=el("div","ovl",`
-      <div class="row" style="gap:7px;flex-wrap:wrap;justify-content:center;flex:0 0 auto;width:100%">
+      <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;flex:0 0 auto;
+        width:100%;max-width:1400px">
+        <button class="btn" data-a="kapat">✕ Kapat</button>
+        <span style="width:1px;height:22px;background:var(--border-2);margin:0 2px"></span>
         ${RENK.map((c,i)=>`<button class="btn sm" data-c="${i}" title="Renk"
-          style="width:38px;height:32px;background:${c}"></button>`).join("")}
-        <button class="btn sm" data-a="silgi">🧽 Silgi</button>
-        <button class="btn sm" data-a="geri">↶ Geri al</button>
+          style="width:36px;height:30px;background:${c}"></button>`).join("")}
+        <button class="btn sm" data-a="silgi" title="Silgi">🧽</button>
+        <button class="btn sm" data-a="geri" title="Geri al">↶</button>
         <button class="btn sm danger" data-a="temizle">Temizle</button>
         <span class="grow"></span>
-        <button class="btn sm" data-a="kapat" title="Kapat (Esc / geri tuşu)">✕</button>
+        <button class="btn pri" data-a="ekle">✓ Nota ekle</button>
       </div>
       <div data-a="tuval" style="flex:1 1 auto;min-height:0;width:100%;display:flex;
         align-items:center;justify-content:center">
         <canvas style="background:#fff;border-radius:12px;touch-action:none;
           max-width:100%;max-height:100%;box-shadow:0 20px 50px rgba(0,0,0,.5)"></canvas>
       </div>
-      <div class="row" style="gap:8px;width:100%;max-width:1000px;flex:0 0 auto">
-        <span class="sub grow" style="font-size:11.5px">Kalemle ya da parmakla çiz.
-          Kalem yazıya çevriliyorsa cihazın kalem el yazısı ayarını kapat.</span>
-        <button class="btn" data-a="vazgec">Vazgeç</button>
-        <button class="btn pri" data-a="ekle">✓ Nota ekle</button>
+      <div class="sub" style="flex:0 0 auto;font-size:11.5px;text-align:center">
+        Kalemle ya da parmakla çiz. Kalem yazıya çevriliyorsa cihazın kalem el yazısı ayarını kapat.
       </div>`);
-    o.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.86);display:flex;"+
-      "flex-direction:column;align-items:center;gap:9px;padding:12px;touch-action:none;"+
-      "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none";
+    o.style.cssText="position:fixed;inset:0;height:100dvh;z-index:9998;background:rgba(0,0,0,.86);"+
+      "display:flex;flex-direction:column;align-items:center;gap:9px;padding:10px;"+
+      "touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none";
     document.body.appendChild(o);
     /* Alttaki her şeyi etkisizleştir: odak ve cihazın kalem-el-yazısı hedefi
        arkadaki metin alanlarında kalmasın. */
@@ -912,8 +915,9 @@ function drawPad(){
     const cv=$("canvas",o), ctx=cv.getContext("2d");
     /* Mantıksal tuval boyu açılışta sabitlenir; ekran döner ya da boyut değişirse
        CSS ölçekler. Böylece koordinatlar ve çizilenler bozulmaz. */
-    const W=Math.round(Math.max(320,Math.min(1400,innerWidth-44)));
-    const H=Math.round(Math.max(240,Math.min(1200,innerHeight-200)));
+    const gh=(window.visualViewport&&window.visualViewport.height)||innerHeight;
+    const W=Math.round(Math.max(320,Math.min(1400,innerWidth-40)));
+    const H=Math.round(Math.max(240,Math.min(1200,gh-150)));
     const dpr=Math.min(2,window.devicePixelRatio||1);
     cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
     cv.style.width=W+"px"; cv.style.height=H+"px";
@@ -921,12 +925,27 @@ function drawPad(){
 
     let renk=RENK[0], silgi=false, ciz=null;
     const strokes=[];
-    const seg=(st,i)=>{ const a=st.p[i-1], b=st.p[i];
+    const orta=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+    /* Noktaları orta noktalardan geçen bir eğriyle bağla — düz parçaların
+       köşeli görüntüsü gidiyor, çizgi akıcı oluyor. */
+    const seg=(st,i)=>{
+      const p=st.p, a=p[i-1], b=p[i];
       ctx.strokeStyle=st.silgi?"#fff":st.renk;
       ctx.lineWidth=(st.silgi?18:2.2)*(0.45+1.55*b.pr);
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); };
+      ctx.beginPath();
+      if(i>=2){ const m1=orta(p[i-2],a), m2=orta(a,b);
+        ctx.moveTo(m1.x,m1.y); ctx.quadraticCurveTo(a.x,a.y,m2.x,m2.y); }
+      else { ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); }
+      ctx.stroke();
+    };
+    /* eğri orta noktalarda bittiği için son parçayı ayrıca kapat */
+    const kuyruk=st=>{ const p=st.p; if(p.length<3) return;
+      const a=p[p.length-2], b=p[p.length-1];
+      ctx.strokeStyle=st.silgi?"#fff":st.renk;
+      ctx.lineWidth=(st.silgi?18:2.2)*(0.45+1.55*b.pr);
+      ctx.beginPath(); ctx.moveTo(orta(a,b).x,orta(a,b).y); ctx.lineTo(b.x,b.y); ctx.stroke(); };
     const paint=()=>{ ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H);
-      for(const st of strokes) for(let i=1;i<st.p.length;i++) seg(st,i); };
+      for(const st of strokes){ for(let i=1;i<st.p.length;i++) seg(st,i); kuyruk(st); } };
     paint();
 
     /* Android Chrome arka plana atılan sekmenin tuval içeriğini atabiliyor —
@@ -951,9 +970,11 @@ function drawPad(){
       const q=pos(e); ciz={renk,silgi,p:[q,{...q}]};   /* aynı nokta iki kez: tek dokunuş nokta bırakır */
       strokes.push(ciz); seg(ciz,1); });
     cv.addEventListener("pointermove",e=>{ if(!ciz) return; e.preventDefault();
-      ciz.p.push(pos(e)); seg(ciz,ciz.p.length-1); });
+      /* iki kare arasında yakalanan ara noktaları da al — kalemde belirgin fark yapıyor */
+      const hepsi=e.getCoalescedEvents?e.getCoalescedEvents():null;
+      for(const ev of (hepsi&&hepsi.length?hepsi:[e])){ ciz.p.push(pos(ev)); seg(ciz,ciz.p.length-1); } });
     /* pointercancel: cihaz kalemi kapmış olabilir — o ana kadarki çizgi korunur */
-    const bitir=()=>{ ciz=null; };
+    const bitir=()=>{ if(ciz) kuyruk(ciz); ciz=null; };
     cv.addEventListener("pointerup",bitir);
     cv.addEventListener("pointercancel",bitir);
 
@@ -969,7 +990,8 @@ function drawPad(){
     A("temizle").onclick=()=>{ if(strokes.length&&!confirm("Tüm çizim silinsin mi?")) return;
       strokes.length=0; paint(); };
 
-    /* --- kapanış yolları: ✕, Vazgeç, Esc, geri tuşu, karartıya dokunma --- */
+    /* --- kapanış: ✕ Kapat, Escape, cihazın geri tuşu. Karartıya dokunmak KAPATMAZ;
+       çizerken avuç değince kapanmasın ve kapanış yeri belirsiz kalmasın. --- */
     let gecmis=false;
     try{ history.pushState({studyosDraw:1},""); gecmis=true; }catch(_){}
     const onPop=()=>{ gecmis=false; vazgec(true); };
@@ -996,9 +1018,7 @@ function drawPad(){
       }
       kapat(null);
     }
-    A("vazgec").onclick=()=>vazgec(false);
     A("kapat").onclick=()=>vazgec(false);
-    o.addEventListener("pointerdown",e=>{ if(e.target===o) vazgec(false); });
     A("ekle").onclick=()=>{ if(!strokes.length){ toast("Çizim boş"); return; }
       cv.toBlob(b=>kapat(b),"image/png"); };
   });
