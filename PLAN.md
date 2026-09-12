@@ -8,11 +8,11 @@ Durum işaretleri: ☐ yapılmadı · ◐ sürüyor · ☑ bitti
 
 ---
 
-## 1. parti — Veri güvenliği kusurları  (hedef sürüm 2.3)
+## 1. parti — Veri güvenliği kusurları  (sürüm 2.3) ✅ BİTTİ
 
 Bunlar öneri değil, gerçek kusur. Hepsi veri kaybına yol açabiliyor.
 
-### 1.1 ☐ Tarih UTC yerine yerel hesaplansın
+### 1.1 ☑ Tarih UTC yerine yerel hesaplansın
 
 **Sorun.** `today()` (`index.html:399`) `toISOString()` kullanıyor. UTC+3'te yerel saat
 00:00–02:59 arası her şey **bir önceki güne** yazılıyor: oturum kayıtları, seri (streak),
@@ -33,7 +33,7 @@ const addDays=(dstr,n)=>{const d=new Date(dstr+"T12:00:00");d.setDate(d.getDate(
 **Dikkat.** Geçmişte yanlış yazılmış tarihler geri döndürülemez (kayıtlarda saat yok).
 Geriye dönük düzeltme **denenmeyecek**; sürüm notunda belirtilecek.
 
-### 1.2 ☐ Bozuk veri artık sessizce ezilmesin
+### 1.2 ☑ Bozuk veri artık sessizce ezilmesin
 
 **Sorun.** `load()` (`index.html:419-426`) `JSON.parse` hata verirse `catch(e){}` ile yutuyor,
 `DB=seed(); save()` çalışıyor. 250 ms sonra kullanıcının verisinin üstüne **örnek veri** yazılıyor
@@ -52,7 +52,7 @@ ve geri dönüş yok.
 
 Uyarı **toast olmayacak**; toast kaçırılır, bu kaçırılmamalı.
 
-### 1.3 ☐ Kota uyarısı susturulmasın  *(incelemede yok, kodda bulundu)*
+### 1.3 ☑ Kota uyarısı susturulmasın  *(incelemede yok, kodda bulundu)*
 
 **Sorun.** `flush()` (`index.html:414-416`) kota hatasında bir kez toast basıyor ve
 `_quotaWarned` sonraki uyarıları da kapatıyor. Yani depo dolduktan sonra kullanıcı
@@ -65,7 +65,7 @@ Uyarı **toast olmayacak**; toast kaçırılır, bu kaçırılmamalı.
   "⚠️ Kaydedilemiyor — depo dolu" + `⬇ Yedek al` düğmesi.
 - Menü çubuğunda küçük bir işaret.
 
-### 1.4 ☐ İki sekme birbirini ezmesin
+### 1.4 ☑ İki sekme birbirini ezmesin
 
 **Sorun.** `storage` olayı hiç dinlenmiyor. Bilgisayarda iki sekme açıksa son yazan kazanır.
 
@@ -75,7 +75,7 @@ kalıcı uyarı: "Veri başka bir sekmede değişti. Buradaki değişiklikler on
 
 Tablet birincil cihaz olduğu için düşük etkili, ama 10 satır.
 
-### 1.5 ☐ İçe aktarmada onay ve geri dönüş
+### 1.5 ☑ İçe aktarmada onay ve geri dönüş
 
 **Sorun.** `importJSON` (`index.html:2262`) mevcut veriyi sormadan değiştiriyor.
 
@@ -86,7 +86,7 @@ Tablet birincil cihaz olduğu için düşük etkili, ama 10 satır.
    (anlık, dosya indirmez). 2. partide anlık görüntü gelince bu ona bağlanır.
 3. Ayarlar'da "Son içe aktarmadan önceki hale dön" düğmesi.
 
-### 1.6 ☐ Saf fonksiyonlar için birim test — `tests/unit.mjs`
+### 1.6 ☑ Saf fonksiyonlar için birim test — `tests/unit.mjs`
 
 Duman testi arayüzü koruyor ama 1.1'deki gibi mantık hatalarını göremez.
 
@@ -104,8 +104,17 @@ test dosyası kendini `TZ=Pacific/Kiritimati` (UTC+14), `TZ=Pacific/Midway` (UTC
 `TZ=Europe/Istanbul` ile alt süreç olarak yeniden çağırır ve `today()`'in yerel takvimle
 eşleştiğini doğrular. Mevcut hata bu testte kesin düşer.
 
-### 1. parti bitiş ölçütü
-`node tests/unit.mjs` ve `node tests/smoke.mjs` geçer · `VERSION=2.3` · `sw.js` `C="studyos-v8"`
+### 1. parti sonucu ✅
+`node tests/unit.mjs` (4 zaman dilimi × 41 kontrol) ve `node tests/smoke.mjs` (29 kontrol) geçiyor ·
+`VERSION=2.3` · `sw.js` `C="studyos-v8"`
+
+**Uygularken çıkan ek kusur:** `flush()` yalnızca `_dirty` işaretliyse yazıyor. İçe aktarma
+(`importJSON`), sıfırlama ve `exportJSON`'ın `lastBackup` damgası bu yüzden **hiç
+kaydedilmiyordu** — sekme kapanınca içe aktarılan yedek uçabilirdi. `saveNow()` eklendi.
+
+**Kapsam dışı bırakılanlar:** `wlParse` ve `noteToCards` birim testine alınamadı — ilki 4.
+blokta (açılış koduyla birlikte yükleniyor), ikincisi `toast`/`saveAnd` çağırıyor. 4. partide
+ayrıştırma kısmı saf bir fonksiyona çıkarılınca test edilecek.
 
 ---
 

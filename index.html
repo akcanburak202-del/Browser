@@ -347,6 +347,7 @@ textarea.inp{resize:none;line-height:1.6}
   <span class="mb-item" id="mbStreak" title="Çalışma serisi">🔥 <b>0</b></span>
   <span class="mb-item" id="mbToday" title="Bugün çalışılan süre">⏱ <b class="pill">0dk</b></span>
   <span class="mb-item" id="mbDue" title="Tekrar bekleyen kart">🗂 <b>0</b></span>
+  <span class="mb-item" id="mbSave" title="Değişiklikler kaydedilemiyor" style="display:none;color:var(--bad)">⚠️</span>
   <span class="mb-item" id="mbSearch" title="Ara (Ctrl+K)">🔍</span>
   <span class="mb-item" id="mbTheme" title="Tema">🌙</span>
   <span class="mb-item pill" id="mbClock">--:--</span>
@@ -389,41 +390,71 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.2", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.3", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const pad=n=>String(n).padStart(2,"0");
-const today=()=>new Date().toISOString().slice(0,10);
-const dayKey=d=>new Date(d).toISOString().slice(0,10);
-const addDays=(dstr,n)=>{const d=new Date(dstr+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
+/* Tarihler YEREL takvime göre üretilir. toISOString() UTC verir; UTC+3'te gece
+   00:00-02:59 arası yapılan her kayıt bir önceki güne düşer, seri kırılır. */
+const ymd=d=>{const x=d==null?new Date():new Date(d);
+  return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate());};
+const today=()=>ymd();
+const dayKey=d=>ymd(d);
+const addDays=(dstr,n)=>{const d=new Date(dstr+"T12:00:00");d.setDate(d.getDate()+n);return ymd(d);};
 const dayDiff=(a,b)=>Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);
 const fmtMin=m=>m>=60?`${Math.floor(m/60)}s ${m%60}dk`:`${m}dk`;
 const trDay=["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
 const COLORS=["#2a78d6","#eb6834","#1baf7a","#eda100","#e87ba4","#4a3aa7","#e34948","#008300"];
 
 let DB=null;
-let _saveT=null,_dirty=false,_quotaWarned=false;
+let _saveT=null,_dirty=false,_quotaAt=0;
+let SAVE_FAILED=false;     /* son yazma başarısız mı — menü çubuğunda ve widget'ta görünür */
+let LOCK_SAVE=false;       /* bozuk veri / sekme çakışması: karar verilene dek KEY'e dokunma */
+/* uyarı göstergelerini tazele — açılışın erken anında henüz tanımlı olmayabilirler */
+function alarmUI(){ try{ updateMenubar(); paintWidgets(); }catch(e){} }
 function save(){ _dirty=true; clearTimeout(_saveT);
   _saveT=setTimeout(()=>{ window.requestIdleCallback?requestIdleCallback(flush,{timeout:1200}):flush(); },250); }
 function flush(){
-  if(!_dirty) return; _dirty=false; clearTimeout(_saveT);
-  try{ localStorage.setItem(KEY,JSON.stringify(DB)); _quotaWarned=false; }
-  catch(e){ if(!_quotaWarned){ _quotaWarned=true;
-    toast("⚠️ Metin deposu doldu! Ayarlar → Veri'den yedek al, eski kayıtları temizle."); } }
+  if(LOCK_SAVE||!_dirty) return; _dirty=false; clearTimeout(_saveT);
+  try{ localStorage.setItem(KEY,JSON.stringify(DB));
+    if(SAVE_FAILED){ SAVE_FAILED=false; alarmUI(); } }
+  catch(e){
+    _dirty=true;                     /* veri hâlâ yazılmadı; sonraki denemede tekrar denensin */
+    const ilk=!SAVE_FAILED; SAVE_FAILED=true;
+    /* uyarı bir kez gösterilip susmaz — en fazla 60 sn'de bir tekrarlanır */
+    if(ilk||Date.now()-_quotaAt>60000){ _quotaAt=Date.now();
+      toast("⚠️ KAYDEDİLEMİYOR — metin deposu dolu. Ayarlar → Veri'den yedek al."); }
+    if(ilk) alarmUI();
+  }
 }
+/* flush() yalnızca bekleyen değişiklik varsa yazar; içe aktarma gibi DB'yi
+   toptan değiştiren yerlerde bayrağı elle kaldırmak gerekir */
+function saveNow(){ _dirty=true; flush(); }
 window.addEventListener("beforeunload",flush);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) flush(); });
+let CORRUPT_RAW=null, CORRUPT_ERR="", CORRUPT_SAVED=false;
 function load(){
-  try{ const raw=localStorage.getItem(KEY);
-    if(raw){ const d=JSON.parse(raw), base=blank();
+  let raw=null;
+  try{ raw=localStorage.getItem(KEY); }catch(e){}
+  if(raw){
+    try{
+      const d=JSON.parse(raw), base=blank();
       DB=Object.assign(base,d);
       DB.settings=Object.assign(base.settings,d.settings||{});  /* yeni ayarlar eksik kalmasın */
-      return; } }catch(e){}
-  DB=seed();
-  save();
+      return;
+    }catch(e){
+      /* Veri bozuk. Örnek veriyle EZME: ham metni sakla, yazmayı kilitle, kullanıcıya sor. */
+      CORRUPT_RAW=raw; CORRUPT_ERR=e.message||String(e);
+      try{ localStorage.setItem(KEY+".bozuk",raw); CORRUPT_SAVED=true; }catch(e2){}
+      LOCK_SAVE=true;
+      DB=blank();
+      return;
+    }
+  }
+  DB=seed(); save();
 }
 function blank(){
   return {v:2, terms:[], settings:{theme:"dark", wall:"mesh", name:"", pomo:25, brk:5, goal:120, widgets:true, autoOpen:""},
@@ -631,6 +662,60 @@ function dialog(title,fields){
   });
 }
 function confirmBox(msg){ return confirm(msg); }
+
+/* --------- kaçırılmaması gereken uyarılar (toast yetmez) --------- */
+function bigNotice(title,bodyHtml,actions){
+  const o=el("div",null,`<div style="max-width:540px;width:100%;background:var(--surface-solid);
+      border:1px solid var(--border-2);border-radius:14px;padding:22px;max-height:86vh;overflow:auto">
+      <div style="font-size:19px;font-weight:700;margin-bottom:10px">${title}</div>
+      <div style="font-size:13.5px;line-height:1.65;color:var(--text-2)">${bodyHtml}</div>
+      <div class="row" style="margin-top:18px;flex-wrap:wrap;justify-content:flex-end" data-acts></div>
+    </div>`);
+  o.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.78);"+
+    "display:flex;align-items:center;justify-content:center;padding:18px";
+  const box=$("[data-acts]",o), close=()=>o.remove();
+  actions.forEach(a=>{ const b=el("button","btn"+(a.pri?" pri":"")+(a.danger?" danger":""),a.label);
+    b.onclick=()=>a.run(close); box.appendChild(b); });
+  document.body.appendChild(o); return o;
+}
+function downloadText(txt,name,mime){
+  const a=el("a"); a.href=URL.createObjectURL(new Blob([txt],{type:mime||"application/json"}));
+  a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+/* localStorage bozuksa: üstüne yazmadan kullanıcıya sor */
+function corruptScreen(){
+  bigNotice("⚠️ Kayıtlı veri okunamadı",
+    `Tarayıcıdaki StudyOS verisi bozulmuş:<br><code>${esc(CORRUPT_ERR)}</code><br><br>
+     Üstüne <b>hiçbir şey yazılmadı</b> — kaydetme şu an kilitli. Ham metin
+     (${bytesFmt((CORRUPT_RAW||"").length)}) ${CORRUPT_SAVED
+       ? `<code>${KEY}.bozuk</code> anahtarına da kopyalandı`
+       : "<b>yalnızca bu sekmenin belleğinde</b> (depo dolu olduğu için kopyalanamadı)"}.<br><br>
+     Önce <b>indir</b>: dosya bir metin düzenleyicide açılıp kurtarılabilir.
+     <b>Boş başla</b> dersen bozuk kayıt silinir ve uygulama sıfırdan açılır.`,
+    [{label:"⬇ Bozuk veriyi indir",pri:true,run(){
+        downloadText(CORRUPT_RAW,`studyos-bozuk-${today()}.json`);
+        toast("İndirildi — dosyayı güvenli bir yere koy"); }},
+     {label:"Boş başla",danger:true,run(close){
+        if(!confirm("Bozuk kayıt silinsin ve boş başlansın mı? İndirdiysen sorun yok.")) return;
+        try{ localStorage.removeItem(KEY+".bozuk"); }catch(e){}
+        CORRUPT_RAW=null; LOCK_SAVE=false; saveNow(); close();
+        toast("Boş başlandı"); }}]);
+}
+/* aynı veriyi açan ikinci bir sekme yazdı — son yazan kazanmasın */
+let _tabWarned=false;
+function tabConflictScreen(){
+  bigNotice("↔ Veri başka bir sekmede değişti",
+    `StudyOS başka bir sekmede ya da pencerede de açık ve orada veri değişti.
+     Bu sekme <b>eski hali</b> gösteriyor; burada yapacağın her değişiklik oradakini silebilir.<br><br>
+     Güvenlisi bu sekmeyi yenilemek — yenilerken buradaki bekleyen değişiklikler yazılmaz.`,
+    [{label:"↻ Yenile",pri:true,run(){ LOCK_SAVE=true; location.reload(); }},
+     {label:"Yoksay",run(close){ close(); }}]);
+}
+window.addEventListener("storage",e=>{
+  if(e.key!==KEY||_tabWarned||LOCK_SAVE||CORRUPT_RAW) return;
+  _tabWarned=true; tabConflictScreen();
+});
 
 /* --------- dosya / görsel --------- */
 function pickFile(accept){ return new Promise(res=>{ const i=el("input"); i.type="file"; if(accept)i.accept=accept;
@@ -2151,6 +2236,8 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
           <button class="btn" data-a="imp">⬆ Yedek yükle</button>
           <button class="btn danger" data-a="reset">Her şeyi sıfırla</button>
         </div>
+        ${(()=>{ let v=null; try{ v=localStorage.getItem(KEY+".oncesi"); }catch(e){} return v
+          ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-a="undoimp">↩ İçe aktarmadan önceki hale dön</button></div>`:""; })()}
         <div class="sub" style="margin-top:8px">${DB.notes.length} not · ${DB.cards.length} kart · ${DB.tasks.length} görev · ${DB.sessions.length} oturum · ${DB.exams.length} sınav</div>
         <div class="row" style="margin-top:10px"><span class="sub grow">Metin (not, kart, kayıtlar)</span><span class="sub">${bytesFmt(storageUsed())} / 5 MB</span></div>
         <div class="meter" style="margin-top:5px"><i style="width:${Math.min(100,storageUsed()/5242880*100).toFixed(1)}%;background:${storageUsed()>4e6?"var(--bad)":"var(--s3)"}"></i></div>
@@ -2229,6 +2316,7 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       }catch(e){ toast("Bu tarayıcı desteklemiyor"); } };
     A("exp").onclick=exportJSON;
     A("imp").onclick=importJSON;
+    if(A("undoimp")) A("undoimp").onclick=()=>{ undoImport(); this.render(w); };
     A("reset").onclick=async()=>{
       const v=await dialog("Her şeyi sıfırla",[{k:"m",label:"Tüm notlar, kartlar, görevler, görseller silinecek. Nasıl başlansın?",
         type:"select",value:"empty",options:[
@@ -2242,7 +2330,7 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       clearTimeout(_saveT); _dirty=false;
       localStorage.removeItem(KEY);
       DB = v.m==="seed" ? seed() : blank();
-      flush(); buildTerms(); applySettings();
+      saveNow(); buildTerms(); applySettings();
       for(const win of [...WINS.values()]) closeWin(win);
       refreshAll(); paintWidgets();
       toast(v.m==="seed"?"Örnek verilerle sıfırlandı":"Sıfırlandı — tertemiz başlayabilirsin");
@@ -2253,25 +2341,49 @@ async function exportJSON(){
   toast("Yedek hazırlanıyor…"); flush();
   const media={};
   try{ for(const k of await idbKeys()){ const b=await idbGet(k); if(b) media[k]=await blobToDataURL(b); } }catch(e){}
-  DB.settings.lastBackup=today(); flush();
+  DB.settings.lastBackup=today(); saveNow();
   const blob=new Blob([JSON.stringify({...DB,_media:media},null,2)],{type:"application/json"});
   const a=el("a"); a.href=URL.createObjectURL(blob); a.download=`studyos-yedek-${today()}.json`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
   toast(`Yedek indirildi (${bytesFmt(blob.size)})`);
 }
+const PREV_KEY=KEY+".oncesi";
 function importJSON(){
   const i=el("input"); i.type="file"; i.accept="application/json";
   i.onchange=()=>{ const f=i.files[0]; if(!f)return; const r=new FileReader();
-    r.onload=async()=>{ try{ const d=JSON.parse(r.result);
-      if(!d||!Array.isArray(d.notes)) throw 0;
+    r.onload=async()=>{
+      let d;
+      try{ d=JSON.parse(r.result); if(!d||!Array.isArray(d.notes)) throw 0; }
+      catch(e){ toast("⚠️ Geçersiz dosya"); return; }
+      const say=o=>`${(o.notes||[]).length} not · ${(o.cards||[]).length} kart · ${(o.sessions||[]).length} oturum`;
+      if(!confirm(`Yedek yüklenecek — mevcut veri silinecek.\n\nGelen:  ${say(d)}\nŞu anki: ${say(DB)}\n\nDevam edilsin mi?\n(Şu anki hal saklanır, Ayarlar'dan geri dönebilirsin.)`)) return;
+      /* geri dönüş için mevcut ham metni sakla */
+      try{ const cur=localStorage.getItem(KEY); if(cur) localStorage.setItem(PREV_KEY,cur); }
+      catch(e){ if(!confirm("Uyarı: mevcut halin kopyası alınamadı (depo dolu). Yine de devam edilsin mi?")) return; }
       const media=d._media||{}; delete d._media;
       for(const [id,url] of Object.entries(media)){ try{ await idbPut(id,dataURLtoBlob(url)); }catch(e){} }
       MEDIA_URL.clear();
-      DB=Object.assign(blank(),d); flush(); applySettings(); refreshAll(); idbUsage();
+      DB=Object.assign(blank(),d);
+      DB.settings=Object.assign(blank().settings,d.settings||{});
+      saveNow(); buildTerms(); applySettings(); refreshAll(); idbUsage();
       toast(`Yedek yüklendi (${Object.keys(media).length} medya)`);
-    }catch(e){ toast("⚠️ Geçersiz dosya"); } };
+    };
     r.readAsText(f); };
   i.click();
+}
+/* içe aktarmadan önceki hale dönüş — tersi de geri alınabilir */
+function undoImport(){
+  let raw=null; try{ raw=localStorage.getItem(PREV_KEY); }catch(e){}
+  if(!raw){ toast("Geri dönülecek bir kayıt yok"); return; }
+  if(!confirm("Şu anki veri, son içe aktarmadan önceki haliyle değiştirilecek. Devam edilsin mi?")) return;
+  try{
+    const d=JSON.parse(raw), cur=localStorage.getItem(KEY);
+    DB=Object.assign(blank(),d);
+    DB.settings=Object.assign(blank().settings,d.settings||{});
+    if(cur) localStorage.setItem(PREV_KEY,cur);
+    saveNow(); buildTerms(); applySettings(); refreshAll();
+    toast("Önceki hale dönüldü");
+  }catch(e){ toast("⚠️ Saklanan kopya okunamadı"); }
 }
 
 /* ============================================================
@@ -2333,6 +2445,7 @@ function updateMenubar(){
   $("#mbStreak").querySelector("b").textContent=streak();
   $("#mbDue").querySelector("b").textContent=dueCards().length;
   $("#mbTheme").textContent=DB.settings.theme==="dark"?"🌙":"☀️";
+  $("#mbSave").style.display=SAVE_FAILED?"":"none";
 }
 function clock(){ const d=new Date();
   $("#mbClock").textContent=`${trDay[(d.getDay()+6)%7]} ${pad(d.getDate())}.${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
@@ -2438,14 +2551,21 @@ function paintWidgets(){
       </div>`;
   const dolu=DB.notes.length+DB.cards.length+DB.sessions.length+DB.tasks.length;
   const gecen=DB.settings.lastBackup?dayDiff(DB.settings.lastBackup,today()):null;
-  const yedekWg=(dolu>8&&(gecen===null||gecen>=7))
+  const kaydetWg = SAVE_FAILED
+    ? `<div class="wg" style="border-color:var(--bad)">
+        <div class="wgh" style="color:var(--bad)">⚠️ KAYDEDİLEMİYOR</div>
+        <div class="sub">Metin deposu dolu — bu oturumdaki değişiklikler tarayıcıya yazılamıyor.
+          Yedek al, sonra Ayarlar → Veri'den eski kayıtları temizle.</div>
+        <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="backup">⬇ Şimdi yedek al</button>
+      </div>`:"";
+  const yedekWg=(!SAVE_FAILED&&dolu>8&&(gecen===null||gecen>=7))
     ? `<div class="wg" style="border-color:var(--warn)">
         <div class="wgh">💾 YEDEK</div>
         <div class="sub">${gecen===null?"Henüz hiç yedek almadın.":gecen+" gündür yedek almadın."}
           Verin yalnızca bu tarayıcıda duruyor.</div>
         <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="backup">⬇ Şimdi yedek al</button>
       </div>`:"";
-  box.innerHTML=`${studyWg}${yedekWg}
+  box.innerHTML=`${kaydetWg}${studyWg}${yedekWg}
     <div class="wg clickable" data-wg="stats">
       <div class="wgh">🎯 Bugün</div>
       <div class="row"><span class="big">${fmtMin(min)}</span><span class="grow"></span><span class="sub">/ ${fmtMin(DB.settings.goal)}</span></div>
@@ -2618,6 +2738,7 @@ async function importShared(){
 Object.values(APPS).forEach(a=>{ const orig=a.render.bind(a);
   a.render=w=>{ orig(w); hydrateMedia(w.body); decorate(w.body); }; });
 load(); buildTerms(); applySettings(); buildDesktop(); buildDock(); updateMenubar(); clock(); paintWidgets();
+if(CORRUPT_RAW) corruptScreen();
 migrateMedia().then(idbUsage).then(()=>refreshAll()).then(importShared);
 /* verinin tarayıcı tarafından silinmemesi için kalıcı depolama iste */
 if(navigator.storage?.persist) navigator.storage.persisted?.().then(p=>{ if(!p) navigator.storage.persist().catch(()=>{}); });
@@ -2627,6 +2748,7 @@ window.addEventListener("beforeunload",e=>{ if(Pomo.running){ e.preventDefault()
 /* PWA: http(s) üzerinden açıldığında çevrimdışı çalışsın (file:// ile atlanır) */
 if(location.protocol.startsWith("http")) navigator.serviceWorker?.register("sw.js").catch(()=>{});
 setTimeout(()=>{
+  if(CORRUPT_RAW) return;                     /* bozuk veri ekranı açıkken selamlama yok */
   const due=dueCards().length, open=DB.tasks.filter(t=>!t.done).length;
   const hi=DB.settings.name?`Hoş geldin ${DB.settings.name}`:"Hoş geldin";
   toast(`${hi} 👋 ${due?`${due} kart tekrar bekliyor · `:""}${open} açık görev`);

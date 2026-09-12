@@ -109,6 +109,61 @@ check("metin deposu küçük kalıyor", store.ls < 200000, store.ls + " karakter
 
 await p.waitForTimeout(300);
 check("konsol hatası yok", errs.length === 0, errs.slice(0, 3).join(" | "));
+await p.close();
+
+/* ---------- veri güvenliği (sürüm 2.3) ---------- */
+const p2 = await b.newPage({ viewport: { width: 1200, height: 800 } });
+const errs2 = [];
+p2.on("pageerror", e => errs2.push("PAGEERROR " + e.message));
+p2.on("console", m => { if (m.type() === "error" && !/manifest|sw\.js|favicon/i.test(m.text())) errs2.push("CONSOLE " + m.text()); });
+p2.on("dialog", d => d.accept());
+
+/* bozuk localStorage: örnek veriyle ezilmemeli, uyarı ekranı açılmalı */
+const BOZUK = "{bu-gecerli-json-degil";
+await p2.goto(URL); await p2.waitForTimeout(400);
+await p2.evaluate(b => { LOCK_SAVE = true; localStorage.setItem("studyos.v1", b); }, BOZUK);
+await p2.reload(); await p2.waitForTimeout(900);
+const ham = () => p2.evaluate(() => localStorage.getItem("studyos.v1"));
+check("bozuk veri uyarı ekranı açılıyor",
+  await p2.evaluate(() => document.body.textContent.includes("Kayıtlı veri okunamadı")));
+check("bozuk veri örnek veriyle ezilmiyor", (await ham()) === BOZUK);
+check("bozuk veri ayrı anahtara kopyalanıyor",
+  (await p2.evaluate(() => localStorage.getItem("studyos.v1.bozuk"))) === BOZUK);
+check("bozuk veride kaydetme kilitli", await p2.evaluate(() => LOCK_SAVE === true));
+await p2.evaluate(() => { DB.tasks.push({ id: "z", title: "z", done: false, pri: 1 }); save(); });
+await p2.waitForTimeout(700);
+check("kilitliyken save() yazmıyor", (await ham()) === BOZUK);
+await p2.evaluate(() => [...document.querySelectorAll("button")].find(x => x.textContent.includes("Boş başla")).click());
+await p2.waitForTimeout(400);
+check("'Boş başla' kilidi açıp yazıyor",
+  await p2.evaluate(() => LOCK_SAVE === false && localStorage.getItem("studyos.v1").startsWith("{")
+    && localStorage.getItem("studyos.v1.bozuk") === null));
+
+/* depo dolduğunda uyarı susmuyor, veri "kirli" kalıyor */
+await p2.goto(URL); await p2.waitForTimeout(500);
+await p2.evaluate(() => {
+  const orij = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = (k, v) => { if (k === "studyos.v1") { const e = new Error("kota"); e.name = "QuotaExceededError"; throw e; } orij(k, v); };
+  DB.tasks.push({ id: "q", title: "q", done: false, pri: 1 }); saveNow();
+});
+await p2.waitForTimeout(250);
+check("kota hatasında menü çubuğu uyarıyor",
+  await p2.evaluate(() => getComputedStyle(document.querySelector("#mbSave")).display !== "none"));
+check("kota hatasında widget uyarıyor",
+  await p2.evaluate(() => document.querySelector("#widgets").textContent.includes("KAYDEDİLEMİYOR")));
+check("yazılamayan veri kirli kalıyor (tekrar denenecek)", await p2.evaluate(() => _dirty === true));
+await p2.evaluate(() => { delete localStorage.setItem; saveNow(); });
+await p2.waitForTimeout(250);
+check("yazma düzelince uyarı kalkıyor",
+  await p2.evaluate(() => SAVE_FAILED === false && getComputedStyle(document.querySelector("#mbSave")).display === "none"));
+
+/* ikinci sekme uyarısı */
+await p2.evaluate(() => window.dispatchEvent(new StorageEvent("storage", { key: "studyos.v1" })));
+await p2.waitForTimeout(200);
+check("başka sekme yazınca uyarılıyor",
+  await p2.evaluate(() => document.body.textContent.includes("başka bir sekmede değişti")));
+
+check("veri güvenliği bölümünde konsol hatası yok", errs2.length === 0, errs2.slice(0, 3).join(" | "));
 
 await b.close();
 console.log(out.join("\n"));

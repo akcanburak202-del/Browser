@@ -28,7 +28,9 @@ Yeni oturumda önce bunu oku, sonra `README.md`'ye ve `git log`'a bak.
 | `vendor/pdf*.js` | pdf.js (Apache-2.0), yalnızca PDF açılınca yüklenir |
 | `sw.js` | Çevrimdışı önbellek + paylaşım hedefi. **Değişiklikte `C` sabitini artır** |
 | `manifest.json`, `icon*.png` | PWA kurulumu |
-| `tests/smoke.mjs` | `node tests/smoke.mjs` — Playwright duman testi |
+| `tests/smoke.mjs` | `node tests/smoke.mjs` — Playwright duman testi (arayüz + açılış yolları) |
+| `tests/unit.mjs` | `node tests/unit.mjs` — tarayıcısız mantık testi; kendini 4 zaman diliminde çalıştırır |
+| `PLAN.md` | İnceleme sonrası parti parti yol haritası, hangi partinin bittiği işaretli |
 
 ## index.html mimarisi
 
@@ -48,6 +50,13 @@ Script blokları sırayla:
 - Veri değişince `saveAnd("app1","app2")` çağır: kaydeder, o uygulamaları yeniden çizer,
   menü çubuğunu ve widget'ları tazeler.
 - Uzun listeleri `capped()` ile kırp (DOM şişerse tüm arayüz yavaşlar — ölçüldü).
+- **Tarih üretirken asla `toISOString()` kullanma.** Tek kaynak `ymd()`; `today()`,
+  `dayKey()`, `addDays()` ona bağlı. UTC'ye kaçan bir hesap, gece çalışan kullanıcıda
+  kayıtları bir önceki güne yazar. `tests/unit.mjs` bunu UTC+14/−11'de sınar.
+- **DB'yi toptan değiştirdiysen `flush()` değil `saveNow()` çağır.** `flush()` yalnızca
+  `_dirty` işaretliyse yazar; içe aktarma/sıfırlama gibi yerlerde sessizce hiçbir şey yapmaz.
+- Kaydetme kilidi: `LOCK_SAVE` açıkken `flush()` yazmaz (bozuk veri veya sekme çakışması).
+  Kullanıcı karar verene kadar `localStorage` olduğu gibi kalır.
 
 ## Veri modeli (localStorage `studyos.v1`, `DB.v = 2`)
 
@@ -57,14 +66,19 @@ journal, terms, settings`. Görseller/dosyalar **IndexedDB**'de (`media`), dosya
 
 `sessions` kayıtları: `{courseId, topicId?, date, min, kind:"focus"|"study", label?}`.
 
+Yan localStorage anahtarları (yalnızca kurtarma için, uygulama bunlardan okumaz):
+`studyos.v1.bozuk` — ayrıştırılamayan son veri · `studyos.v1.oncesi` — son içe aktarmadan
+önceki hal (Ayarlar → Veri'den geri dönülebilir).
+
 ## Geliştirme akışı
 
 1. `index.html` üzerinde küçük, hedefli değişiklikler (uzun blokları `node` ile
    dize değiştirerek yamalamak güvenli oldu — bulunamayan desende hata fırlat).
 2. Sözdizimi: script bloklarını çıkarıp `node --check`.
-3. `node tests/smoke.mjs` — hepsi geçmeli.
-4. `VERSION` sabitini artır; `sw.js` içindeki önbellek adını (`studyos-vN`) da artır.
-5. Commit + `git push origin main` → Pages 1-2 dakikada yayınlar.
+3. `node tests/unit.mjs` — mantık; saniyeler sürer, önce bunu çalıştır.
+4. `node tests/smoke.mjs` — arayüz; hepsi geçmeli.
+5. `VERSION` sabitini artır; `sw.js` içindeki önbellek adını (`studyos-vN`) da artır.
+6. Commit + `git push origin main` → Pages 1-2 dakikada yayınlar.
 
 ## Yapılabilecekler (konuşuldu, yapılmadı)
 
