@@ -237,6 +237,66 @@ await p2.waitForTimeout(400);
 check("çöp ekranından geri alınıyor",
   await p2.evaluate(() => DB.notes.some(x => x.id === "cp1") && DB.trash.length === 0));
 
+/* ---------- günlük plan widget'ı (sürüm 2.5) ---------- */
+await p2.goto(URL); await p2.waitForTimeout(700);
+await p2.evaluate(() => {
+  DB.courses = [{ id: "k1", name: "Biyoloji", color: "#1baf7a" }];
+  DB.topics = [{ id: "t1", courseId: "k1", parentId: null, name: "Hücre bölünmesi", status: "learning" }];
+  DB.exams = [{ id: "s1", name: "Bio yazılı", date: addDays(today(), 3), courseId: "k1" }];
+  DB.tasks = []; DB.cards = []; DB.decks = []; DB.sessions = [];
+  DB.settings.planDone = null; DB.settings.widgets = true;
+  saveNow(); paintWidgets();
+});
+await p2.waitForTimeout(300);
+const wg = () => p2.evaluate(() => document.querySelector("#widgets").textContent);
+check("plan widget'ı çiziliyor", (await wg()).includes("BUGÜN NE ÇALIŞAYIM"));
+check("plan satırı konuyu ve gerekçesini gösteriyor",
+  (await wg()).includes("Hücre bölünmesi") && (await wg()).includes("Bio yazılı sınavına 3 gün"));
+
+/* ▶ kronometreyi o konu için başlatıyor */
+await p2.evaluate(() => document.querySelector("[data-plg]").click());
+await p2.waitForTimeout(300);
+check("plan satırı kronometreyi doğru konuyla başlatıyor",
+  await p2.evaluate(() => Study.on === true && Study.courseId === "k1" && Study.topicId === "t1"));
+await p2.evaluate(() => Study.cancel());
+await p2.waitForTimeout(200);
+
+/* çalışan kronometre varken ikinci satır onu ezmiyor */
+await p2.evaluate(() => { Study.begin("k1", null); });
+await p2.waitForTimeout(200);
+const oncekiStart = await p2.evaluate(() => Study.start);
+await p2.evaluate(() => document.querySelector("[data-plg]").click());
+await p2.waitForTimeout(200);
+check("çalışan kronometre plan satırıyla ezilmiyor",
+  (await p2.evaluate(() => Study.start)) === oncekiStart);
+await p2.evaluate(() => Study.cancel());
+await p2.waitForTimeout(200);
+
+/* onay kutusu işaretleniyor ve kalıcı */
+await p2.evaluate(() => document.querySelector("[data-plc]").click());
+await p2.waitForTimeout(300);
+check("plan satırı yapıldı işaretleniyor",
+  await p2.evaluate(() => DB.settings.planDone.ids.length === 1 && DB.settings.planDone.date === today()));
+check("işaretli satırın başlat düğmesi kalkıyor",
+  await p2.evaluate(() => !document.querySelector("[data-plg]")));
+await p2.reload(); await p2.waitForTimeout(700);
+check("işaret yenilemeden sonra duruyor",
+  (await p2.evaluate(() => document.querySelectorAll("#widgets .checkbox.on").length)) >= 1);
+
+/* vadesi gelen kart her zaman ilk sırada */
+await p2.evaluate(() => {
+  DB.decks = [{ id: "d1", name: "Deste", courseId: "k1" }];
+  DB.cards = [{ id: "c1", deckId: "d1", front: "a", back: "b", ef: 2.5, int: 0, reps: 0, lapses: 0, due: today() }];
+  DB.settings.planDone = null; saveNow(); paintWidgets();
+});
+await p2.waitForTimeout(300);
+check("kart tekrarı plan listesinin başında",
+  await p2.evaluate(() => document.querySelector("[data-plc]").dataset.plc === "kart"));
+await p2.evaluate(() => document.querySelector("[data-plg]").click());
+await p2.waitForTimeout(400);
+check("plandan kart turu başlıyor",
+  await p2.evaluate(() => [...WINS.values()].some(w => w.appId === "cards" && w.state.mode === "study")));
+
 check("veri güvenliği bölümünde konsol hatası yok", errs2.length === 0, errs2.slice(0, 3).join(" | "));
 
 await b.close();

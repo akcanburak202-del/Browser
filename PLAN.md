@@ -165,7 +165,7 @@ tek kayıt değil, yinelenen blok kümesi; ayrı bir çöp türü gerektiriyor.
 
 ---
 
-## 3. parti — "Bugün ne çalışayım"  (hedef sürüm 2.5)
+## 3. parti — "Bugün ne çalışayım"  (sürüm 2.5) ✅ BİTTİ
 
 Uygulamanın hissini en çok değiştirecek parça. Veriler zaten var, birleşmiyor.
 
@@ -188,6 +188,20 @@ turunu başlatır.
 
 **Saklama.** Plan türetilmiştir, veriye yazılmaz. Tek istisna `DB.settings.planDone={date, ids}` —
 bugün tamamlananların üstü çizilir, tarih değişince kendiliğinden sıfırlanır.
+
+### 3. parti sonucu ✅
+`node tests/unit.mjs` (4 zaman dilimi × 82 kontrol) ve `node tests/smoke.mjs` (57 kontrol) geçiyor ·
+`VERSION=2.5` · `sw.js` `C="studyos-v10"`
+
+`dailyPlan()` 3. bloğun sonunda duruyor (blok 1-3 birim testte yükleniyor), çizim 4. blokta.
+Motorun tamamı 22 birim testiyle sabitlendi; widget davranışı 11 duman testiyle.
+
+**Ayarlanan sayı:** ihmal ağırlığı ilk yazımda `0.3` idi, yani "3 gün sonraki sınav" kadar ağır —
+iki hafta sonraki bir sınavın konularını gömüyordu. `PLAN_IHMAL=0.1` yapıldı (≈ 10 gün sonraki
+sınav) ve denge noktası teste bağlandı, kazara kaymasın.
+
+**Yan düzeltme:** kart turu başlatma kodu widget'ta iki kez kopyalanmıştı;
+`startCardReview()` olarak tek yere alındı.
 
 ---
 

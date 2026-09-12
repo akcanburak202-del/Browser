@@ -38,6 +38,7 @@ if (bloklar.length !== 4) { console.error("Beklenen 4 script bloğu, bulunan " +
 const kaynak = bloklar.slice(0, 3).join("\n") + `
 globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueCards, minutesByDay,
   toTrash, trimTrash, restoreTrash, dropTrash, trashRefs, COP_GUN, COP_BAYT,
+  dailyPlan, planDone, planToggle, PLAN_BLOK, PLAN_SATIR, PLAN_IHMAL,
   setDB: v => { DB = v; }, getDB: () => DB };`;
 
 const bosDugum = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {} },
@@ -208,6 +209,111 @@ es("çöp: kart görseli bulunuyor", T.trashRefs({ type: "card", data: { img: "i
 es("çöp: destedeki kartların görselleri bulunuyor",
   T.trashRefs({ type: "deck", data: { cards: [{ img: "idb:k1" }, {}, { img: "idb:k2" }] } }), ["idb:k1", "idb:k2"]);
 es("çöp: görevde görsel yok", T.trashRefs({ type: "task", data: { title: "x" } }), []);
+
+/* ---------- günlük plan ---------- */
+const planDB = (x = {}) => ({ settings: { goal: 120 }, trash: [], notes: [], decks: [],
+  cards: [], tasks: [], sessions: [], topics: [], courses: [], exams: [], quizzes: [], terms: [], ...x });
+
+/* boş veri → boş plan (widget kurulum çağrısı gösterir) */
+T.setDB(planDB());
+es("plan: veri yokken boş", T.dailyPlan().length, 0);
+
+/* vadesi gelen kart her zaman ilk sıra */
+T.setDB(planDB({ cards: [{ id: "c1", due: bugun }, { id: "c2", due: T.addDays(bugun, -3) },
+  { id: "c3", due: T.addDays(bugun, 5) }] }));
+let pl = T.dailyPlan();
+es("plan: kart satırı ilk sırada", pl[0].tip, "kart");
+es("plan: yalnızca vadesi gelenler sayılır", pl[0].baslik, "2 kart tekrarı");
+es("plan: kart satırı bir bloğu aşmaz", pl[0].dk <= T.PLAN_BLOK, true);
+
+/* geciken görev — en fazla 2, en eski önce */
+T.setDB(planDB({ courses: [{ id: "k1", name: "Fizik" }], tasks: [
+  { id: "g1", title: "Eski", done: false, due: T.addDays(bugun, -5), pri: 0, courseId: "k1" },
+  { id: "g2", title: "Bugün", done: false, due: bugun, pri: 2, courseId: "k1" },
+  { id: "g3", title: "Yarın", done: false, due: T.addDays(bugun, 1), pri: 2, courseId: "k1" },
+  { id: "g4", title: "Bitmiş", done: true, due: T.addDays(bugun, -9), pri: 2, courseId: "k1" },
+  { id: "g5", title: "Daha eski", done: false, due: T.addDays(bugun, -7), pri: 0, courseId: "k1" }] }));
+pl = T.dailyPlan();
+es("plan: gelecek ve bitmiş görev alınmaz", pl.length, 2);
+es("plan: en eski geciken önce", pl.map(r => r.baslik), ["Daha eski", "Eski"]);
+es("plan: gecikme gün sayısı yazılıyor", pl[0].neden, "7 gün gecikti");
+es("plan: dersi yazılıyor", pl[0].alt, "Fizik");
+
+/* sınav yakınlığı konuları sıralar */
+T.setDB(planDB({
+  courses: [{ id: "k1", name: "Biyoloji" }, { id: "k2", name: "Tarih" }],
+  exams: [{ id: "s1", name: "Bio", date: T.addDays(bugun, 20), courseId: "k1" },
+          { id: "s2", name: "Tarih", date: T.addDays(bugun, 2), courseId: "k2" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Hücre", status: "learning" },
+           { id: "t2", courseId: "k2", name: "Osmanlı", status: "learning" }] }));
+pl = T.dailyPlan();
+es("plan: yakın sınavın konusu önce", pl.map(r => r.baslik), ["Osmanlı", "Hücre"]);
+es("plan: gerekçe sınavı ve kalan günü söylüyor", pl[0].neden, "Tarih sınavına 2 gün");
+es("plan: satır başlatılabilir bilgiyi taşıyor", [pl[0].tip, pl[0].courseId, pl[0].topicId], ["konu", "k2", "t2"]);
+
+/* "biliyorum" konular plana girmez */
+T.setDB(planDB({ courses: [{ id: "k1", name: "X" }],
+  exams: [{ id: "s1", name: "S", date: T.addDays(bugun, 3), courseId: "k1" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Biliniyor", status: "known" },
+           { id: "t2", courseId: "k1", name: "Öğreniliyor", status: "learning" }] }));
+es("plan: bilinen konu atlanır", T.dailyPlan().map(r => r.baslik), ["Öğreniliyor"]);
+
+/* aynı yakınlıkta başlanmamış konu, öğrenilene göre önde */
+T.setDB(planDB({ courses: [{ id: "k1", name: "X" }],
+  exams: [{ id: "s1", name: "S", date: T.addDays(bugun, 4), courseId: "k1" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Devam eden", status: "learning" },
+           { id: "t2", courseId: "k1", name: "Başlanmamış", status: "new" }] }));
+es("plan: başlanmamış konu biraz önde", T.dailyPlan().map(r => r.baslik), ["Başlanmamış", "Devam eden"]);
+
+/* sınavı olmayan derste 7 gündür dokunulmamış konu */
+T.setDB(planDB({ courses: [{ id: "k1", name: "X" }],
+  topics: [{ id: "t1", courseId: "k1", name: "İhmal", status: "learning" },
+           { id: "t2", courseId: "k1", name: "Taze", status: "learning" }],
+  sessions: [{ date: T.addDays(bugun, -2), min: 30, topicId: "t2" }] }));
+pl = T.dailyPlan();
+es("plan: son 7 günde çalışılan konu önerilmez", pl.map(r => r.baslik), ["İhmal"]);
+es("plan: ihmal gerekçesi", pl[0].neden, "7 gündür dokunulmadı");
+
+/* bugün çalışılan konu arkaya düşer ama yok olmaz */
+T.setDB(planDB({ courses: [{ id: "k1", name: "X" }],
+  exams: [{ id: "s1", name: "S", date: T.addDays(bugun, 3), courseId: "k1" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Bugün çalışıldı", status: "learning" },
+           { id: "t2", courseId: "k1", name: "Çalışılmadı", status: "learning" }],
+  sessions: [{ date: bugun, min: 40, topicId: "t1" }] }));
+es("plan: bugün çalışılan konu arkaya düşer",
+  T.dailyPlan().map(r => r.baslik), ["Çalışılmadı", "Bugün çalışıldı"]);
+
+/* ihmal ile sınav yakınlığı arasındaki denge — PLAN_IHMAL bunu belirler */
+const dengeDB = gun => planDB({
+  courses: [{ id: "k1", name: "Sınavlı" }, { id: "k2", name: "Sınavsız" }],
+  exams: [{ id: "s1", name: "Yazılı", date: T.addDays(bugun, gun), courseId: "k1" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Sınav konusu", status: "learning" },
+           { id: "t2", courseId: "k2", name: "İhmal edilen", status: "learning" }] });
+T.setDB(dengeDB(5));
+es("plan: yakın sınav ihmali geçer", T.dailyPlan().map(r => r.baslik), ["Sınav konusu", "İhmal edilen"]);
+T.setDB(dengeDB(30));
+es("plan: uzak sınav ihmalin gerisinde kalır", T.dailyPlan().map(r => r.baslik), ["İhmal edilen", "Sınav konusu"]);
+dogru("plan: denge noktası PLAN_IHMAL ile tutarlı", Math.abs(1 / T.PLAN_IHMAL - 10) < 1e-9);
+
+/* bütçe ve satır sınırı */
+const cokKonu = [...Array(20)].map((_, i) => ({ id: "t" + i, courseId: "k1", name: "K" + i, status: "learning" }));
+T.setDB(planDB({ courses: [{ id: "k1", name: "X" }], topics: cokKonu,
+  exams: [{ id: "s1", name: "S", date: T.addDays(bugun, 3), courseId: "k1" }] }));
+es("plan: en fazla PLAN_SATIR satır", T.dailyPlan().length, T.PLAN_SATIR);
+T.setDB(planDB({ settings: { goal: 50 }, courses: [{ id: "k1", name: "X" }], topics: cokKonu,
+  exams: [{ id: "s1", name: "S", date: T.addDays(bugun, 3), courseId: "k1" }] }));
+pl = T.dailyPlan();
+es("plan: günlük hedef bütçesi aşılmaz", pl.length, 2);
+dogru("plan: toplam süre hedefi aşmıyor", pl.reduce((a, r) => a + r.dk, 0) <= 50);
+
+/* "bugün yapıldı" işaretleri tarih değişince sıfırlanır */
+T.setDB(planDB());
+T.planToggle("konu:t1");
+es("plan: işaret eklendi", T.planDone(), ["konu:t1"]);
+T.planToggle("konu:t1");
+es("plan: işaret kaldırıldı", T.planDone(), []);
+T.setDB(planDB({ settings: { goal: 120, planDone: { date: T.addDays(bugun, -1), ids: ["konu:t1"] } } }));
+es("plan: dünkü işaretler bugüne taşınmaz", T.planDone(), []);
 
 /* ---------- markdown ---------- */
 dogru("md kalın", T.md("**kalın**").includes("<b>kalın</b>"));

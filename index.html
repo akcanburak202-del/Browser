@@ -390,7 +390,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.4", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.5", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1725,6 +1725,67 @@ APPS.stats={ name:"İstatistik", icon:"📊", w:760, h:600, desk:true, single:tr
         </div>
       </div></div>`;
   }, onResize(w){ this.render(w); }};
+/* ---------------- Günlük plan — "Bugün ne çalışayım" ----------------
+   Kural tabanlı ve açıklanabilir: her satır neden orada olduğunu yazar.
+   Türetilmiştir, veriye yazılmaz — yalnızca "bugün yapıldı" işaretleri saklanır
+   ve tarih değişince kendiliğinden sıfırlanır. */
+const PLAN_BLOK=25, PLAN_SATIR=5;
+/* İhmal edilen konunun ağırlığı. Sınav ağırlığı 1/kalan_gün olduğu için 0.1,
+   "10 gün sonraki sınav" kadar ağır demek: 10 günden yakın sınavlar ihmali geçer,
+   daha uzaktakiler geçemez. Bu sayıyı değiştirmek planın karakterini değiştirir. */
+const PLAN_IHMAL=0.1;
+function planDone(){ const p=DB.settings.planDone; return p&&p.date===today()?(p.ids||[]):[]; }
+function planToggle(id){
+  const ids=planDone(), i=ids.indexOf(id);
+  if(i<0) ids.push(id); else ids.splice(i,1);
+  DB.settings.planDone={date:today(),ids};
+}
+function dailyPlan(){
+  const t=today(), out=[];
+  let kalan=Math.max(PLAN_BLOK,DB.settings.goal||120);      /* günlük hedef dakika */
+  const ekle=r=>{ if(out.length>=PLAN_SATIR||kalan<=0) return; out.push(r); kalan-=r.dk; };
+
+  /* 1) vadesi gelen kartlar her zaman ilk sırada — biriktikçe telafisi zorlaşır */
+  const due=dueCards().length;
+  if(due) ekle({id:"kart",icon:"🗂",baslik:`${due} kart tekrarı`,alt:"",neden:"vadesi geldi",
+    dk:Math.min(PLAN_BLOK,Math.max(5,Math.round(due*0.25))),tip:"kart"});
+
+  /* 2) bugün ve geçmiş vadeli görevler — en fazla 2, gün planını yutmasınlar */
+  DB.tasks.filter(x=>!x.done&&x.due&&x.due<=t)
+    .sort((a,b)=>a.due.localeCompare(b.due)||(b.pri||0)-(a.pri||0))
+    .slice(0,2)
+    .forEach(x=>ekle({id:"gorev:"+x.id,icon:"✅",baslik:x.title,alt:cname(x.courseId),
+      neden:x.due<t?`${dayDiff(x.due,t)} gün gecikti`:"bugün teslim",
+      dk:PLAN_BLOK,tip:"gorev",courseId:x.courseId,taskId:x.id}));
+
+  /* 3) konular: yaklaşan sınav ağır basar (ağırlık 1/kalan gün),
+        sınavı olmayan derslerde 7 gündür dokunulmamış konular arkadan gelir */
+  const bugunCalisilan=new Set(DB.sessions.filter(x=>x.date===t&&x.topicId).map(x=>x.topicId));
+  const sonHafta=new Set(DB.sessions.filter(x=>x.date>addDays(t,-7)&&x.topicId).map(x=>x.topicId));
+  const aday=new Map();
+  const koy=(k,w,neden)=>{ const v=aday.get(k.id);
+    if(!v||w>v.w) aday.set(k.id,{topicId:k.id,courseId:k.courseId,ad:k.name,w,neden}); };
+  const sinavliDers=new Set();
+  for(const e of examList()){
+    sinavliDers.add(e.courseId);
+    const gun=Math.max(0,dayDiff(t,e.date));
+    for(const k of DB.topics.filter(k=>k.courseId===e.courseId&&k.status!=="known"))
+      koy(k, (1/Math.max(1,gun))*(k.status==="new"?1.2:1),
+        gun===0?`${e.name} bugün`:`${e.name} sınavına ${gun} gün`);
+  }
+  for(const k of DB.topics){
+    if(k.status!=="learning"||sinavliDers.has(k.courseId)||sonHafta.has(k.id)) continue;
+    koy(k,PLAN_IHMAL,"7 gündür dokunulmadı");
+  }
+  [...aday.values()]
+    .map(x=>bugunCalisilan.has(x.topicId)?{...x,w:x.w*0.25}:x)   /* bugün çalışılana öncelik verme */
+    .sort((a,b)=>b.w-a.w||a.ad.localeCompare(b.ad))
+    .forEach(x=>ekle({id:"konu:"+x.topicId,icon:"🧠",baslik:x.ad,alt:cname(x.courseId),
+      neden:x.neden,dk:PLAN_BLOK,tip:"konu",courseId:x.courseId,topicId:x.topicId}));
+
+  return out;
+}
+
 </script>
 <script>
 /* ============================================================
@@ -2690,6 +2751,14 @@ const hms=s=>`${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%6
 /* ============================================================
    MASAÜSTÜ WIDGET'LARI
    ============================================================ */
+/* vadesi gelen kartlarla dolu bir tur başlat (plan satırı ve tekrar kuyruğu widget'ı) */
+function startCardReview(){
+  const w=openApp("cards");
+  w.state.deck=DB.decks.find(d=>dueCards(d.id).length)?.id||w.state.deck;
+  w.state.mode="study"; w.state.queue=dueCards(w.state.deck).map(c=>c.id);
+  w.state.show=false; w.state.done=0;
+  APPS.cards.render(w);
+}
 function paintWidgets(){
   const box=$("#widgets"); if(!box) return;
   if(!DB.settings.widgets){ box.innerHTML=""; return; }
@@ -2724,6 +2793,32 @@ function paintWidgets(){
         <div class="sub">Önce bir ders ekle.</div>
         <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="newcourse">+ Ders ekle</button>
       </div>`;
+  const plan=dailyPlan(), planBitti=planDone();
+  const planWg = plan.length
+    ? `<div class="wg">
+        <div class="wgh">🎯 BUGÜN NE ÇALIŞAYIM<span class="grow"></span>
+          <span class="sub" style="text-transform:none">${plan.filter(r=>planBitti.includes(r.id)).length}/${plan.length}</span></div>
+        ${plan.map(r=>{ const ok=planBitti.includes(r.id);
+          return `<div class="rowi" style="align-items:flex-start">
+            <span class="checkbox ${ok?"on":""}" data-plc="${r.id}">✓</span>
+            <span class="grow" style="min-width:0${ok?";opacity:.45;text-decoration:line-through":""}">
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.icon} ${esc(r.baslik)}</div>
+              <div class="sub">${esc(r.neden)}${r.alt?" · "+esc(r.alt):""} · ${r.dk} dk</div></span>
+            ${ok?"":`<button class="btn sm pri" data-plg="${r.id}" title="Başlat">▶</button>`}
+          </div>`;}).join("")}
+      </div>`
+    : (!DB.topics.length&&!DB.cards.length)
+    ? `<div class="wg">
+        <div class="wgh">🎯 BUGÜN NE ÇALIŞAYIM</div>
+        <div class="sub">Plan çıkarmak için veri gerekiyor: konu haritasına konu ekle,
+          takvime sınav tarihi gir ya da kart destesi oluştur.</div>
+        <button class="btn sm" style="width:100%;margin-top:8px" data-wgo="topics">🧠 Konu haritasını aç</button>
+      </div>`
+    : `<div class="wg">
+        <div class="wgh">🎯 BUGÜN NE ÇALIŞAYIM</div>
+        <div class="sub">Vadesi gelen kart, geciken görev ya da yaklaşan sınav yok.
+          İstediğin konudan devam edebilirsin.</div>
+      </div>`;
   const dolu=DB.notes.length+DB.cards.length+DB.sessions.length+DB.tasks.length;
   const gecen=DB.settings.lastBackup?dayDiff(DB.settings.lastBackup,today()):null;
   const kaydetWg = SAVE_FAILED
@@ -2740,7 +2835,7 @@ function paintWidgets(){
           Verin yalnızca bu tarayıcıda duruyor.</div>
         <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="backup">⬇ Şimdi yedek al</button>
       </div>`:"";
-  box.innerHTML=`${kaydetWg}${studyWg}${yedekWg}
+  box.innerHTML=`${kaydetWg}${studyWg}${planWg}${yedekWg}
     <div class="wg clickable" data-wg="stats">
       <div class="wgh">🎯 Bugün</div>
       <div class="row"><span class="big">${fmtMin(min)}</span><span class="grow"></span><span class="sub">/ ${fmtMin(DB.settings.goal)}</span></div>
@@ -2777,11 +2872,17 @@ function paintWidgets(){
   $$("[data-wg]",box).forEach(n=>n.onclick=e=>{ if(e.target.closest("[data-wgo],[data-wgt],[data-st]"))return; openApp(n.dataset.wg); });
   $$("[data-wgt]",box).forEach(n=>n.onclick=()=>{ const t=DB.tasks.find(x=>x.id===n.dataset.wgt); t.done=true; saveAnd("tasks","stats"); });
   const study=$('[data-wgo="study"]',box);
-  if(study) study.onclick=()=>{ const w=openApp("cards");
-    w.state.deck=DB.decks.find(d=>dueCards(d.id).length)?.id||w.state.deck;
-    w.state.mode="study"; w.state.queue=dueCards(w.state.deck).map(c=>c.id); w.state.show=false; w.state.done=0;
-    APPS.cards.render(w); };
+  if(study) study.onclick=startCardReview;
   const all=$('[data-wgo="tasks"]',box); if(all) all.onclick=()=>openApp("tasks");
+  const topicsBtn=$('[data-wgo="topics"]',box); if(topicsBtn) topicsBtn.onclick=()=>openApp("topics");
+  $$("[data-plc]",box).forEach(x=>x.onclick=()=>{ planToggle(x.dataset.plc); save(); paintWidgets(); });
+  $$("[data-plg]",box).forEach(x=>x.onclick=()=>{
+    const r=plan.find(y=>y.id===x.dataset.plg); if(!r) return;
+    if(r.tip==="kart") return startCardReview();
+    if(r.tip==="gorev"){ Pomo.start(r.courseId,r.baslik); openApp("pomodoro"); return; }
+    if(Study.on){ toast("Önce çalışan kronometreyi bitir"); return; }
+    Study.begin(r.courseId,r.topicId);
+  });
 }
 
 /* ============================================================

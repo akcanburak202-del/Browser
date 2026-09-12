@@ -39,7 +39,8 @@ Script blokları sırayla:
    IndexedDB medya katmanı (`putMedia/mediaURL/dropMedia`, `idb:<id>` referansları),
    `dialog()`, mini markdown (`md()`), pencere yöneticisi (`openApp/WINS/dragify`).
 2. **Uygulamalar 1** — Notlar, Görevler, Kartlar (SM-2), Pomodoro.
-3. **Uygulamalar 2** — Quiz, Takvim+Sınavlar, Konu Haritası, İstatistik.
+3. **Uygulamalar 2** — Quiz, Takvim+Sınavlar, Konu Haritası, İstatistik,
+   günlük plan motoru (`dailyPlan()`).
 4. **Uygulamalar 3 + kabuk** — Günlük, Terminal, iç bağlantılar (`[[...]]`), Bağlantı Haritası,
    Sözlük, Görüntüleyici, Ayarlar, çalışma kronometresi (`Study`), widget'lar, spotlight, açılış.
 
@@ -63,6 +64,13 @@ Script blokları sırayla:
   tek bir çöp kaydı yaz — geri alınca ilişki bozulmasın.
 - Anlık görüntüler IndexedDB `snaps` deposunda ve **yalnızca metin DB'si** tutar; medya bilerek
   dışarıda. Yeni bir toplu silme/değiştirme eklersen öncesinde `takeSnapshot("<sebep>")` çağır.
+- **Günlük plan türetilmiştir, veriye yazılmaz.** `dailyPlan()` (3. bloğun sonunda, blok 1-3'te
+  durduğu için birim testten erişilebilir) her çağrıda yeniden hesaplar; saklanan tek şey
+  `settings.planDone={date,ids}` ve tarih değişince kendiliğinden sıfırlanır.
+  Her satır `neden` alanını doldurur — gerekçesiz satır eklemeyin, plan açıklanabilir kalsın.
+  Sıralama ağırlıkları: sınav `1/kalan_gün`, başlanmamış konu ×1.2, bugün çalışılan ×0.25,
+  ihmal edilen sabit `PLAN_IHMAL=0.1` (≈ 10 gün sonraki sınav). Bunları değiştirmek planın
+  karakterini değiştirir; `tests/unit.mjs` denge noktasını sabitliyor.
 
 ## Veri modeli (localStorage `studyos.v1`, `DB.v = 2`)
 
