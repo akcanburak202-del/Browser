@@ -8,7 +8,16 @@ Ders çalışmayı daha akılda kalıcı hale getirmek için tasarlanmış, **te
 
 **Tablet/telefonda (önerilen):** repoyu GitHub Pages'te yayınla, tarayıcıdan aç ve *"Ana ekrana ekle"* de. `manifest.json` + `sw.js` sayesinde adres çubuğu olmadan, tam ekran ve çevrimdışı çalışır — yani ayrı bir uygulama yazmaya gerek yok.
 
-Veriler tarayıcının `localStorage` alanında saklanır; **Ayarlar → Veri** bölümünden JSON yedek alıp başka cihaza taşıyabilirsin. Her cihazın verisi kendine aittir.
+### Veri nerede durur
+
+| Ne | Nerede | Sınır |
+|---|---|---|
+| Metin (not, kart, görev, kayıtlar) | `localStorage` | 5 MB — ölçüldü; ~25.000 karta veya ~1.700 uzun nota denk gelir |
+| Görsel ve dosyalar | `IndexedDB` | Boş diskin ~%60'ı, yani GB'larca |
+
+Kaydetme, yazmayı bıraktıktan 250 ms sonra ve tarayıcı boştayken yapılır; bu yüzden veri büyüdükçe yazarken takılma olmaz. Uzun listeler 150 satırda kırpılır (gerisi arama ile bulunur), böylece DOM şişip arayüzü yavaşlatmaz.
+
+**Ayarlar → Veri**'den alınan JSON yedek görselleri de içerir — tek dosyayla başka cihaza taşınır. Her cihazın verisi kendine aittir.
 
 ## Uygulamalar
 
@@ -23,8 +32,24 @@ Veriler tarayıcının `localStorage` alanında saklanır; **Ayarlar → Veri** 
 | 🧠 | **Konu Haritası** | Ders → konu → alt konu ağacı, "başlanmadı / öğreniyorum / biliyorum" durumları |
 | 📊 | **İstatistik** | 14 günlük bar grafik, 12 haftalık ısı haritası, ders dağılımı, seri (streak) |
 | 🗒 | **Günlük** | Günün özeti + ruh hali kaydı |
+| 📖 | **Sözlük** | Terim tanımları; terimler tüm metinlerde otomatik işaretlenir, üstüne gelince tanım balonu açılır |
+| 🕸 | **Bağlantı Haritası** | Notlar arası bağlantıların ağ görünümü |
 | >_ | **Terminal** | `gorev`, `kart`, `calis`, `durum`, `yedek`… komutlarıyla hızlı giriş |
 | 🌙 | **Odak modu** | Tam ekran sayaç, ekran karartma, üretilen pembe gürültü |
+
+### İç bağlantılar
+
+Not içinde `[[Başlık]]` yazınca otomatik tamamlama açılır ve bağlantı oluşur:
+
+| Yazım | Nereye gider |
+|---|---|
+| `[[Türev kuralları]]` | Nota |
+| `[[#Limit]]` | Konu haritasındaki konuya |
+| `[[?Hücre testi]]` | Teste (doğrudan çözmeye başlar) |
+| `[[!Mitokondri nedir]]` | Karta |
+| `[[@Final sınavı]]` | Takvimdeki sınava |
+
+Olmayan bir başlığa bağlantı verirsen gri görünür; tıklayınca notu oluşturur. Her notun altında **"buraya bağlananlar"** listesi vardır. Metne yapıştırılan bağlantılar (Drive, YouTube, PDF) otomatik rozetlenir.
 
 Ayrıca: **masaüstü widget'ları** (bugünkü hedef, tekrar kuyruğu, sınav geri sayımı, görevler), **Ctrl+K ile her şeyde arama**, notlara görsel/dosya gömme, kartlara görsel ekleme, notlardaki `Soru :: Cevap` satırlarını tek tuşla desteye çevirme.
 
