@@ -545,6 +545,16 @@ async function pickDeviceFile(){
   await idbOp("readwrite",st=>st.put(h,hid),"handles");
   return {name:h.name,hid};
 }
+/* Dosyayı kopyalamadan "işaretle": sadece adı/türü saklanır, açarken
+   dosya seçici açılır ve dosyanın o anki hali gösterilir. Her yerde çalışır. */
+function openFileRef(a){
+  const i=el("input"); i.type="file";
+  if(a.type) i.accept=a.type;
+  i.onchange=()=>{ const f=i.files[0]; if(!f) return;
+    if(a.name&&f.name!==a.name) toast(`Farklı dosya seçtin: ${f.name}`);
+    window.open(URL.createObjectURL(f),"_blank"); };
+  i.click();
+}
 async function openDeviceFile(hid){
   const h=await idbOp("readonly",st=>st.get(hid),"handles");
   if(!h){ toast("⚠️ Dosya bağlantısı kayboldu"); return; }
@@ -791,7 +801,8 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
           <span class="sub grow">${n?`${n.body.trim().split(/\s+/).filter(Boolean).length} kelime · güncellendi ${esc(n.updated)}`:""}</span>
           ${n&&backlinks(n).length?`<span class="bl"><span class="sub">↩ buraya bağlananlar:</span>
             ${backlinks(n).map(x=>`<span class="chip" data-bl="${x.id}">${esc(x.title||"Adsız")}</span>`).join("")}</span>`:""}
-          <span>${(n?.att||[]).map((a,i)=>`<span class="att ${a.hid?"linked":""}" data-att="${i}" title="${a.hid?"Cihazdaki dosyayı aç":"Aç"}">${a.hid?"🔗":"📎"} ${esc(a.name)} <b data-rmatt="${i}">✕</b></span>`).join("")}</span>
+          <span>${(n?.att||[]).map((a,i)=>`<span class="att ${a.hid||a.manual?"linked":""}" data-att="${i}"
+              title="${a.hid?"Cihazdaki dosyayı aç (güncel hali)":a.manual?"Dosyayı seç ve aç — içeriği saklanmıyor":"Gömülü kopyayı aç"}">${a.hid?"🔗":a.manual?"📌":"📎"} ${esc(a.name)} <b data-rmatt="${i}">✕</b></span>`).join("")}</span>
         </div>
       </div></div>`;
     const q=(s.q||"").toLowerCase();
@@ -823,13 +834,22 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       n.updated=today(); save(); this.render(w); toast("Dosya eklendi ("+bytesFmt(f.size)+")"); });
     on("link","click",async()=>{
       if(!n) return;
-      if(!canLinkFiles()){
-        toast("Bu tarayıcı cihaz dosyasına bağlanamıyor (Android'de yok) — dosya gömülüyor");
-        $('[data-a="file"]',w.body).click(); return;
+      if(canLinkFiles()){
+        try{ const h=await pickDeviceFile(); (n.att=n.att||[]).push({name:h.name,hid:h.hid});
+          n.updated=today(); save(); this.render(w); toast("🔗 Bağlanıldı — kopya alınmadı, hep güncel hali açılır");
+        }catch(e){}
+        return;
       }
-      try{ const h=await pickDeviceFile(); (n.att=n.att||[]).push({name:h.name,hid:h.hid});
-        n.updated=today(); save(); this.render(w); toast("🔗 Dosyaya bağlanıldı — kopyası alınmadı");
-      }catch(e){ /* kullanıcı vazgeçti */ } });
+      /* API yoksa (Android) kullanıcıya kararı bırak */
+      const v=await dialog("Cihazdaki dosya",[{k:"m",label:"Bu tarayıcı dosyaya kalıcı bağlanamıyor. Ne yapılsın?",
+        type:"select",value:"ref",options:[
+          {v:"ref",l:"İşaretle — kopya alınmaz, açarken dosyayı seçersin (hep güncel)"},
+          {v:"embed",l:"İçine göm — kopyası saklanır, çevrimdışı açılır (donar)"}]}]);
+      if(!v) return;
+      if(v.m==="embed"){ $('[data-a="file"]',w.body).click(); return; }
+      const f=await pickFile(); if(!f) return;
+      (n.att=n.att||[]).push({name:f.name,type:f.type,size:f.size,manual:true});
+      n.updated=today(); save(); this.render(w); toast("📌 İşaretlendi — içeriği saklanmadı"); });
     on("tocards","click",()=>{ if(!n)return; noteToCards(n); });
     $$("[data-bl]",w.body).forEach(b=>b.onclick=()=>{ s.id=b.dataset.bl; s.prev=true; this.render(w); });
     const ta=$('[data-a="body"]',w.body); if(ta) wlAutocomplete(ta,()=>{n.body=ta.value;n.updated=today();save();});
@@ -839,6 +859,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
         else dropMedia(n.att[i].ref);
         n.att.splice(i,1); save(); this.render(w); return; }
       const a=n.att[+b.dataset.att];
+      if(a.manual) return openFileRef(a);
       if(a.hid) return openDeviceFile(a.hid);
       const u=await mediaURL(a.ref||a.data);
       if(u) window.open(u,"_blank"); });
@@ -1882,6 +1903,11 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
         <div class="meter" style="margin-top:5px"><i style="width:${Math.min(100,IDB_BYTES/1e9*100).toFixed(2)}%;background:var(--s1)"></i></div>
         <div class="sub" style="margin-top:8px">Görseller ayrı depoda tutulur, metin deposunu doldurmaz.${DB.settings.lastBackup?` Son yedek: ${esc(DB.settings.lastBackup)}.`:" Henüz yedek almadın."}</div>
       </div>
+      <div class="card"><div class="h2">Bu cihaz neyi destekliyor?</div>
+        <div class="sub" style="margin:6px 0">Tarayıcının bu cihazda gerçekten sunduğu yetenekler:</div>
+        <div data-a="caps"></div>
+        <button class="btn sm" data-a="persist" style="margin-top:8px">Depolamayı kalıcı yap</button>
+      </div>
       <div class="card"><div class="h2">Kısayollar</div>
         <div class="sub" style="margin-top:6px;line-height:2">
           <span class="kbd">Esc</span> odak modundan çık · <span class="kbd">Boşluk</span> kart çevir ·
@@ -1906,6 +1932,29 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       DB.courses=DB.courses.filter(c=>c.id!==b.dataset.cx); refreshAll(); save(); this.render(w);});
     A("addc").onclick=()=>{const n=prompt("Ders adı:");if(!n)return;
       DB.courses.push({id:uid(),name:n,color:COLORS[DB.courses.length%COLORS.length]});saveAnd("settings","topics","tasks");this.render(w);};
+    (async()=>{
+      const box=A("caps"); if(!box) return;
+      let persisted=false, est={};
+      try{ persisted=await navigator.storage?.persisted?.(); }catch(e){}
+      try{ est=await navigator.storage?.estimate?.()||{}; }catch(e){}
+      const caps=[
+        ["Cihaz dosyasına canlı bağlantı", canLinkFiles(), "🔗 düğmesi kopya almadan bağlanır"],
+        ["Dosya seçici (işaretleme)", true, "📌 her cihazda çalışır"],
+        ["Paylaş menüsünden dosya alma", !!navigator.serviceWorker && location.protocol.startsWith("http"), "Paylaş → StudyOS (kurulu uygulamada)"],
+        ["Uygulama olarak kurulu", matchMedia("(display-mode: standalone)").matches, "tam ekran, adres çubuğu yok"],
+        ["Kalıcı depolama", persisted, "tarayıcı verini kendiliğinden silemez"],
+        ["Ayrılan alan", est.quota?bytesFmt(est.quota):"?", ""],
+      ];
+      box.innerHTML=caps.map(([k,v,note])=>`<div class="row" style="padding:3px 0">
+        <span class="grow sub">${esc(k)}</span>
+        <span style="font-size:12.5px;color:${v===true?"var(--good)":v===false?"var(--bad)":"var(--text-2)"}">${v===true?"✓ var":v===false?"✕ yok":esc(String(v))}</span></div>
+        ${note&&v===true?`<div class="sub" style="font-size:11px;margin:-2px 0 4px">${esc(note)}</div>`:""}`).join("");
+    })();
+    A("persist").onclick=async()=>{
+      try{ const ok=await navigator.storage.persist();
+        toast(ok?"✓ Depolama kalıcı — tarayıcı silmeyecek":"Tarayıcı kalıcı izni vermedi (uygulamayı ana ekrana ekleyince genelde verir)");
+        this.render(w);
+      }catch(e){ toast("Bu tarayıcı desteklemiyor"); } };
     A("exp").onclick=exportJSON;
     A("imp").onclick=importJSON;
     A("reset").onclick=()=>{ if(!confirm("TÜM veriler silinecek. Emin misin?"))return;
@@ -2152,12 +2201,59 @@ window.addEventListener("resize",()=>{
   paintWidgets();
 });
 
+/* ============================================================
+   PAYLAŞ MENÜSÜNDEN GELEN DOSYALAR (PWA share target)
+   Service worker dosyaları önbelleğe koyar, burada nota ekleriz.
+   ============================================================ */
+async function importShared(){
+  if(!/[?&]shared=1/.test(location.search)) return;
+  try{ history.replaceState(null,"",location.pathname); }catch(e){}
+  if(!window.caches) return;
+  try{
+    const cache=await caches.open("studyos-share");
+    const idxRes=await cache.match("./__shared/index"); if(!idxRes) return;
+    const idx=await idxRes.json();
+    const files=[];
+    for(let i=0;i<(idx.count||0);i++){
+      const r=await cache.match("./__shared/"+i); if(!r) continue;
+      files.push({name:idx.names[i]||("dosya-"+i), blob:await r.blob()});
+      await cache.delete("./__shared/"+i);
+    }
+    await cache.delete("./__shared/index");
+    const extra=[idx.title,idx.text,idx.url].filter(Boolean).join("\n");
+    if(!files.length&&!extra) return;
+    const v=await dialog(files.length?`${files.length} dosya paylaşıldı`:"Paylaşılan metin",[
+      {k:"note",label:"Nereye eklensin?",type:"select",value:"__new",
+       options:[{v:"__new",l:"➕ Yeni not"},...DB.notes.slice(0,60).map(n=>({v:n.id,l:n.title||"Adsız"}))]}]);
+    if(!v) return;
+    let note;
+    if(v.note==="__new"){
+      const t=today();
+      note={id:uid(),courseId:DB.courses[0]?.id,
+        title:(idx.title||files[0]?.name||"Paylaşılan").replace(/\.[^.]+$/,""),body:"",created:t,updated:t};
+      DB.notes.push(note);
+    } else note=DB.notes.find(n=>n.id===v.note);
+    if(!note) return;
+    if(extra) note.body+="\n\n"+extra+"\n";
+    for(const f of files){
+      const ref=await putMedia(f.blob);
+      if((f.blob.type||"").startsWith("image/")) note.body+=`\n\n![${f.name}](${ref})\n`;
+      else (note.att=note.att||[]).push({name:f.name,type:f.blob.type,ref});
+    }
+    note.updated=today(); save(); flush(); idbUsage();
+    openNote(note.id,true);
+    toast(`${files.length?files.length+" dosya":"Metin"} nota eklendi`);
+  }catch(e){ console.warn("paylaşım alınamadı",e); }
+}
+
 /* --------- açılış --------- */
 /* her uygulama çiziminden sonra medyayı bağla */
 Object.values(APPS).forEach(a=>{ const orig=a.render.bind(a);
   a.render=w=>{ orig(w); hydrateMedia(w.body); decorate(w.body); }; });
 load(); buildTerms(); applySettings(); buildDesktop(); buildDock(); updateMenubar(); clock(); paintWidgets();
-migrateMedia().then(idbUsage).then(()=>refreshAll());
+migrateMedia().then(idbUsage).then(()=>refreshAll()).then(importShared);
+/* verinin tarayıcı tarafından silinmemesi için kalıcı depolama iste */
+if(navigator.storage?.persist) navigator.storage.persisted?.().then(p=>{ if(!p) navigator.storage.persist().catch(()=>{}); });
 setInterval(clock,10000); setInterval(paintWidgets,30000);
 Pomo.left=DB.settings.pomo*60; Pomo.total=Pomo.left; Pomo.courseId=DB.courses[0]?.id;
 window.addEventListener("beforeunload",e=>{ if(Pomo.running){ e.preventDefault(); e.returnValue=""; } });
