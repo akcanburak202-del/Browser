@@ -325,8 +325,11 @@ textarea.inp{resize:none;line-height:1.6}
 /* bağlantı haritası */
 .vwrap{position:absolute;inset:0;display:grid;place-items:center;padding:10px;background:var(--surface-2)}
 .vframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
-.pdfbox{position:absolute;inset:0;overflow:auto;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:12px;align-items:center}
-.pdfpage{border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.25);background:#fff;max-width:100%}
+.pdfbox{position:absolute;inset:0 0 44px 0;overflow:auto;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:12px;align-items:center}
+.pdfpage{border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.25);background:#fff;max-width:100%;display:block}
+.pdfslot{width:100%;max-width:1100px;background:var(--surface-3);border-radius:6px;display:grid;place-items:center;color:var(--muted);flex:0 0 auto}
+.pdfnav{position:absolute;left:0;right:0;bottom:0;height:44px;display:flex;gap:6px;align-items:center;justify-content:center;
+  background:var(--surface);backdrop-filter:blur(14px);border-top:1px solid var(--border-2)}
 .vtext{position:absolute;inset:0;margin:0;padding:14px;overflow:auto;font:12.5px/1.6 var(--mono);white-space:pre-wrap}
 .gedge{stroke:var(--border);stroke-width:1.5}
 .gnode{cursor:pointer}
@@ -386,7 +389,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.1", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.2", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -887,7 +890,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       if(a.manual) return openFileRef(a);
       if(a.hid) return openDeviceFile(a.hid,false);
       const blob=await mediaBlob(a.ref||a.data);
-      if(blob) openViewer(new File([blob],a.name,{type:a.type||blob.type}));
+      if(blob) openViewer(new File([blob],a.name,{type:a.type||blob.type}),null,{key:"m:"+(a.ref||a.name)});
       else toast("⚠️ Dosya bulunamadı"); });
   }};
 
@@ -1735,23 +1738,75 @@ function ensurePdfJs(){
     document.head.appendChild(sc);
   });
 }
-async function renderPdf(file,box,info){
+function pdfPosGet(key){ return (DB.settings.pdfPos||{})[key]||1; }
+let _pdfPosT=null;
+function pdfPosSet(key,page){
+  if(!key) return;
+  DB.settings.pdfPos=DB.settings.pdfPos||{};
+  if(DB.settings.pdfPos[key]===page) return;
+  DB.settings.pdfPos[key]=page;
+  clearTimeout(_pdfPosT); _pdfPosT=setTimeout(save,800);
+}
+function pdfNav(w){
+  const n=$("#pdfpos",w.body); if(n) n.textContent=(w.state.page||1)+" / "+(w.state.total||"?");
+}
+function pdfGo(w,page){
+  const s=w.state; if(!s.slots) return;
+  const p=Math.max(1,Math.min(s.total,page));
+  s.slots[p-1]?.scrollIntoView({block:"start",behavior:Math.abs(p-(s.page||1))>3?"auto":"smooth"});
+  s.page=p; pdfNav(w); pdfPosSet(s.pdfKey,p);
+}
+/* Sayfalar önce boş kutu olarak dizilir; görünüre girince çizilir,
+   uzaklaşınca boşaltılır — 200+ sayfalık dosyalar da akıcı kalsın. */
+async function renderPdf(file,box,info,w){
   const lib=await ensurePdfJs();
   const doc=await lib.getDocument({data:await file.arrayBuffer()}).promise;
-  const max=Math.min(doc.numPages,80);
+  const s=w.state; s.doc=doc; s.total=doc.numPages; s.zoom=s.zoom||1;
+  const v1=(await doc.getPage(1)).getViewport({scale:1});
   box.innerHTML="";
-  if(info) info.textContent=doc.numPages+" sayfa";
-  for(let i=1;i<=max;i++){
-    const page=await doc.getPage(i);
-    const w1=page.getViewport({scale:1}).width;
-    const target=Math.max(320,(box.clientWidth||700)-26);
-    const vp=page.getViewport({scale:Math.min(3,target/w1)*Math.min(2,window.devicePixelRatio||1)});
-    const c=el("canvas","pdfpage"); c.width=vp.width; c.height=vp.height;
-    c.style.width="100%"; box.appendChild(c);
-    await page.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
-    if(i===1&&box.scrollTop) box.scrollTop=0;
+  const slots=[];
+  for(let i=1;i<=doc.numPages;i++){
+    const d=el("div","pdfslot",`<span class="sub">${i}</span>`);
+    d.dataset.p=i; d.style.aspectRatio=(v1.width/v1.height).toFixed(4);
+    box.appendChild(d); slots.push(d);
   }
-  if(doc.numPages>max) box.appendChild(el("div","sub","… ilk "+max+" sayfa gösterildi"));
+  s.slots=slots;
+  const drawn=new Set();
+  const draw=async d=>{
+    const i=+d.dataset.p;
+    if(drawn.has(i)||d.dataset.busy) return;
+    d.dataset.busy="1";
+    try{
+      const page=await doc.getPage(i);
+      const target=Math.max(300,(box.clientWidth||700)-26)*s.zoom;
+      const base=page.getViewport({scale:1}).width;
+      const vp=page.getViewport({scale:(target/base)*Math.min(2,window.devicePixelRatio||1)});
+      const c=el("canvas","pdfpage"); c.width=vp.width; c.height=vp.height; c.style.width="100%";
+      await page.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+      d.style.aspectRatio=(vp.width/vp.height).toFixed(4);
+      d.innerHTML=""; d.appendChild(c); drawn.add(i);
+    }catch(e){}
+    delete d.dataset.busy;
+  };
+  s.io=new IntersectionObserver(es=>{
+    es.forEach(e=>{ if(e.isIntersecting) draw(e.target); });
+    if(drawn.size>16){                       /* uzaktaki sayfaları bellekten düşür */
+      const cur=s.page||1;
+      [...drawn].filter(i=>Math.abs(i-cur)>8).forEach(i=>{
+        const d=slots[i-1]; d.innerHTML=`<span class="sub">${i}</span>`; drawn.delete(i); });
+    }
+  },{root:box,rootMargin:"700px 0px"});
+  s.io2=new IntersectionObserver(es=>{
+    const top=es.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+    if(top){ s.page=+top.target.dataset.p; pdfNav(w); pdfPosSet(s.pdfKey,s.page); }
+  },{root:box,threshold:[.25,.6]});
+  slots.forEach(d=>{ s.io.observe(d); s.io2.observe(d); });
+  if(info) info.textContent=doc.numPages+" sayfa";
+  const saved=pdfPosGet(s.pdfKey);
+  if(saved>1&&saved<=doc.numPages){
+    setTimeout(()=>{ slots[saved-1].scrollIntoView({block:"start"}); s.page=saved; pdfNav(w);
+      toast(`${saved}. sayfadan devam ediliyor`); },150);
+  } else { s.page=1; pdfNav(w); }
 }
 /* Dosyayı cihazdaki uygulamalara ver: Android'in "aç/paylaş" sayfası
    açılır ve dosya seçtiğin uygulamaya gider — indirme yapılmaz.
@@ -1771,8 +1826,10 @@ async function openElsewhere(file,name){
 }
 const canOpenElsewhere=f=>{ try{ return !!(navigator.canShare&&navigator.canShare({files:[f]})); }catch(e){ return false; } };
 function openViewer(file,name,opts){
-  const w=openApp("viewer",{state:{file,name:name||file.name||"dosya",type:file.type||"",size:file.size,
-    hid:opts&&opts.hid, at:opts&&opts.at}});
+  const nm=name||file.name||"dosya";
+  const w=openApp("viewer",{state:{file,name:nm,type:file.type||"",size:file.size,
+    hid:opts&&opts.hid, at:opts&&opts.at,
+    pdfKey:(opts&&opts.key)||(opts&&opts.hid?"h:"+opts.hid:"f:"+nm+":"+(file.size||0))}});
   return w;
 }
 APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
@@ -1787,7 +1844,16 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
     if(isImg)      body=`<div class="vwrap"><img src="${s.url}" style="max-width:100%;max-height:100%;object-fit:contain"></div>`;
     else if(isVid) body=`<div class="vwrap"><video src="${s.url}" controls style="max-width:100%;max-height:100%"></video></div>`;
     else if(isAud) body=`<div class="vwrap"><audio src="${s.url}" controls style="width:90%"></audio></div>`;
-    else if(isPdf) body=`<div class="pdfbox" data-a="pdf"><div class="empty">PDF açılıyor…</div></div>`;
+    else if(isPdf) body=`<div class="pdfbox" data-a="pdf"><div class="empty">PDF açılıyor…</div></div>
+      <div class="pdfnav">
+        <button class="btn sm" data-a="prev">‹</button>
+        <input class="inp" data-a="jump" inputmode="numeric" placeholder="sayfa" style="width:74px;text-align:center">
+        <span class="tag" id="pdfpos">— / —</span>
+        <button class="btn sm" data-a="next">›</button>
+        <span style="width:10px"></span>
+        <button class="btn sm" data-a="zout">⊖</button>
+        <button class="btn sm" data-a="zin">⊕</button>
+      </div>`;
     else if(isTxt) body=`<pre class="vtext" data-a="txt">yükleniyor…</pre>`;
     else           body=`<div class="empty"><div style="font-size:42px">📦</div>
         Bu tür uygulama içinde gösterilemiyor.<br><b>${esc(s.name)}</b><br>
@@ -1817,8 +1883,14 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
     };
     if(isTxt) s.file.text().then(x=>{ const n=$('[data-a="txt"]',w.body); if(n) n.textContent=x.slice(0,200000); });
     if(isPdf){
-      const box=$('[data-a="pdf"]',w.body), info=$(".tag",w.body);
-      renderPdf(s.file,box,info).catch(err=>{
+      const box=$('[data-a="pdf"]',w.body), info=$(".toolbar .tag",w.body);
+      const A2=a=>$(`[data-a="${a}"]`,w.body);
+      A2("prev").onclick=()=>pdfGo(w,(s.page||1)-1);
+      A2("next").onclick=()=>pdfGo(w,(s.page||1)+1);
+      A2("jump").onkeydown=e=>{ if(e.key==="Enter"){ const v=parseInt(e.target.value); if(v)pdfGo(w,v); e.target.value=""; e.target.blur(); } };
+      A2("zin").onclick=()=>{ s.zoom=Math.min(3,(s.zoom||1)+.25); this.render(w); };
+      A2("zout").onclick=()=>{ s.zoom=Math.max(.5,(s.zoom||1)-.25); this.render(w); };
+      renderPdf(s.file,box,info,w).catch(err=>{
         box.innerHTML=`<div class="empty"><div style="font-size:40px">📕</div>
           <b>PDF uygulama içinde açılamadı</b><br>
           <span class="sub">Görüntüleyici bileşeni yüklenemedi (${esc(String(err&&err.message||err).slice(0,60))}).</span><br><br>
@@ -1826,7 +1898,12 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
       });
     }
   },
-  onClose(w){ if(w.state.url) URL.revokeObjectURL(w.state.url); }};
+  onClose(w){
+    if(w.state.url) URL.revokeObjectURL(w.state.url);
+    w.state.io?.disconnect(); w.state.io2?.disconnect();
+    w.state.doc?.destroy?.(); w.state.slots=null; w.state.doc=null;
+    flush();
+  }};
 
 /* ---------------- Ayarlar ---------------- */
 /* ============================================================
@@ -2359,7 +2436,16 @@ function paintWidgets(){
         <div class="sub">Önce bir ders ekle.</div>
         <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="newcourse">+ Ders ekle</button>
       </div>`;
-  box.innerHTML=`${studyWg}
+  const dolu=DB.notes.length+DB.cards.length+DB.sessions.length+DB.tasks.length;
+  const gecen=DB.settings.lastBackup?dayDiff(DB.settings.lastBackup,today()):null;
+  const yedekWg=(dolu>8&&(gecen===null||gecen>=7))
+    ? `<div class="wg" style="border-color:var(--warn)">
+        <div class="wgh">💾 YEDEK</div>
+        <div class="sub">${gecen===null?"Henüz hiç yedek almadın.":gecen+" gündür yedek almadın."}
+          Verin yalnızca bu tarayıcıda duruyor.</div>
+        <button class="btn pri sm" style="width:100%;margin-top:8px" data-st="backup">⬇ Şimdi yedek al</button>
+      </div>`:"";
+  box.innerHTML=`${studyWg}${yedekWg}
     <div class="wg clickable" data-wg="stats">
       <div class="wgh">🎯 Bugün</div>
       <div class="row"><span class="big">${fmtMin(min)}</span><span class="grow"></span><span class="sub">/ ${fmtMin(DB.settings.goal)}</span></div>
@@ -2392,6 +2478,7 @@ function paintWidgets(){
   if(ST("stop")) ST("stop").onclick=()=>Study.end();
   if(ST("cancel")) ST("cancel").onclick=()=>{ if(confirm("Süre kaydedilmeden silinsin mi?")) Study.cancel(); };
   if(ST("newcourse")) ST("newcourse").onclick=()=>openApp("topics");
+  if(ST("backup")) ST("backup").onclick=()=>exportJSON().then(paintWidgets);
   $$("[data-wg]",box).forEach(n=>n.onclick=e=>{ if(e.target.closest("[data-wgo],[data-wgt],[data-st]"))return; openApp(n.dataset.wg); });
   $$("[data-wgt]",box).forEach(n=>n.onclick=()=>{ const t=DB.tasks.find(x=>x.id===n.dataset.wgt); t.done=true; saveAnd("tasks","stats"); });
   const study=$('[data-wgo="study"]',box);

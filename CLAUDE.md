@@ -69,9 +69,9 @@ journal, terms, settings`. Görseller/dosyalar **IndexedDB**'de (`media`), dosya
 ## Yapılabilecekler (konuşuldu, yapılmadı)
 
 - Cihazlar arası senkron (Drive/Gist'e elle yedek gönderme düğmesi) — sunucu istemeyen sürümü.
-- PDF'de "kaldığın sayfadan devam" ve 80 sayfa sınırının kaldırılması.
-- Not içinden PDF sayfasına bağlantı (`[[ders.pdf#42]]` gibi).
+- Not içinden PDF sayfasına bağlantı (`[[ders.pdf#42]]` gibi) — görüntüleyicide `pdfGo(w,n)` hazır.
 - Kart destelerinde alt deste / etiket.
+- Kronometre ile pomodoro'yu tek akışta birleştirmek (şu an ayrı çalışıyorlar).
 - TWA ile gerçek uygulama ikonu (ikinci repo + assetlinks.json gerekiyor; kullanıcı şimdilik istemedi).
 
 ## Bilinen sınırlar
