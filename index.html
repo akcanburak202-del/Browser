@@ -293,6 +293,7 @@ textarea.inp{resize:none;line-height:1.6}
 .exam .cd{font-weight:700;font-variant-numeric:tabular-nums}
 .cal .todaycol{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .cal .hd.tdy{color:var(--accent)}
+.att.linked{border-color:var(--s1);color:var(--s1)}
 .att{display:inline-flex;gap:6px;align-items:center;background:var(--surface-3);border:1px solid var(--border-2);border-radius:9px;padding:4px 9px;font-size:12px;margin:3px 5px 0 0;cursor:pointer}
 .md-prev img{max-width:100%;border-radius:10px;margin:6px 0}
 .cardimg{max-width:100%;max-height:190px;border-radius:12px;margin-bottom:10px;object-fit:contain}
@@ -314,6 +315,8 @@ textarea.inp{resize:none;line-height:1.6}
 /* sözlük terimleri */
 .gterm{border-bottom:1.5px dotted var(--s3);cursor:help;background:color-mix(in srgb,var(--s3) 10%,transparent);border-radius:3px;padding:0 1px}
 .gterm:hover{background:color-mix(in srgb,var(--s3) 22%,transparent)}
+.popimg{margin-top:9px;border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.popimg img{display:block;max-width:100%;width:auto;max-height:170px;margin:0 auto;object-fit:contain}
 #termpop{position:fixed;z-index:9540;background:var(--surface-solid);border:1px solid var(--border);border-radius:13px;
   box-shadow:var(--shadow);padding:12px 14px;display:none;font-size:13px}
 #termpop.on{display:block}
@@ -476,15 +479,17 @@ const MEDIA_URL=new Map();           // id -> objectURL (önbellek)
 function idb(){
   return new Promise((res,rej)=>{
     if(_idb) return res(_idb);
-    const r=indexedDB.open("studyos",1);
-    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains("media")) r.result.createObjectStore("media"); };
+    const r=indexedDB.open("studyos",2);
+    r.onupgradeneeded=()=>{ const d=r.result;
+      if(!d.objectStoreNames.contains("media"))   d.createObjectStore("media");
+      if(!d.objectStoreNames.contains("handles")) d.createObjectStore("handles"); };
     r.onsuccess=()=>{ _idb=r.result; res(_idb); };
     r.onerror=()=>rej(r.error);
   });
 }
-function idbOp(mode,fn){
+function idbOp(mode,fn,store="media"){
   return idb().then(db=>new Promise((res,rej)=>{
-    const tx=db.transaction("media",mode), st=tx.objectStore("media");
+    const tx=db.transaction(store,mode), st=tx.objectStore(store);
     const rq=fn(st); tx.onerror=()=>rej(tx.error); tx.oncomplete=()=>res(rq&&rq.result);
   }));
 }
@@ -530,6 +535,27 @@ function hydrateMedia(root){
 const mediaImg=(ref,cls,style)=>ref?`<img ${ref.startsWith("idb:")?`data-media="${ref}"`:`src="${esc(ref)}"`} class="${cls||""}" style="${style||""}" alt="">`:"";
 async function idbUsage(){ try{ const ks=await idbKeys(); let n=0;
   for(const k of ks){ const b=await idbGet(k); n+=b?.size||0; } IDB_BYTES=n; return n; }catch(e){ return 0; } }
+
+/* ---- cihazdaki dosyaya canlı bağlantı (masaüstü Chrome/Edge) ----
+   Dosya diskte kalır; burada yalnızca tutamaç saklanır, açarken izin istenir. */
+const canLinkFiles=()=>typeof window.showOpenFilePicker==="function";
+async function pickDeviceFile(){
+  const [h]=await window.showOpenFilePicker({multiple:false});
+  const hid="h"+uid()+uid();
+  await idbOp("readwrite",st=>st.put(h,hid),"handles");
+  return {name:h.name,hid};
+}
+async function openDeviceFile(hid){
+  const h=await idbOp("readonly",st=>st.get(hid),"handles");
+  if(!h){ toast("⚠️ Dosya bağlantısı kayboldu"); return; }
+  try{
+    let perm=await h.queryPermission?.({mode:"read"});
+    if(perm!=="granted") perm=await h.requestPermission?.({mode:"read"});
+    if(perm&&perm!=="granted"){ toast("Dosyaya erişim izni verilmedi"); return; }
+    const f=await h.getFile();
+    window.open(URL.createObjectURL(f),"_blank");
+  }catch(e){ toast("⚠️ Dosya bulunamadı — taşınmış veya silinmiş olabilir"); }
+}
 
 /* ---- eski sürümden taşıma: gömülü data: URL'lerini IndexedDB'ye al ---- */
 async function migrateMedia(){
@@ -752,7 +778,8 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
           <input class="inp grow" data-a="title" placeholder="Başlık" value="${esc(n?.title||"")}" ${n?"":"disabled"}>
           <select class="inp" data-a="course" style="width:130px">${DB.courses.map(c=>`<option value="${c.id}" ${n&&n.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
           <button class="btn sm" data-a="img" title="Görsel ekle">🖼</button>
-          <button class="btn sm" data-a="file" title="Dosya ekle">📎</button>
+          <button class="btn sm" data-a="file" title="Dosyayı içine göm (kopyasını alır)">📎</button>
+          <button class="btn sm" data-a="link" title="Cihazdaki dosyaya bağlan (kopya almaz)">🔗</button>
           <button class="btn sm" data-a="tocards" title="Karta çevir (Soru :: Cevap satırları)">🗂</button>
           <button class="btn" data-a="prev">${s.prev?"✏️ Yaz":"👁 Önizle"}</button>
           <button class="btn danger sm" data-a="del">Sil</button>
@@ -764,7 +791,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
           <span class="sub grow">${n?`${n.body.trim().split(/\s+/).filter(Boolean).length} kelime · güncellendi ${esc(n.updated)}`:""}</span>
           ${n&&backlinks(n).length?`<span class="bl"><span class="sub">↩ buraya bağlananlar:</span>
             ${backlinks(n).map(x=>`<span class="chip" data-bl="${x.id}">${esc(x.title||"Adsız")}</span>`).join("")}</span>`:""}
-          <span>${(n?.att||[]).map((a,i)=>`<span class="att" data-att="${i}" title="Aç">📎 ${esc(a.name)} <b data-rmatt="${i}">✕</b></span>`).join("")}</span>
+          <span>${(n?.att||[]).map((a,i)=>`<span class="att ${a.hid?"linked":""}" data-att="${i}" title="${a.hid?"Cihazdaki dosyayı aç":"Aç"}">${a.hid?"🔗":"📎"} ${esc(a.name)} <b data-rmatt="${i}">✕</b></span>`).join("")}</span>
         </div>
       </div></div>`;
     const q=(s.q||"").toLowerCase();
@@ -794,12 +821,26 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       if(f.size>60e6){ toast("⚠️ Dosya çok büyük (max 60 MB)"); return; }
       const ref=await putMedia(f); (n.att=n.att||[]).push({name:f.name,type:f.type,ref});
       n.updated=today(); save(); this.render(w); toast("Dosya eklendi ("+bytesFmt(f.size)+")"); });
+    on("link","click",async()=>{
+      if(!n) return;
+      if(!canLinkFiles()){
+        toast("Bu tarayıcı cihaz dosyasına bağlanamıyor (Android'de yok) — dosya gömülüyor");
+        $('[data-a="file"]',w.body).click(); return;
+      }
+      try{ const h=await pickDeviceFile(); (n.att=n.att||[]).push({name:h.name,hid:h.hid});
+        n.updated=today(); save(); this.render(w); toast("🔗 Dosyaya bağlanıldı — kopyası alınmadı");
+      }catch(e){ /* kullanıcı vazgeçti */ } });
     on("tocards","click",()=>{ if(!n)return; noteToCards(n); });
     $$("[data-bl]",w.body).forEach(b=>b.onclick=()=>{ s.id=b.dataset.bl; s.prev=true; this.render(w); });
     const ta=$('[data-a="body"]',w.body); if(ta) wlAutocomplete(ta,()=>{n.body=ta.value;n.updated=today();save();});
     $$("[data-att]",w.body).forEach(b=>b.onclick=async e=>{
-      if(e.target.dataset.rmatt!=null){ const i=+e.target.dataset.rmatt; dropMedia(n.att[i].ref); n.att.splice(i,1); save(); this.render(w); return; }
-      const a=n.att[+b.dataset.att]; const u=await mediaURL(a.ref||a.data);
+      if(e.target.dataset.rmatt!=null){ const i=+e.target.dataset.rmatt;
+        if(n.att[i].hid) idbOp("readwrite",st=>st.delete(n.att[i].hid),"handles").catch(()=>{});
+        else dropMedia(n.att[i].ref);
+        n.att.splice(i,1); save(); this.render(w); return; }
+      const a=n.att[+b.dataset.att];
+      if(a.hid) return openDeviceFile(a.hid);
+      const u=await mediaURL(a.ref||a.data);
       if(u) window.open(u,"_blank"); });
   }};
 
@@ -1700,16 +1741,24 @@ function showTerm(sp){
   const t=(DB.terms||[]).find(x=>x.id===sp.dataset.term); if(!t) return;
   const pop=$("#termpop");
   const note=t.noteId?DB.notes.find(n=>n.id===t.noteId):null;
+  /* görsel: terimin kendi görseli, yoksa bağlı notun ilk görseli */
+  const noteImg=note&&(note.body.match(/!\[[^\]]*\]\((idb:[^)]+|data:image[^)]+)\)/)||[])[1];
+  const img=t.img||noteImg;
+  const excerpt=note?note.body.replace(/!\[[^\]]*\]\([^)]*\)/g,"").replace(/\[\[([^\]]+)\]\]/g,"$1")
+    .replace(/[#*>`=]/g,"").replace(/\s+/g," ").trim().slice(0,150):"";
   pop.innerHTML=`<div class="row"><span class="dotc" style="background:${ccolor(t.courseId)}"></span>
       <b class="grow">${esc(t.term)}</b><span class="sub" style="cursor:pointer" data-p="x">✕</span></div>
     ${t.alt&&t.alt.length?`<div class="sub" style="margin-top:2px">${esc(t.alt.join(", "))}</div>`:""}
+    ${img?`<div class="popimg">${mediaImg(img)}</div>`:""}
     <div style="margin-top:8px;line-height:1.6">${esc(t.def)}</div>
+    ${excerpt?`<div class="sub" style="margin-top:7px;line-height:1.55;border-left:2px solid var(--border);padding-left:8px">${esc(excerpt)}…</div>`:""}
     <div class="row" style="margin-top:11px;flex-wrap:wrap">
       ${note?`<button class="btn sm" data-p="note">📝 Tam notu aç</button>`:""}
       <button class="btn sm" data-p="card">🗂 Kart yap</button>
       <button class="btn sm" data-p="edit">✏️ Düzenle</button></div>`;
   pop.classList.add("on");
-  const r=sp.getBoundingClientRect(), pw=Math.min(330,window.innerWidth-20);
+  hydrateMedia(pop);
+  const r=sp.getBoundingClientRect(), pw=Math.min(340,window.innerWidth-20);
   pop.style.width=pw+"px";
   pop.style.left=Math.max(10,Math.min(r.left, window.innerWidth-pw-10))+"px";
   const below=r.bottom+8, ph=pop.offsetHeight||160;
@@ -1746,6 +1795,12 @@ APPS.glossary={ name:"Sözlük", icon:"📖", w:720, h:560, desk:true, single:tr
           <input class="inp" data-f="alt" placeholder="Eş anlamlılar (virgülle ayır)" value="${esc((t.alt||[]).join(", "))}">
           <textarea class="inp" data-f="def" rows="3" placeholder="Kısa tanım — balonda bu görünecek">${esc(t.def)}</textarea>
           <div class="row">
+            <button class="btn sm" data-a="pic">${t.img?"🖼 Görseli değiştir":"🖼 Görsel ekle"}</button>
+            ${t.img?`<button class="btn sm danger" data-a="unpic">Görseli kaldır</button>`:""}
+            <span class="sub grow">${t.img?"":"Balonda tanımın üstünde gösterilir"}</span>
+          </div>
+          ${t.img?`<div class="popimg" style="max-width:220px">${mediaImg(t.img)}</div>`:""}
+          <div class="row">
             <select class="inp" data-f="course">${DB.courses.map(c=>`<option value="${c.id}" ${t.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
             <select class="inp" data-f="note"><option value="">— detay notu yok —</option>
               ${DB.notes.map(n=>`<option value="${n.id}" ${t.noteId===n.id?"selected":""}>${esc(n.title||"Adsız")}</option>`).join("")}</select>
@@ -1757,6 +1812,7 @@ APPS.glossary={ name:"Sözlük", icon:"📖", w:720, h:560, desk:true, single:tr
       <div class="grow scroll pad">
         ${capped(list).map(x=>`<div class="card" style="margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
           <span class="dotc" style="background:${ccolor(x.courseId)};margin-top:6px"></span>
+          ${x.img?mediaImg(x.img,"","width:40px;height:40px;object-fit:cover;border-radius:8px"):""}
           <div class="grow"><b>${esc(x.term)}</b>
             ${x.alt&&x.alt.length?`<span class="sub"> (${esc(x.alt.join(", "))})</span>`:""}
             <div class="sub" style="margin-top:3px">${esc(x.def)}</div></div>
@@ -1774,6 +1830,10 @@ APPS.glossary={ name:"Sözlük", icon:"📖", w:720, h:560, desk:true, single:tr
     $$("[data-e]",w.body).forEach(b=>b.onclick=()=>{ s.edit=b.dataset.e; this.render(w); });
     if(t){
       const F=f=>$(`[data-f="${f}"]`,w.body);
+      A("pic").onclick=async()=>{ const f=await pickFile("image/*"); if(!f)return;
+        const old=t.img; t.img=await putMedia(await imageScaled(f,900,.82)); if(old)dropMedia(old);
+        save(); this.render(w); toast("Görsel eklendi"); };
+      const un=A("unpic"); if(un) un.onclick=()=>{ dropMedia(t.img); t.img=null; save(); this.render(w); };
       A("save").onclick=()=>{
         t.term=F("term").value.trim();
         t.alt=F("alt").value.split(",").map(x=>x.trim()).filter(Boolean);

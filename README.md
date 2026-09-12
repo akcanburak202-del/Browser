@@ -32,7 +32,7 @@ Kaydetme, yazmayı bıraktıktan 250 ms sonra ve tarayıcı boştayken yapılır
 | 🧠 | **Konu Haritası** | Ders → konu → alt konu ağacı, "başlanmadı / öğreniyorum / biliyorum" durumları |
 | 📊 | **İstatistik** | 14 günlük bar grafik, 12 haftalık ısı haritası, ders dağılımı, seri (streak) |
 | 🗒 | **Günlük** | Günün özeti + ruh hali kaydı |
-| 📖 | **Sözlük** | Terim tanımları; terimler tüm metinlerde otomatik işaretlenir, üstüne gelince tanım balonu açılır |
+| 📖 | **Sözlük** | Terim tanımları; terimler tüm metinlerde otomatik işaretlenir, üstüne gelince görselli tanım balonu açılır |
 | 🕸 | **Bağlantı Haritası** | Notlar arası bağlantıların ağ görünümü |
 | >_ | **Terminal** | `gorev`, `kart`, `calis`, `durum`, `yedek`… komutlarıyla hızlı giriş |
 | 🌙 | **Odak modu** | Tam ekran sayaç, ekran karartma, üretilen pembe gürültü |
