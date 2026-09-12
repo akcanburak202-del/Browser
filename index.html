@@ -386,7 +386,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="1.6", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="1.7", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -2049,7 +2049,12 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       let persisted=false, est={};
       try{ persisted=await navigator.storage?.persisted?.(); }catch(e){}
       try{ est=await navigator.storage?.estimate?.()||{}; }catch(e){}
+      const ua=navigator.userAgent;
+      const brand=(navigator.userAgentData?.brands||[]).filter(b=>!/Not.?A.?Brand/i.test(b.brand))
+        .map(b=>b.brand+" "+b.version).join(", ")
+        || (ua.match(/(HuaweiBrowser|EdgA?|SamsungBrowser|OPR|Firefox|Chrome)\/([\d.]+)/)||[,"?",""]).slice(1).join(" ");
       const caps=[
+        ["Tarayıcı", brand||"bilinmiyor", ""],
         ["Cihaz dosyasına canlı bağlantı", canLinkFiles(), "🔗 düğmesi kopya almadan bağlanır"],
         ["Dosya seçici (işaretleme)", true, "📌 her cihazda çalışır"],
         ["Paylaş menüsünden dosya alma", !!(await (async()=>{ try{
