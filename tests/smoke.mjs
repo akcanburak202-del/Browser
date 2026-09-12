@@ -383,6 +383,104 @@ await p2.waitForTimeout(300);
 check("zayıf konular İstatistik'te görünüyor",
   await p2.evaluate(() => [...WINS.values()].find(w => w.appId === "stats").body.textContent.includes("Zayıf konular")));
 
+/* ---------- pencere yaslama ve çizim (sürüm 2.7) ---------- */
+await p2.goto(URL); await p2.waitForTimeout(700);
+const tut = await p2.evaluate(() => {
+  for (const w of [...WINS.values()]) closeWin(w);
+  const w = openApp("notes");
+  Object.assign(w.node.style, { left: "300px", top: "180px", width: "520px", height: "380px" });
+  const r = w.node.querySelector(".titlebar").getBoundingClientRect();
+  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+});
+await p2.mouse.move(tut.x, tut.y);
+await p2.mouse.down();
+await p2.mouse.move(tut.x - 80, tut.y + 40, { steps: 5 });
+await p2.mouse.move(6, 420, { steps: 12 });
+await p2.waitForTimeout(120);
+check("yaslama önizlemesi çıkıyor",
+  await p2.evaluate(() => { const g = document.querySelector("#snapghost");
+    return !!g && g.textContent.includes("Sol yarı"); }));
+await p2.mouse.up();
+await p2.waitForTimeout(200);
+check("sol yarıya yaslanıyor", await p2.evaluate(() => {
+  const w = [...WINS.values()].find(x => x.appId === "notes");
+  const r = w.node.getBoundingClientRect(), d = document.querySelector("#desktop").getBoundingClientRect();
+  return w.node.classList.contains("snapped") && Math.abs(r.width - d.width / 2) < 2 && Math.abs(r.left - d.left) < 2;
+}));
+check("önizleme kalkıyor", await p2.evaluate(() => !document.querySelector("#snapghost")));
+check("yaslanmış pencere eski boyutuna dönebiliyor", await p2.evaluate(() => {
+  const w = [...WINS.values()].find(x => x.appId === "notes");
+  toggleMax(w);
+  return w.node.style.width === "520px" && !w.node.classList.contains("snapped") && !w.node._snapped;
+}));
+
+/* çizim tahtası */
+await p2.evaluate(() => {
+  DB.notes = [{ id: "dn", courseId: DB.courses[0]?.id, title: "Çizim notu", body: "başlangıç",
+    created: today(), updated: today() }];
+  saveNow();
+  const w = [...WINS.values()].find(x => x.appId === "notes");
+  w.state.id = "dn"; w.state.prev = false; APPS.notes.render(w);
+  w.body.querySelector('[data-a="draw"]').click();
+});
+await p2.waitForTimeout(300);
+check("çizim tahtası açılıyor", await p2.evaluate(() => !!document.querySelector("canvas")));
+const tuval = await p2.evaluate(() => {
+  const r = document.querySelector("canvas").getBoundingClientRect();
+  return { x: Math.round(r.left), y: Math.round(r.top) };
+});
+await p2.mouse.move(tuval.x + 40, tuval.y + 40);
+await p2.mouse.down();
+await p2.mouse.move(tuval.x + 220, tuval.y + 170, { steps: 14 });
+await p2.mouse.up();
+await p2.waitForTimeout(150);
+const bosDegil = () => p2.evaluate(() => {
+  const cv = document.querySelector("canvas"), c = cv.getContext("2d");
+  const d = c.getImageData(0, 0, cv.width, cv.height).data;
+  for (let i = 0; i < d.length; i += 4) if (d[i] < 200 || d[i + 1] < 200 || d[i + 2] < 200) return true;
+  return false;
+});
+check("tuvale çizgi düşüyor", await bosDegil());
+await p2.evaluate(() => document.querySelector('[data-a="geri"]').click());
+await p2.waitForTimeout(100);
+check("geri al çizgiyi siliyor", (await bosDegil()) === false);
+await p2.mouse.move(tuval.x + 60, tuval.y + 60);
+await p2.mouse.down();
+await p2.mouse.move(tuval.x + 240, tuval.y + 190, { steps: 14 });
+await p2.mouse.up();
+await p2.waitForTimeout(120);
+await p2.evaluate(() => document.querySelector('[data-a="ekle"]').click());
+await p2.waitForTimeout(700);
+check("çizim tahtası kapanıyor", await p2.evaluate(() => !document.querySelector("canvas")));
+check("çizim nota gömülüyor",
+  await p2.evaluate(() => /!\[çizim\]\(idb:[a-z0-9]+\)/.test(DB.notes.find(n => n.id === "dn").body)));
+check("çizim IndexedDB'ye yazılıyor", await p2.evaluate(async () => {
+  const m = DB.notes.find(n => n.id === "dn").body.match(/idb:([a-z0-9]+)/);
+  return !!m && (await idbKeys()).includes(m[1]);
+}));
+const oncekiGovde = await p2.evaluate(() => DB.notes.find(n => n.id === "dn").body);
+await p2.evaluate(() => {
+  const w = [...WINS.values()].find(x => x.appId === "notes");
+  w.body.querySelector('[data-a="draw"]').click();
+});
+await p2.waitForTimeout(250);
+await p2.evaluate(() => document.querySelector('[data-a="vazgec"]').click());
+await p2.waitForTimeout(250);
+check("vazgeçince nota bir şey eklenmiyor",
+  (await p2.evaluate(() => DB.notes.find(n => n.id === "dn").body)) === oncekiGovde);
+
+/* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
+await p2.evaluate(() => openApp("settings"));
+await p2.waitForTimeout(1900);
+check("görüntüleyici dosyasız açılınca düzgün boş durum gösteriyor", await p2.evaluate(() => {
+  const w = openApp("viewer");
+  return w.node.querySelector(".wtitle").textContent.includes("Görüntüleyici")
+    && w.body.textContent.includes("Görüntülenecek dosya yok");
+}));
+
+check("cihaz panelinde sesli okuma satırı var", await p2.evaluate(() =>
+  [...WINS.values()].find(w => w.appId === "settings").body.textContent.includes("Türkçe sesli okuma")));
+
 check("veri güvenliği bölümünde konsol hatası yok", errs2.length === 0, errs2.slice(0, 3).join(" | "));
 
 await b.close();

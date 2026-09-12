@@ -64,6 +64,12 @@ Script blokları sırayla:
   tek bir çöp kaydı yaz — geri alınca ilişki bozulmasın.
 - Anlık görüntüler IndexedDB `snaps` deposunda ve **yalnızca metin DB'si** tutar; medya bilerek
   dışarıda. Yeni bir toplu silme/değiştirme eklersen öncesinde `takeSnapshot("<sebep>")` çağır.
+- **Pencere yaslama** `dragify` içinde: `snapZone()` bölgeyi bulur, `snapGhost()` önizler,
+  `applySnap()` uygular. Köşede yan yaslama kazanır (tam ekran değil) — amaç yan yana çalışmak.
+  Sabitler `YASLA_*`; **`SNAP_*` anlık görüntülere ait**, karıştırma.
+- **Çizim tahtası** `drawPad()` bir `Promise<Blob|null>` döndürür; çağıran `putMedia()` ile
+  gömer. Tuval kağıt gibidir (beyaz zemin, koyu mürekkep) — iki temada da okunur, dışarı
+  çıkınca da doğru görünür. Basınç yalnızca `pointerType==="pen"` iken kullanılır.
 - **Kartlarda "yeni" demek `!c.seen` demek.** `sm2()` her değerlendirmede `seen` yazar, bu yüzden
   bilinemeyen bir kart ikinci kez yeni sayılmaz. `dueCards()` günlük yeni kart kotasını **global**
   harcar ve `DB.cards` sırası sabit olduğu için deste deste çağrılsa da aynı kartları seçer —
@@ -114,6 +120,10 @@ Yan localStorage anahtarları (yalnızca kurtarma için, uygulama bunlardan okum
 
 ## Bilinen sınırlar
 
+- **Sesli okuma (TTS) eklenmedi.** Play Servisleri olmadan Google TTS motoru gelmiyor, Türkçe ses
+  olup olmadığı cihazdan cihaza değişiyor ve buradan sınanamıyor. Bunun yerine Ayarlar →
+  "Bu cihaz neyi destekliyor?" panelinde **ölçüm satırı** var. O satır ✓ gösteriyorsa özellik
+  eklenebilir; ✕ ise konu kapalı. Kod yazmadan önce kullanıcıya o satırı sor.
 - Paylaşım hedefi bu cihazda çalışmaz (yukarı bak).
 - `file://` ile açıldığında service worker, manifest ve paylaşım devre dışı (uyarı basmaz).
 - localStorage 5 MB (ölçüldü) — metin için fazlasıyla yeter; medya IndexedDB'de.

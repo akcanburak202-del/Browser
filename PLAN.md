@@ -240,20 +240,32 @@ plan ağırlıkları teste bağlı; ayrı bir iş olarak konuşulmalı.
 
 ---
 
-## 5. parti — Tablet ergonomisi  (hedef sürüm 2.7)
+## 5. parti — Tablet ergonomisi  (sürüm 2.7) ✅ BİTTİ
 
-- ☐ **Pencere yaslama.** `dragify` (`index.html:726`) bırakma anında: `clientX < 24` → sol yarı,
+- ☑ **Pencere yaslama.** `dragify` (`index.html:726`) bırakma anında: `clientX < 24` → sol yarı,
   `> W-24` → sağ yarı, `clientY < 24` → tam ekran; sürüklerken yarı saydam önizleme.
   Not + PDF'i yan yana koymayı iki dokunuşa indirir.
-- ☐ **Kalem/çizim notu.** Pointer events (`pointerType==="pen"`, basınç) ile canvas; PNG olarak
+- ☑ **Kalem/çizim notu.** Pointer events (`pointerType==="pen"`, basınç) ile canvas; PNG olarak
   `putMedia` → nota `![](idb:…)`. Matematik ve biyoloji için klavyeden doğal.
-- ☐ **Kartlarda sesli okuma — koşullu.** `speechSynthesis` çevrimdışı çalışır, ama Play Servisleri
-  olmayan cihazda Google TTS gelmez; Türkçe ses olmayabilir.
-  `getVoices().some(v=>v.lang.startsWith("tr"))` **false ise düğme hiç gösterilmez.**
-  Garanti özellik değil, öyle sunulmayacak.
+- ✕ **Kartlarda sesli okuma — YAPILMADI (kullanıcı kararı).**
+  Cihazda Play Servisleri yok; Android'de Türkçe ses Google TTS motorundan geliyor ve Huawei'nin
+  kendi motorunun `speechSynthesis`'e kayıtlı olup olmadığı buradan sınanamıyor. Playwright'taki
+  Chromium'un ses listesi tabletle ilgisiz — yani "çalışıyor" denemezdi, ancak "cihazında varsa
+  çalışır" denebilirdi. Kullanıcı bu belirsizlikte özelliği istemedi.
+  **Yerine:** Ayarlar → "Bu cihaz neyi destekliyor?" paneline ölçüm satırı eklendi
+  (Türkçe ses var mı, cihazda kaç ses kayıtlı). O satır ✓ gösterirse özellik ~30 satırlık iş olarak
+  sonra eklenebilir.
 
----
+### 5. parti sonucu ✅
+`node tests/unit.mjs` (4 zaman dilimi × 121 kontrol) ve `node tests/smoke.mjs` (74 kontrol) geçiyor ·
+`VERSION=2.7` · `sw.js` `C="studyos-v12"`
 
+**Ad çakışması:** yaslama sabitleri önce `SNAP_*` yazılmıştı ve 2. partideki anlık görüntü
+etiketleriyle çakıştı (`node --check` yakaladı). Yaslama tarafı `YASLA_*` oldu.
+
+**Yan düzeltme (kapsam dışı, testte görüldü):** Görüntüleyici dock'tan dosyasız açılınca
+başlığı "undefined" oluyor, gövdesinde çalışmayan "Tarayıcıda aç / İndir" düğmeleri çıkıyordu.
+Düzgün bir boş durum eklendi.
 ## Reddedilen / ertelenen
 
 - **Kaynağı 4 dosyaya bölüp build betiğiyle birleştirmek.** "Klonla, `index.html`'i aç, çalışır"

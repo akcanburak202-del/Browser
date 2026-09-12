@@ -40,7 +40,7 @@ globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueC
   toTrash, trimTrash, restoreTrash, dropTrash, trashRefs, COP_GUN, COP_BAYT,
   dailyPlan, planDone, planToggle, PLAN_BLOK, PLAN_SATIR, PLAN_IHMAL,
   isNewCard, newLimit, newQuota, newSeenToday, newWaiting, NEW_PER_DAY,
-  clozeCards, noteCardPairs, weakTopics,
+  clozeCards, noteCardPairs, weakTopics, snapZone, YASLA_KENAR, YASLA_KUTU,
   setDB: v => { DB = v; }, getDB: () => DB };`;
 
 const bosDugum = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {} },
@@ -412,6 +412,22 @@ T.planToggle("konu:t1");
 es("plan: işaret kaldırıldı", T.planDone(), []);
 T.setDB(planDB({ settings: { goal: 120, planDone: { date: T.addDays(bugun, -1), ids: ["konu:t1"] } } }));
 es("plan: dünkü işaretler bugüne taşınmaz", T.planDone(), []);
+
+/* ---------- pencere yaslama bölgeleri ---------- */
+const masa = { left: 0, top: 30, right: 1000, width: 1000, height: 770 };
+const nokta = (x, y) => ({ clientX: x, clientY: y });
+es("yaslama: ortada bölge yok", T.snapZone(nokta(500, 400), masa), null);
+es("yaslama: sol kenar", T.snapZone(nokta(5, 400), masa), "sol");
+es("yaslama: sağ kenar", T.snapZone(nokta(995, 400), masa), "sag");
+es("yaslama: üst kenar", T.snapZone(nokta(500, 35), masa), "max");
+/* köşede yarım ekran kazanmalı — asıl istenen yan yana çalışmak */
+es("yaslama: sol üst köşe sol yarıyı verir", T.snapZone(nokta(4, 32), masa), "sol");
+es("yaslama: sağ üst köşe sağ yarıyı verir", T.snapZone(nokta(998, 32), masa), "sag");
+es("yaslama: eşiğin hemen dışı boş", T.snapZone(nokta(T.YASLA_KENAR + 1, 400), masa), null);
+/* masaüstü 30px menü çubuğunun altında başlar: bölgeler onun üstüne göre ölçülür */
+es("yaslama: üst eşiğin altı boş", T.snapZone(nokta(500, 30 + T.YASLA_KENAR + 1), masa), null);
+es("yaslama: masaüstünün üstü de üst bölge sayılır", T.snapZone(nokta(500, 25), masa), "max");
+es("yaslama: kutular yarım genişlik", [T.YASLA_KUTU.sol.width, T.YASLA_KUTU.sag.left], ["50%", "50%"]);
 
 /* ---------- markdown ---------- */
 dogru("md kalın", T.md("**kalın**").includes("<b>kalın</b>"));
