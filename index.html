@@ -1,0 +1,1250 @@
+<!doctype html>
+<html lang="tr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StudyOS</title>
+<style>
+/* ============================================================
+   StudyOS — tek dosya çalışma masaüstü
+   1. Tema değişkenleri  2. Masaüstü  3. Menü çubuğu  4. Dock
+   5. Pencereler  6. Ortak bileşenler  7. Uygulamalar
+   ============================================================ */
+
+:root{
+  color-scheme: light;
+  --bg-1:#cfd9e8; --bg-2:#e7dcd0; --bg-3:#b9c6dd;
+  --surface:rgba(255,255,255,.78);
+  --surface-solid:#fcfcfb;
+  --surface-2:rgba(0,0,0,.045);
+  --surface-3:rgba(0,0,0,.075);
+  --text:#14130f; --text-2:#52514e; --muted:#8a8985;
+  --border:rgba(0,0,0,.12); --border-2:rgba(0,0,0,.07);
+  --accent:#2a78d6; --accent-ink:#fff;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --good:#1baf7a; --warn:#eda100; --bad:#e34948;
+  --shadow:0 18px 50px rgba(20,25,40,.28), 0 2px 8px rgba(20,25,40,.12);
+  --radius:14px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg-1:#1b2333; --bg-2:#2a2431; --bg-3:#111722;
+  --surface:rgba(30,32,38,.80);
+  --surface-solid:#1a1a19;
+  --surface-2:rgba(255,255,255,.06);
+  --surface-3:rgba(255,255,255,.11);
+  --text:#f4f3ef; --text-2:#c3c2b7; --muted:#8d8c85;
+  --border:rgba(255,255,255,.14); --border-2:rgba(255,255,255,.08);
+  --accent:#3987e5; --accent-ink:#fff;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --good:#199e70; --warn:#c98500; --bad:#e66767;
+  --shadow:0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:var(--font); color:var(--text);
+  background:
+    radial-gradient(120% 90% at 12% 8%, var(--bg-2) 0%, transparent 55%),
+    radial-gradient(110% 100% at 88% 92%, var(--bg-3) 0%, transparent 60%),
+    linear-gradient(150deg, var(--bg-1), var(--bg-3));
+  background-attachment:fixed;
+  overflow:hidden; -webkit-font-smoothing:antialiased;
+  font-size:14px;
+}
+body[data-wall="mesh"]{background:
+    radial-gradient(60% 60% at 20% 20%, #7aa8ff44, transparent 60%),
+    radial-gradient(50% 50% at 80% 30%, #ff9d6e44, transparent 60%),
+    radial-gradient(60% 60% at 50% 90%, #56d9a344, transparent 60%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-3));}
+body[data-wall="plain"]{background:linear-gradient(170deg,var(--bg-1),var(--bg-3))}
+body[data-wall="grid"]{background:
+    linear-gradient(var(--border-2) 1px, transparent 1px) 0 0/32px 32px,
+    linear-gradient(90deg, var(--border-2) 1px, transparent 1px) 0 0/32px 32px,
+    linear-gradient(160deg, var(--bg-1), var(--bg-3));}
+
+button,input,textarea,select{font:inherit;color:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- 3. Menü çubuğu ---------- */
+#menubar{
+  position:fixed;top:0;left:0;right:0;height:30px;z-index:9000;
+  display:flex;align-items:center;gap:14px;padding:0 12px;
+  background:var(--surface);backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  border-bottom:1px solid var(--border-2);font-size:12.5px;
+}
+#menubar .logo{font-weight:700;letter-spacing:.2px}
+#menubar .mb-app{font-weight:600}
+#menubar .spacer{flex:1}
+#menubar .mb-item{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:7px;cursor:pointer;white-space:nowrap}
+#menubar .mb-item:hover{background:var(--surface-3)}
+#menubar .pill{font-variant-numeric:tabular-nums}
+
+/* ---------- 2. Masaüstü ---------- */
+#desktop{position:fixed;inset:30px 0 0 0;overflow:hidden}
+#icons{position:absolute;top:14px;left:14px;display:flex;flex-direction:column;flex-wrap:wrap;gap:4px;max-height:calc(100vh - 160px)}
+.dicon{width:92px;padding:8px 4px;border-radius:10px;text-align:center;cursor:pointer;user-select:none}
+.dicon:hover{background:var(--surface-2)}
+.dicon.sel{background:color-mix(in srgb,var(--accent) 30%, transparent)}
+.dicon .gl{font-size:30px;display:block;line-height:1.2;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.dicon .lb{font-size:11.5px;margin-top:3px;color:var(--text);text-shadow:0 1px 3px rgba(0,0,0,.35)}
+:root[data-theme="light"] .dicon .lb{text-shadow:0 1px 2px rgba(255,255,255,.7)}
+
+/* ---------- 4. Dock ---------- */
+#dock{
+  position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:8000;
+  display:flex;align-items:flex-end;gap:6px;padding:8px 10px;
+  background:var(--surface);backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  border:1px solid var(--border-2);border-radius:20px;box-shadow:var(--shadow);
+  max-width:96vw;overflow-x:auto;scrollbar-width:none;
+}
+#dock::-webkit-scrollbar{display:none}
+.dockicon{position:relative;width:44px;height:44px;flex:0 0 auto;display:grid;place-items:center;font-size:26px;
+  border-radius:12px;cursor:pointer;transition:transform .16s cubic-bezier(.2,.8,.3,1),background .16s}
+.dockicon:hover{transform:translateY(-9px) scale(1.22);background:var(--surface-2)}
+.dockicon .dot{position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--text-2);opacity:0}
+.dockicon.open .dot{opacity:1}
+.dock-sep{width:1px;align-self:stretch;background:var(--border);margin:4px 3px}
+.tip{position:absolute;bottom:56px;left:50%;transform:translateX(-50%);background:var(--surface-solid);border:1px solid var(--border);
+  padding:3px 8px;border-radius:7px;font-size:11.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;box-shadow:var(--shadow)}
+.dockicon:hover .tip{opacity:1}
+
+/* ---------- 5. Pencereler ---------- */
+.win{
+  position:absolute;display:flex;flex-direction:column;min-width:300px;min-height:200px;
+  background:var(--surface);backdrop-filter:blur(28px) saturate(180%);
+  -webkit-backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);
+  overflow:hidden;animation:pop .16s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:none}}
+.win.min{display:none}
+.win.max{border-radius:0}
+.titlebar{height:38px;flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 12px;cursor:default;
+  border-bottom:1px solid var(--border-2);user-select:none;background:var(--surface-2)}
+.lights{display:flex;gap:7px}
+.light{width:12px;height:12px;border-radius:50%;cursor:pointer;border:1px solid rgba(0,0,0,.14);font-size:9px;line-height:10px;text-align:center;color:rgba(0,0,0,.55)}
+.light.c{background:#ff5f57}.light.m{background:#febc2e}.light.z{background:#28c840}
+.lights:not(:hover) .light{color:transparent}
+.wtitle{font-size:13px;font-weight:600;flex:1;text-align:center;margin-right:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbody{flex:1;overflow:auto;position:relative}
+.resize{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize}
+.win.focus{box-shadow:0 24px 60px rgba(0,0,0,.45), 0 0 0 1px var(--border)}
+
+/* ---------- 6. Ortak bileşenler ---------- */
+.app{display:flex;flex-direction:column;height:100%;min-height:0}
+.row{display:flex;gap:8px;align-items:center}
+.col{display:flex;flex-direction:column;gap:8px}
+.pad{padding:14px}
+.grow{flex:1;min-width:0;min-height:0}
+.scroll{overflow:auto;min-height:0}
+.toolbar{display:flex;gap:8px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-2);flex-wrap:wrap;flex:0 0 auto}
+.sidebar{width:186px;flex:0 0 auto;border-right:1px solid var(--border-2);overflow:auto;padding:8px}
+.btn{background:var(--surface-3);border:1px solid var(--border-2);border-radius:9px;padding:6px 11px;cursor:pointer;font-size:13px;transition:.12s;white-space:nowrap}
+.btn:hover{background:var(--surface-2);border-color:var(--border)}
+.btn.pri{background:var(--accent);border-color:transparent;color:var(--accent-ink);font-weight:600}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:3px 8px;font-size:12px;border-radius:7px}
+.btn.danger{color:var(--bad)}
+.inp,select.inp,textarea.inp{background:var(--surface-solid);border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:13px;outline:none;width:100%}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+textarea.inp{resize:none;line-height:1.6}
+.item{padding:7px 9px;border-radius:9px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center}
+.item:hover{background:var(--surface-2)}
+.item.sel{background:var(--surface-3);font-weight:600}
+.card{background:var(--surface-2);border:1px solid var(--border-2);border-radius:12px;padding:12px}
+.h1{font-size:19px;font-weight:700;margin:0}
+.h2{font-size:14px;font-weight:700;margin:0}
+.sub{font-size:12px;color:var(--muted)}
+.tag{font-size:11px;padding:2px 7px;border-radius:20px;background:var(--surface-3);color:var(--text-2);white-space:nowrap}
+.dotc{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.empty{padding:38px 20px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7}
+.sep{height:1px;background:var(--border-2);margin:8px 0}
+.kbd{font:11px var(--mono);background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;padding:1px 5px}
+.checkbox{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--muted);display:grid;place-items:center;cursor:pointer;flex:0 0 auto;font-size:11px;color:transparent}
+.checkbox.on{background:var(--good);border-color:var(--good);color:#fff}
+.pop{position:fixed;z-index:9500;background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:170px}
+#toasts{position:fixed;top:40px;right:12px;z-index:9600;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;padding:10px 14px;box-shadow:var(--shadow);font-size:13px;animation:pop .2s;max-width:290px}
+</style>
+</head>
+<body data-wall="mesh">
+<style>
+/* ---------- 7. Uygulamaya özel ---------- */
+/* Notlar */
+.note-ed{flex:1;border:none;background:transparent;padding:16px 20px;font-size:14.5px;line-height:1.75;resize:none;outline:none;font-family:var(--font)}
+.md-prev{padding:16px 20px;line-height:1.75;overflow:auto}
+.md-prev h1{font-size:21px;margin:.6em 0 .3em}.md-prev h2{font-size:17px;margin:.6em 0 .3em}.md-prev h3{font-size:15px;margin:.6em 0 .3em}
+.md-prev code{font:12.5px var(--mono);background:var(--surface-3);padding:1px 5px;border-radius:5px}
+.md-prev pre{background:var(--surface-3);padding:10px 12px;border-radius:10px;overflow:auto}
+.md-prev pre code{background:none;padding:0}
+.md-prev blockquote{border-left:3px solid var(--accent);margin:.6em 0;padding:2px 0 2px 12px;color:var(--text-2)}
+.md-prev mark{background:color-mix(in srgb,var(--s4) 45%,transparent);color:inherit;padding:0 3px;border-radius:3px}
+.md-prev ul,.md-prev ol{padding-left:22px}
+.md-prev hr{border:none;border-top:1px solid var(--border);margin:1em 0}
+.md-prev table{border-collapse:collapse}.md-prev td,.md-prev th{border:1px solid var(--border);padding:5px 9px}
+/* Kartlar */
+.flash{flex:1;display:grid;place-items:center;padding:22px;text-align:center}
+.flash-card{width:100%;max-width:520px;min-height:190px;display:grid;place-items:center;padding:26px;
+  background:var(--surface-solid);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);
+  font-size:18px;line-height:1.6;cursor:pointer;white-space:pre-wrap}
+.flash-card .side{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+.grade{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+/* Pomodoro */
+.timer{font:600 66px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-2px}
+.ring{--p:0;width:210px;height:210px;border-radius:50%;display:grid;place-items:center;
+  background:conic-gradient(var(--accent) calc(var(--p)*1%), var(--surface-3) 0);position:relative}
+.ring::after{content:"";position:absolute;inset:11px;border-radius:50%;background:var(--surface-solid)}
+.ring>*{position:relative;z-index:1}
+/* Takvim */
+.cal{display:grid;grid-template-columns:46px repeat(7,1fr);font-size:11.5px;min-width:620px}
+.cal .hd{position:sticky;top:0;background:var(--surface);backdrop-filter:blur(12px);padding:6px 2px;text-align:center;font-weight:600;border-bottom:1px solid var(--border-2);z-index:2}
+.cal .hr{color:var(--muted);text-align:right;padding:0 6px;height:34px;border-top:1px solid var(--border-2);font-size:10.5px}
+.cal .cell{height:34px;border-top:1px solid var(--border-2);border-left:1px solid var(--border-2);position:relative;cursor:pointer}
+.cal .cell:hover{background:var(--surface-2)}
+.ev{position:absolute;inset:1px;border-radius:7px;padding:3px 6px;font-size:11px;color:#fff;overflow:hidden;z-index:1;line-height:1.3}
+/* Konu haritası */
+.tree-node{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px}
+.tree-node:hover{background:var(--surface-2)}
+.st{width:10px;height:10px;border-radius:3px;flex:0 0 auto;cursor:pointer}
+.st.new{background:var(--surface-3);border:1px solid var(--border)}
+.st.learning{background:var(--s4)}.st.known{background:var(--good)}
+/* İstatistik / grafikler */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.hero{font:700 34px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-1px}
+.meter{height:9px;border-radius:6px;background:var(--surface-3);overflow:hidden}
+.meter>i{display:block;height:100%;border-radius:6px;background:var(--s1)}
+.heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,12px);gap:3px;overflow-x:auto;padding-bottom:4px}
+.heat i{width:12px;height:12px;border-radius:3px;background:var(--surface-3);display:block}
+.bar{fill:var(--s1)}
+.axis{font-size:10px;fill:var(--muted)}
+.gridline{stroke:var(--border-2);stroke-width:1}
+/* Quiz */
+.choice{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid var(--border);border-radius:11px;cursor:pointer;background:var(--surface-solid);line-height:1.5}
+.choice:hover{border-color:var(--accent)}
+.choice.pick{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.choice.ok{border-color:var(--good);background:color-mix(in srgb,var(--good) 14%,var(--surface-solid))}
+.choice.no{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,var(--surface-solid))}
+.choice b{flex:0 0 auto;width:20px}
+/* Terminal */
+.term{background:#0e1116;color:#d6e0ea;font:13px/1.65 var(--mono);padding:12px;height:100%;overflow:auto}
+.term .in{background:transparent;border:none;outline:none;color:#7ee0a8;font:inherit;width:100%}
+.term .pr{color:#7ee0a8}
+.term .er{color:#ff8f8f}.term .ok{color:#8fd6ff}.term .dim{color:#7d8896}
+/* Odak modu */
+#focusOverlay{position:fixed;inset:0;z-index:9400;background:rgba(8,10,14,.94);display:none;place-items:center;color:#f2f2ee;text-align:center}
+#focusOverlay.on{display:grid}
+#focusOverlay .ft{font:200 96px/1 var(--font);font-variant-numeric:tabular-nums}
+/* Günlük */
+.mood{font-size:22px;cursor:pointer;opacity:.35;transition:.15s;background:none;border:none;padding:2px}
+.mood.on{opacity:1;transform:scale(1.2)}
+@media (max-width:640px){ .sidebar{width:130px} .dicon{width:74px} }
+</style>
+
+<div id="menubar">
+  <span class="logo">🎓 StudyOS</span>
+  <span class="mb-app" id="mbApp">Masaüstü</span>
+  <span class="spacer"></span>
+  <span class="mb-item" id="mbStreak" title="Çalışma serisi">🔥 <b>0</b></span>
+  <span class="mb-item" id="mbToday" title="Bugün çalışılan süre">⏱ <b class="pill">0dk</b></span>
+  <span class="mb-item" id="mbDue" title="Tekrar bekleyen kart">🗂 <b>0</b></span>
+  <span class="mb-item" id="mbTheme" title="Tema">🌙</span>
+  <span class="mb-item pill" id="mbClock">--:--</span>
+</div>
+
+<div id="desktop">
+  <div id="icons"></div>
+</div>
+
+<div id="dock"></div>
+<div id="toasts"></div>
+<div id="focusOverlay">
+  <div>
+    <div class="sub" id="foLabel" style="letter-spacing:3px;text-transform:uppercase">odak</div>
+    <div class="ft" id="foTime">25:00</div>
+    <div id="foTask" style="opacity:.7;margin-top:6px"></div>
+    <div style="margin-top:26px;display:flex;gap:10px;justify-content:center">
+      <button class="btn" id="foToggle">Duraklat</button>
+      <button class="btn" id="foNoise">🔊 Gürültü</button>
+      <button class="btn" id="foExit">Çık (Esc)</button>
+    </div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ============================================================
+   ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
+   ============================================================ */
+const KEY="studyos.v1";
+const uid=()=>Math.random().toString(36).slice(2,10);
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const pad=n=>String(n).padStart(2,"0");
+const today=()=>new Date().toISOString().slice(0,10);
+const dayKey=d=>new Date(d).toISOString().slice(0,10);
+const addDays=(dstr,n)=>{const d=new Date(dstr+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
+const dayDiff=(a,b)=>Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);
+const fmtMin=m=>m>=60?`${Math.floor(m/60)}s ${m%60}dk`:`${m}dk`;
+const trDay=["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
+const COLORS=["#2a78d6","#eb6834","#1baf7a","#eda100","#e87ba4","#4a3aa7","#e34948","#008300"];
+
+let DB=null;
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){toast("⚠️ Kaydedilemedi: depolama dolu");} }
+function load(){
+  try{ const raw=localStorage.getItem(KEY); if(raw){DB=JSON.parse(raw); return;} }catch(e){}
+  DB=seed();
+  save();
+}
+function blank(){
+  return {v:1, settings:{theme:"dark", wall:"mesh", name:"", pomo:25, brk:5, goal:120},
+    courses:[], notes:[], decks:[], cards:[], tasks:[], sessions:[], topics:[],
+    quizzes:[], quizRuns:[], events:[], journal:[]};
+}
+function seed(){
+  const d=blank(); const t=today();
+  const c1={id:uid(),name:"Matematik",color:COLORS[0]};
+  const c2={id:uid(),name:"Biyoloji",color:COLORS[2]};
+  const c3={id:uid(),name:"Tarih",color:COLORS[1]};
+  d.courses=[c1,c2,c3];
+  d.notes=[{id:uid(),courseId:c1.id,title:"Türev — temel kurallar",
+    body:"# Türev\n\n**Tanım:** f'(x) = lim(h→0) [f(x+h) − f(x)] / h\n\n## Kurallar\n- Kuvvet: (x^n)' = n·x^(n-1)\n- Çarpım: (u·v)' = u'v + uv'\n- Bölüm: (u/v)' = (u'v − uv') / v²\n\n> ==Zincir kuralı== en çok unutulan yer: (f(g(x)))' = f'(g(x))·g'(x)\n\n`Not:` Bu notu silip kendi notlarını yazabilirsin.",
+    created:t,updated:t}];
+  const dk={id:uid(),name:"Biyoloji — Hücre",courseId:c2.id};
+  d.decks=[dk];
+  d.cards=[
+    {id:uid(),deckId:dk.id,front:"Mitokondri ne yapar?",back:"Hücrenin enerji (ATP) üretim merkezidir.",ef:2.5,int:0,reps:0,lapses:0,due:t},
+    {id:uid(),deckId:dk.id,front:"Ribozom görevi?",back:"Protein sentezi yapar.",ef:2.5,int:0,reps:0,lapses:0,due:t},
+    {id:uid(),deckId:dk.id,front:"Hücre zarının yapısı?",back:"Akıcı mozaik model: fosfolipit çift tabaka + proteinler.",ef:2.5,int:0,reps:0,lapses:0,due:t}];
+  d.tasks=[
+    {id:uid(),courseId:c1.id,title:"Türev soru bankası 40 soru",done:false,pri:2,due:addDays(t,1),created:t},
+    {id:uid(),courseId:c2.id,title:"Hücre bölünmesi konu tekrarı",done:false,pri:1,due:addDays(t,3),created:t},
+    {id:uid(),courseId:c3.id,title:"Kurtuluş Savaşı kronoloji çıkar",done:true,pri:0,due:t,created:t}];
+  const r1={id:uid(),courseId:c1.id,parentId:null,name:"Analiz",status:"learning"};
+  d.topics=[r1,
+    {id:uid(),courseId:c1.id,parentId:r1.id,name:"Limit",status:"known"},
+    {id:uid(),courseId:c1.id,parentId:r1.id,name:"Türev",status:"learning"},
+    {id:uid(),courseId:c1.id,parentId:r1.id,name:"İntegral",status:"new"},
+    {id:uid(),courseId:c2.id,parentId:null,name:"Hücre",status:"learning"}];
+  d.quizzes=[{id:uid(),name:"Hücre — hızlı test",courseId:c2.id,questions:[
+    {q:"ATP üretiminin ana merkezi hangisidir?",ch:["Ribozom","Mitokondri","Golgi","Lizozom"],a:1,ex:"Mitokondri oksijenli solunumla ATP üretir."},
+    {q:"Protein sentezi nerede gerçekleşir?",ch:["Ribozom","Koful","Sentrozom","Çekirdekçik"],a:0,ex:"Ribozomlar protein sentezinin yapıldığı organeldir."}]}];
+  d.events=[{id:uid(),day:0,start:18,end:20,courseId:c1.id,title:"Matematik tekrar"},
+            {id:uid(),day:2,start:19,end:20,courseId:c2.id,title:"Biyoloji kart"}];
+  for(let i=1;i<=6;i++){ d.sessions.push({id:uid(),courseId:[c1,c2,c3][i%3].id,date:addDays(t,-i),min:[50,25,75,25,50,25][i-1],kind:"focus"}); }
+  d.sessions.push({id:uid(),courseId:c1.id,date:t,min:25,kind:"focus"});
+  d.journal=[{date:t,mood:3,text:"StudyOS'a hoş geldin. Bugün ne öğrendiğini buraya yaz."}];
+  return d;
+}
+const course=id=>DB.courses.find(c=>c.id===id);
+const cname=id=>course(id)?.name||"Genel";
+const ccolor=id=>course(id)?.color||"var(--muted)";
+function toast(msg){ const t=el("div","toast",esc(msg)); $("#toasts").appendChild(t);
+  setTimeout(()=>{t.style.transition="opacity .3s";t.style.opacity="0";setTimeout(()=>t.remove(),300)},2600); }
+
+/* --------- markdown (mini) --------- */
+function md(src){
+  let s=esc(src);
+  s=s.replace(/```([\s\S]*?)```/g,(m,c)=>`<pre><code>${c.trim()}</code></pre>`);
+  s=s.replace(/^### (.*)$/gm,"<h3>$1</h3>").replace(/^## (.*)$/gm,"<h2>$1</h2>").replace(/^# (.*)$/gm,"<h1>$1</h1>");
+  s=s.replace(/^&gt; (.*)$/gm,"<blockquote>$1</blockquote>");
+  s=s.replace(/^---$/gm,"<hr>");
+  s=s.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/(^|\W)\*([^*\n]+)\*/g,"$1<i>$2</i>");
+  s=s.replace(/==([^=]+)==/g,"<mark>$1</mark>");
+  s=s.replace(/`([^`\n]+)`/g,"<code>$1</code>");
+  s=s.replace(/^\s*[-*] (.*)$/gm,"<li>$1</li>").replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g,"<ul>$1</ul>");
+  s=s.replace(/\n{2,}/g,"<br><br>").replace(/\n/g,"<br>");
+  s=s.replace(/<br>(<\/?(h1|h2|h3|ul|li|pre|blockquote|hr))/g,"$1");
+  return s;
+}
+
+/* ============================================================
+   PENCERE YÖNETİCİSİ
+   ============================================================ */
+const WINS=new Map(); let ztop=100;
+function openApp(appId,opts={}){
+  const app=APPS[appId]; if(!app) return;
+  if(app.single){ for(const w of WINS.values()) if(w.appId===appId){ focusWin(w); if(w.node.classList.contains("min")) w.node.classList.remove("min"); return w; } }
+  const id=uid();
+  const node=el("div","win");
+  const n=WINS.size;
+  const W=Math.min(opts.w||app.w||760, window.innerWidth-40);
+  const H=Math.min(opts.h||app.h||520, window.innerHeight-110);
+  node.style.width=W+"px"; node.style.height=H+"px";
+  node.style.left=Math.max(10,Math.min((window.innerWidth-W)/2 + (n%5)*26 - 52, window.innerWidth-W-10))+"px";
+  node.style.top=Math.max(6,Math.min(40+(n%5)*24, window.innerHeight-H-70))+"px";
+  node.innerHTML=`<div class="titlebar">
+      <div class="lights"><span class="light c" title="Kapat">✕</span><span class="light m" title="Küçült">–</span><span class="light z" title="Büyüt">+</span></div>
+      <div class="wtitle">${esc(app.icon+"  "+app.name)}</div></div>
+    <div class="wbody"></div><div class="resize"></div>`;
+  $("#desktop").appendChild(node);
+  const w={id,appId,node,body:$(".wbody",node),state:opts.state||{}};
+  WINS.set(id,w);
+  $(".light.c",node).onclick=()=>closeWin(w);
+  $(".light.m",node).onclick=()=>{node.classList.add("min");syncDock();};
+  $(".light.z",node).onclick=()=>toggleMax(w);
+  $(".titlebar",node).ondblclick=e=>{if(!e.target.classList.contains("light"))toggleMax(w);};
+  dragify(w); resizify(w);
+  node.addEventListener("mousedown",()=>focusWin(w),true);
+  focusWin(w);
+  app.render(w);
+  syncDock();
+  return w;
+}
+function closeWin(w){ APPS[w.appId].onClose?.(w); w.node.remove(); WINS.delete(w.id); syncDock();
+  const last=[...WINS.values()].pop(); if(last) focusWin(last); else $("#mbApp").textContent="Masaüstü"; }
+function focusWin(w){ if(w.node.style.zIndex==ztop) {} ztop++; w.node.style.zIndex=ztop;
+  $$(".win").forEach(n=>n.classList.remove("focus")); w.node.classList.add("focus");
+  $("#mbApp").textContent=APPS[w.appId].name; }
+function toggleMax(w){
+  const n=w.node;
+  if(n.classList.contains("max")){ n.classList.remove("max"); Object.assign(n.style,n._prev); }
+  else { n._prev={left:n.style.left,top:n.style.top,width:n.style.width,height:n.style.height};
+    n.classList.add("max"); Object.assign(n.style,{left:"0px",top:"0px",width:"100%",height:"calc(100% - 62px)"}); }
+}
+function dragify(w){
+  const bar=$(".titlebar",w.node);
+  bar.addEventListener("pointerdown",e=>{
+    if(e.target.classList.contains("light"))return;
+    if(w.node.classList.contains("max"))return;
+    const r=w.node.getBoundingClientRect(), d=$("#desktop").getBoundingClientRect();
+    const ox=e.clientX-r.left, oy=e.clientY-r.top;
+    const move=ev=>{ w.node.style.left=Math.max(-r.width+80,Math.min(ev.clientX-ox, window.innerWidth-60))+"px";
+                     w.node.style.top=Math.max(0,Math.min(ev.clientY-oy-d.top, window.innerHeight-70))+"px"; };
+    const up=()=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);};
+    document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);
+    focusWin(w);
+  });
+}
+function resizify(w){
+  $(".resize",w.node).addEventListener("pointerdown",e=>{
+    e.stopPropagation();
+    const r=w.node.getBoundingClientRect(), sx=e.clientX, sy=e.clientY;
+    const move=ev=>{ w.node.style.width=Math.max(300,r.width+ev.clientX-sx)+"px";
+                     w.node.style.height=Math.max(200,r.height+ev.clientY-sy)+"px"; APPS[w.appId].onResize?.(w); };
+    const up=()=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);};
+    document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);
+  });
+}
+/* aynı uygulamanın açık pencerelerini yeniden çiz */
+function rerender(appId){ for(const w of WINS.values()) if(w.appId===appId) APPS[w.appId].render(w); }
+function refreshAll(){ for(const w of WINS.values()) APPS[w.appId].render(w); updateMenubar(); }
+function saveAnd(...apps){ save(); apps.forEach(rerender); updateMenubar(); }
+</script>
+<script>
+/* ============================================================
+   UYGULAMALAR — 1: Notlar, Görevler, Kartlar, Pomodoro
+   ============================================================ */
+const APPS={};
+
+/* ---------------- Notlar ---------------- */
+APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
+  render(w){
+    const s=w.state; const list=DB.notes.slice().sort((a,b)=>b.updated.localeCompare(a.updated));
+    if(!s.id||!DB.notes.find(n=>n.id===s.id)) s.id=list[0]?.id||null;
+    const n=DB.notes.find(x=>x.id===s.id);
+    w.body.innerHTML=`<div class="app" style="flex-direction:row">
+      <div class="sidebar">
+        <button class="btn pri" style="width:100%" data-a="new">+ Yeni not</button>
+        <input class="inp" data-a="q" placeholder="Ara…" style="margin:8px 0" value="${esc(s.q||"")}">
+        <div data-a="list"></div>
+      </div>
+      <div class="app grow">
+        <div class="toolbar">
+          <input class="inp grow" data-a="title" placeholder="Başlık" value="${esc(n?.title||"")}" ${n?"":"disabled"}>
+          <select class="inp" data-a="course" style="width:130px">${DB.courses.map(c=>`<option value="${c.id}" ${n&&n.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+          <button class="btn" data-a="prev">${s.prev?"✏️ Yaz":"👁 Önizle"}</button>
+          <button class="btn danger sm" data-a="del">Sil</button>
+        </div>
+        ${n? (s.prev?`<div class="md-prev grow scroll">${md(n.body)}</div>`
+                    :`<textarea class="note-ed grow" data-a="body" placeholder="Markdown yazabilirsin: # başlık, **kalın**, - liste, ==vurgu==, \`kod\`">${esc(n.body)}</textarea>`)
+            :`<div class="empty">Henüz not yok.<br>Soldan <b>+ Yeni not</b> ile başla.</div>`}
+        <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+          <span class="sub">${n?`${n.body.trim().split(/\s+/).filter(Boolean).length} kelime · güncellendi ${esc(n.updated)}`:""}</span>
+        </div>
+      </div></div>`;
+    const q=(s.q||"").toLowerCase();
+    const box=$('[data-a="list"]',w.body);
+    const shown=list.filter(x=>!q||x.title.toLowerCase().includes(q)||x.body.toLowerCase().includes(q));
+    box.innerHTML=shown.map(x=>`<div class="item ${x.id===s.id?"sel":""}" data-id="${x.id}">
+        <span class="dotc" style="background:${ccolor(x.courseId)}"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.title||"Adsız")}</span></div>`).join("")
+      || `<div class="sub" style="padding:10px">Sonuç yok</div>`;
+    $$('[data-id]',box).forEach(it=>it.onclick=()=>{s.id=it.dataset.id;this.render(w);});
+    const on=(a,ev,fn)=>{const e=$(`[data-a="${a}"]`,w.body); if(e)e.addEventListener(ev,fn);};
+    on("new","click",()=>{const t=today();const nn={id:uid(),courseId:DB.courses[0]?.id,title:"Yeni not",body:"",created:t,updated:t};
+      DB.notes.push(nn);s.id=nn.id;s.prev=false;save();this.render(w);});
+    on("q","input",e=>{s.q=e.target.value;const v=e.target.selectionStart;this.render(w);const f=$('[data-a="q"]',w.body);f.focus();f.setSelectionRange(v,v);});
+    on("prev","click",()=>{s.prev=!s.prev;this.render(w);});
+    on("del","click",()=>{ if(!n)return; if(!confirm("Bu not silinsin mi?"))return;
+      DB.notes=DB.notes.filter(x=>x.id!==n.id); s.id=null; save(); this.render(w); });
+    on("title","input",e=>{n.title=e.target.value;n.updated=today();save();
+      $$('[data-id="'+n.id+'"] span:last-child',w.body).forEach(sp=>sp.textContent=n.title||"Adsız");});
+    on("course","change",e=>{n.courseId=e.target.value;n.updated=today();save();this.render(w);});
+    on("body","input",e=>{n.body=e.target.value;n.updated=today();save();});
+  }};
+
+/* ---------------- Görevler ---------------- */
+const PRI=["Düşük","Orta","Yüksek"], PRICOL=["var(--muted)","var(--s4)","var(--bad)"];
+APPS.tasks={ name:"Görevler", icon:"✅", w:640, h:520, desk:true, single:true,
+  render(w){
+    const s=w.state; s.filter=s.filter||"open";
+    const all=DB.tasks.slice().sort((a,b)=>(a.done-b.done)||((a.due||"9")>(b.due||"9")?1:-1)||(b.pri-a.pri));
+    const t=today();
+    const list=all.filter(x=> s.filter==="all"||(s.filter==="open"&&!x.done)||(s.filter==="today"&&!x.done&&x.due&&x.due<=t)||(s.filter==="done"&&x.done));
+    w.body.innerHTML=`<div class="app">
+      <div class="toolbar">
+        <input class="inp grow" data-a="new" placeholder="Yeni görev yaz, Enter'a bas…">
+        <select class="inp" data-a="nc" style="width:120px">${DB.courses.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
+      </div>
+      <div class="toolbar">
+        ${[["open","Açık"],["today","Bugün"],["all","Hepsi"],["done","Bitti"]].map(([k,l])=>
+          `<button class="btn sm ${s.filter===k?"pri":""}" data-f="${k}">${l}</button>`).join("")}
+        <span class="spacer grow"></span>
+        <span class="sub">${DB.tasks.filter(x=>!x.done).length} açık · ${DB.tasks.filter(x=>x.done).length} bitti</span>
+      </div>
+      <div class="grow scroll pad" data-a="list"></div></div>`;
+    const box=$('[data-a="list"]',w.body);
+    box.innerHTML=list.map(x=>{
+      const late=!x.done&&x.due&&x.due<t, due=x.due?(x.due===t?"bugün":(dayDiff(t,x.due)>0?`${dayDiff(t,x.due)} gün`:`${-dayDiff(t,x.due)} gün geçti`)):"";
+      return `<div class="card" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+        <span class="checkbox ${x.done?"on":""}" data-t="${x.id}">✓</span>
+        <div class="grow">
+          <div style="${x.done?"opacity:.5;text-decoration:line-through":""}">${esc(x.title)}</div>
+          <div class="row" style="margin-top:4px;gap:6px">
+            <span class="tag"><span class="dotc" style="display:inline-block;background:${ccolor(x.courseId)}"></span> ${esc(cname(x.courseId))}</span>
+            <span class="tag" style="color:${PRICOL[x.pri]}">${PRI[x.pri]}</span>
+            ${due?`<span class="tag" style="${late?"color:var(--bad)":""}">📅 ${due}</span>`:""}
+          </div></div>
+        <button class="btn sm" data-p="${x.id}" title="Öncelik">⇅</button>
+        <button class="btn sm" data-s="${x.id}" title="Bu görevle pomodoro başlat">▶</button>
+        <button class="btn sm danger" data-d="${x.id}">✕</button></div>`;}).join("")
+      || `<div class="empty">Bu filtrede görev yok 🎉</div>`;
+    $$("[data-f]",w.body).forEach(b=>b.onclick=()=>{s.filter=b.dataset.f;this.render(w);});
+    $$("[data-t]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.t);x.done=!x.done;saveAnd("tasks","stats");});
+    $$("[data-d]",box).forEach(b=>b.onclick=()=>{DB.tasks=DB.tasks.filter(y=>y.id!==b.dataset.d);saveAnd("tasks");});
+    $$("[data-p]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.p);x.pri=(x.pri+1)%3;saveAnd("tasks");});
+    $$("[data-s]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.s);
+      Pomo.start(x.courseId,x.title); openApp("pomodoro"); });
+    const inp=$('[data-a="new"]',w.body);
+    inp.onkeydown=e=>{ if(e.key!=="Enter"||!inp.value.trim())return;
+      let title=inp.value.trim(), due=null, pri=1;
+      if(/!$/.test(title)){pri=2;title=title.replace(/!+$/,"").trim();}
+      if(/\bbugün\b/i.test(title)){due=today();title=title.replace(/\bbugün\b/i,"").trim();}
+      if(/\byarın\b/i.test(title)){due=addDays(today(),1);title=title.replace(/\byarın\b/i,"").trim();}
+      DB.tasks.push({id:uid(),courseId:$('[data-a="nc"]',w.body).value,title,done:false,pri,due,created:today()});
+      inp.value=""; saveAnd("tasks"); $('[data-a="new"]',w.body).focus(); };
+  }};
+
+/* ---------------- Kartlar (aralıklı tekrar / SM-2) ---------------- */
+function dueCards(deckId){ const t=today();
+  return DB.cards.filter(c=>(!deckId||c.deckId===deckId)&&(!c.due||c.due<=t)); }
+function sm2(card,q){
+  if(q<3){ card.reps=0; card.int=1; card.lapses=(card.lapses||0)+1; }
+  else{ card.reps=(card.reps||0)+1;
+    card.int = card.reps===1?1 : card.reps===2?6 : Math.round((card.int||1)*(card.ef||2.5));
+    card.ef = Math.max(1.3,(card.ef||2.5)+(0.1-(5-q)*(0.08+(5-q)*0.02))); }
+  card.due=addDays(today(),card.int);
+  card.seen=today();
+}
+APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
+  render(w){
+    const s=w.state;
+    if(!s.deck||!DB.decks.find(d=>d.id===s.deck)) s.deck=DB.decks[0]?.id||null;
+    if(s.mode==="study"){ return this.study(w); }
+    const cards=DB.cards.filter(c=>c.deckId===s.deck);
+    w.body.innerHTML=`<div class="app" style="flex-direction:row">
+      <div class="sidebar">
+        <button class="btn pri" style="width:100%" data-a="newdeck">+ Yeni deste</button><div class="sep"></div>
+        ${DB.decks.map(d=>{const n=dueCards(d.id).length;
+          return `<div class="item ${d.id===s.deck?"sel":""}" data-d="${d.id}">
+            <span class="dotc" style="background:${ccolor(d.courseId)}"></span>
+            <span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</span>
+            ${n?`<span class="tag" style="background:var(--accent);color:#fff">${n}</span>`:""}</div>`;}).join("")
+          ||`<div class="sub" style="padding:8px">Deste yok</div>`}
+      </div>
+      <div class="app grow">
+        <div class="toolbar">
+          <b class="grow">${esc(DB.decks.find(d=>d.id===s.deck)?.name||"—")}</b>
+          <span class="tag">${cards.length} kart</span>
+          <span class="tag" style="background:var(--accent);color:#fff">${dueCards(s.deck).length} tekrar</span>
+          <button class="btn pri" data-a="study" ${dueCards(s.deck).length?"":"disabled"}>▶ Çalış</button>
+          <button class="btn danger sm" data-a="deldeck">Deste sil</button>
+        </div>
+        <div class="toolbar">
+          <input class="inp grow" data-a="f" placeholder="Ön yüz (soru)">
+          <input class="inp grow" data-a="b" placeholder="Arka yüz (cevap)">
+          <button class="btn" data-a="add">+ Ekle</button>
+        </div>
+        <div class="grow scroll pad" data-a="list"></div>
+      </div></div>`;
+    $('[data-a="list"]',w.body).innerHTML=cards.map(c=>`
+      <div class="card" style="margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
+        <div class="grow"><div><b>${esc(c.front)}</b></div><div class="sub" style="margin-top:3px">${esc(c.back)}</div></div>
+        <span class="tag">${c.due&&c.due>today()?`⏳ ${dayDiff(today(),c.due)}g`:"🔔 hazır"}</span>
+        <button class="btn sm danger" data-x="${c.id}">✕</button></div>`).join("")
+      ||`<div class="empty">Bu destede kart yok.<br>Yukarıdan ön/arka yüz yazıp ekle.</div>`;
+    $$("[data-d]",w.body).forEach(b=>b.onclick=()=>{s.deck=b.dataset.d;this.render(w);});
+    $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{DB.cards=DB.cards.filter(c=>c.id!==b.dataset.x);saveAnd("cards");});
+    const A=a=>$(`[data-a="${a}"]`,w.body);
+    A("newdeck").onclick=()=>{const n=prompt("Deste adı:");if(!n)return;
+      const d={id:uid(),name:n,courseId:DB.courses[0]?.id};DB.decks.push(d);s.deck=d.id;saveAnd("cards");};
+    A("deldeck").onclick=()=>{ if(!s.deck||!confirm("Deste ve içindeki kartlar silinsin mi?"))return;
+      DB.cards=DB.cards.filter(c=>c.deckId!==s.deck);DB.decks=DB.decks.filter(d=>d.id!==s.deck);s.deck=null;saveAnd("cards");};
+    const add=()=>{const f=A("f").value.trim(),b=A("b").value.trim(); if(!f||!b||!s.deck)return;
+      DB.cards.push({id:uid(),deckId:s.deck,front:f,back:b,ef:2.5,int:0,reps:0,lapses:0,due:today()});
+      A("f").value="";A("b").value="";saveAnd("cards");$('[data-a="f"]',w.body).focus();};
+    A("add").onclick=add; A("b").onkeydown=e=>{if(e.key==="Enter")add();};
+    A("study").onclick=()=>{s.mode="study";s.queue=dueCards(s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
+  },
+  study(w){
+    const s=w.state; const c=DB.cards.find(x=>x.id===s.queue[0]);
+    if(!c){ w.body.innerHTML=`<div class="app"><div class="empty"><div style="font-size:46px">🎉</div>
+      <b>Tur bitti!</b><br>${s.done} kart tekrar edildi.<br><br>
+      <button class="btn pri" data-a="back">Destelere dön</button></div></div>`;
+      $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;this.render(w);}; return; }
+    w.body.innerHTML=`<div class="app">
+      <div class="toolbar"><button class="btn sm" data-a="back">‹ Geri</button>
+        <span class="grow"></span><span class="sub">kalan ${s.queue.length} · bitti ${s.done}</span></div>
+      <div class="flash grow">
+        <div>
+          <div class="flash-card" data-a="flip">
+            <div><div class="side">${s.show?"cevap":"soru"}</div>
+            <div style="margin-top:10px">${esc(s.show?c.back:c.front)}</div>
+            ${s.show?"":'<div class="sub" style="margin-top:16px">çevirmek için tıkla / Boşluk</div>'}</div>
+          </div>
+          <div style="height:16px"></div>
+          ${s.show?`<div class="grade">
+            <button class="btn" data-g="0" style="color:var(--bad)">Bilemedim <span class="kbd">1</span></button>
+            <button class="btn" data-g="3">Zor <span class="kbd">2</span></button>
+            <button class="btn pri" data-g="4">İyi <span class="kbd">3</span></button>
+            <button class="btn" data-g="5" style="color:var(--good)">Kolay <span class="kbd">4</span></button></div>`
+           :`<div class="grade"><button class="btn pri" data-a="flip2">Çevir</button></div>`}
+        </div></div></div>`;
+    const flip=()=>{s.show=true;this.render(w);};
+    $('[data-a="flip"]',w.body).onclick=flip; $('[data-a="flip2"]',w.body)?.addEventListener("click",flip);
+    $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;this.render(w);};
+    const grade=g=>{ sm2(c,g); s.queue.shift(); if(g<3)s.queue.push(c.id); s.done++; s.show=false; save(); this.render(w); updateMenubar(); };
+    $$("[data-g]",w.body).forEach(b=>b.onclick=()=>grade(+b.dataset.g));
+    w.keys=e=>{ if(!s.show&&(e.key===" "||e.key==="Enter")){e.preventDefault();flip();}
+      else if(s.show&&["1","2","3","4"].includes(e.key)) grade([0,3,4,5][+e.key-1]); };
+  },
+  onClose(w){ w.keys=null; }};
+
+/* ---------------- Pomodoro ---------------- */
+const Pomo={
+  left:0, total:0, running:false, mode:"focus", courseId:null, label:"", tick:null,
+  start(courseId,label){ this.courseId=courseId||DB.courses[0]?.id; this.label=label||"";
+    this.mode="focus"; this.total=DB.settings.pomo*60; this.left=this.total; this.run(); },
+  startBreak(){ this.mode="break"; this.total=DB.settings.brk*60; this.left=this.total; this.run(); },
+  run(){ this.running=true; clearInterval(this.tick);
+    this.tick=setInterval(()=>{ this.left--; if(this.left<=0) this.finish(); this.paint(); },1000); this.paint(); },
+  pause(){ this.running=false; clearInterval(this.tick); this.paint(); },
+  reset(){ this.pause(); this.left=this.total=(this.mode==="focus"?DB.settings.pomo:DB.settings.brk)*60; this.paint(); },
+  finish(){ clearInterval(this.tick); this.running=false;
+    if(this.mode==="focus"){ const min=Math.round(this.total/60);
+      DB.sessions.push({id:uid(),courseId:this.courseId,date:today(),min,kind:"focus",label:this.label});
+      save(); toast(`✅ ${min} dakika kaydedildi — mola zamanı`); beep(); this.startBreak(); }
+    else { toast("☕ Mola bitti, hadi devam!"); beep(); this.mode="focus"; this.left=this.total=DB.settings.pomo*60; }
+    updateMenubar(); rerender("stats"); },
+  paint(){ rerender("pomodoro"); paintFocus(); }
+};
+function beep(){ try{ const a=new (window.AudioContext||window.webkitAudioContext)();
+  const o=a.createOscillator(), g=a.createGain(); o.connect(g); g.connect(a.destination);
+  o.frequency.value=660; g.gain.setValueAtTime(.0001,a.currentTime);
+  g.gain.exponentialRampToValueAtTime(.25,a.currentTime+.03);
+  g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+1.1);
+  o.start(); o.stop(a.currentTime+1.15);}catch(e){} }
+const mmss=s=>`${pad(Math.floor(Math.max(0,s)/60))}:${pad(Math.max(0,s)%60)}`;
+APPS.pomodoro={ name:"Pomodoro", icon:"⏱", w:420, h:520, desk:true, single:true,
+  render(w){
+    const p=Pomo.total?1-Pomo.left/Pomo.total:0;
+    const todayMin=DB.sessions.filter(s=>s.date===today()).reduce((a,b)=>a+b.min,0);
+    w.body.innerHTML=`<div class="app">
+      <div class="toolbar"><b class="grow">${Pomo.mode==="focus"?"🎯 Odak":"☕ Mola"}</b>
+        <select class="inp" data-a="c" style="width:140px">${DB.courses.map(c=>`<option value="${c.id}" ${Pomo.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
+      <div class="grow" style="display:grid;place-items:center;gap:18px;padding:18px">
+        <div class="ring" style="--p:${(p*100).toFixed(1)}">
+          <div style="text-align:center"><div class="timer">${mmss(Pomo.left||DB.settings.pomo*60)}</div>
+          <div class="sub">${esc(Pomo.label||"serbest çalışma")}</div></div>
+        </div>
+        <div class="row">
+          <button class="btn pri" data-a="tog">${Pomo.running?"⏸ Duraklat":"▶ Başlat"}</button>
+          <button class="btn" data-a="rst">↺ Sıfırla</button>
+          <button class="btn" data-a="focus">🌙 Odak modu</button>
+        </div>
+        <div class="card" style="width:100%">
+          <div class="row"><b class="grow">Bugün</b><span>${fmtMin(todayMin)} / ${fmtMin(DB.settings.goal)}</span></div>
+          <div class="meter" style="margin-top:8px"><i style="width:${Math.min(100,todayMin/DB.settings.goal*100)}%"></i></div>
+          <div class="sub" style="margin-top:8px">${DB.sessions.filter(s=>s.date===today()).length} oturum tamamlandı</div>
+        </div>
+        <div class="row sub"><span>Süre</span>
+          <input class="inp" type="number" min="1" max="120" value="${DB.settings.pomo}" data-a="len" style="width:70px">
+          <span>Mola</span>
+          <input class="inp" type="number" min="1" max="60" value="${DB.settings.brk}" data-a="brk" style="width:70px">
+        </div>
+      </div></div>`;
+    const A=a=>$(`[data-a="${a}"]`,w.body);
+    A("tog").onclick=()=>{ if(Pomo.running)Pomo.pause(); else { if(!Pomo.left){Pomo.total=DB.settings.pomo*60;Pomo.left=Pomo.total;} Pomo.courseId=A("c").value; Pomo.run(); } };
+    A("rst").onclick=()=>Pomo.reset();
+    A("focus").onclick=()=>{ if(!Pomo.running){Pomo.courseId=A("c").value;Pomo.start(Pomo.courseId,Pomo.label);} enterFocus(); };
+    A("c").onchange=e=>Pomo.courseId=e.target.value;
+    A("len").onchange=e=>{DB.settings.pomo=Math.max(1,+e.target.value||25);save();if(!Pomo.running){Pomo.total=Pomo.left=DB.settings.pomo*60;}this.render(w);};
+    A("brk").onchange=e=>{DB.settings.brk=Math.max(1,+e.target.value||5);save();};
+  }};
+</script>
+<script>
+/* ============================================================
+   UYGULAMALAR — 2: Quiz, Takvim, Konu Haritası, İstatistik
+   ============================================================ */
+
+/* ---------------- Quiz ---------------- */
+APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
+  render(w){
+    const s=w.state;
+    if(s.mode==="run") return this.run(w);
+    if(s.mode==="edit") return this.edit(w);
+    w.body.innerHTML=`<div class="app">
+      <div class="toolbar"><b class="grow">Soru bankaları</b>
+        <button class="btn pri" data-a="new">+ Yeni test</button></div>
+      <div class="grow scroll pad">
+        ${DB.quizzes.map(q=>{
+          const runs=DB.quizRuns.filter(r=>r.quizId===q.id);
+          const best=runs.length?Math.max(...runs.map(r=>Math.round(r.correct/r.total*100))):null;
+          return `<div class="card" style="margin-bottom:8px;display:flex;gap:10px;align-items:center">
+            <span class="dotc" style="background:${ccolor(q.courseId)}"></span>
+            <div class="grow"><b>${esc(q.name)}</b>
+              <div class="sub">${q.questions.length} soru · ${esc(cname(q.courseId))}${best!=null?` · en iyi %${best}`:""}</div></div>
+            <button class="btn pri sm" data-r="${q.id}" ${q.questions.length?"":"disabled"}>▶ Çöz</button>
+            <button class="btn sm" data-e="${q.id}">✏️</button>
+            <button class="btn sm danger" data-x="${q.id}">✕</button></div>`;}).join("")
+          ||`<div class="empty">Henüz test yok.<br><b>+ Yeni test</b> ile kendi soru bankanı oluştur.</div>`}
+        ${DB.quizRuns.length?`<div class="sep"></div><div class="h2" style="margin:10px 0">Son denemeler</div>
+          ${DB.quizRuns.slice(-8).reverse().map(r=>{const q=DB.quizzes.find(x=>x.id===r.quizId);
+            const pct=Math.round(r.correct/r.total*100);
+            return `<div class="row" style="padding:6px 0"><span class="grow">${esc(q?.name||"—")} <span class="sub">${esc(r.date)}</span></span>
+              <span class="tag" style="color:${pct>=70?"var(--good)":pct>=40?"var(--warn)":"var(--bad)"}">${r.correct}/${r.total} · %${pct}</span></div>`;}).join("")}`:""}
+      </div></div>`;
+    $$("[data-r]",w.body).forEach(b=>b.onclick=()=>{s.quiz=b.dataset.r;s.mode="run";s.i=0;s.answers=[];s.locked=false;this.render(w);});
+    $$("[data-e]",w.body).forEach(b=>b.onclick=()=>{s.quiz=b.dataset.e;s.mode="edit";this.render(w);});
+    $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{if(!confirm("Test silinsin mi?"))return;
+      DB.quizzes=DB.quizzes.filter(q=>q.id!==b.dataset.x);saveAnd("quiz");});
+    $('[data-a="new"]',w.body).onclick=()=>{const n=prompt("Test adı:");if(!n)return;
+      const q={id:uid(),name:n,courseId:DB.courses[0]?.id,questions:[]};DB.quizzes.push(q);
+      s.quiz=q.id;s.mode="edit";saveAnd("quiz");};
+  },
+  edit(w){
+    const s=w.state, q=DB.quizzes.find(x=>x.id===s.quiz);
+    if(!q){s.mode=null;return this.render(w);}
+    w.body.innerHTML=`<div class="app">
+      <div class="toolbar"><button class="btn sm" data-a="back">‹ Geri</button>
+        <input class="inp grow" data-a="name" value="${esc(q.name)}">
+        <select class="inp" data-a="course" style="width:130px">${DB.courses.map(c=>`<option value="${c.id}" ${q.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
+      <div class="grow scroll pad" data-a="list"></div>
+      <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+        <button class="btn pri" data-a="add">+ Soru ekle</button>
+        <span class="sub">Doğru şıkkı soldaki dairelerden seç</span></div></div>`;
+    $('[data-a="list"]',w.body).innerHTML=q.questions.map((x,i)=>`
+      <div class="card" style="margin-bottom:10px">
+        <div class="row"><b class="sub">Soru ${i+1}</b><span class="grow"></span><button class="btn sm danger" data-dq="${i}">✕</button></div>
+        <input class="inp" data-q="${i}" value="${esc(x.q)}" placeholder="Soru metni" style="margin:6px 0">
+        ${x.ch.map((c,j)=>`<div class="row" style="margin:4px 0">
+          <input type="radio" name="a${i}" ${x.a===j?"checked":""} data-a2="${i}.${j}">
+          <input class="inp grow" data-c="${i}.${j}" value="${esc(c)}" placeholder="Şık ${String.fromCharCode(65+j)}"></div>`).join("")}
+        <input class="inp" data-ex="${i}" value="${esc(x.ex||"")}" placeholder="Açıklama (opsiyonel)" style="margin-top:6px">
+      </div>`).join("")||`<div class="empty">Soru ekleyerek başla.</div>`;
+    const A=a=>$(`[data-a="${a}"]`,w.body);
+    A("back").onclick=()=>{s.mode=null;saveAnd("quiz");};
+    A("name").oninput=e=>{q.name=e.target.value;save();};
+    A("course").onchange=e=>{q.courseId=e.target.value;save();};
+    A("add").onclick=()=>{q.questions.push({q:"",ch:["","","",""],a:0,ex:""});saveAnd("quiz");};
+    $$("[data-dq]",w.body).forEach(b=>b.onclick=()=>{q.questions.splice(+b.dataset.dq,1);saveAnd("quiz");});
+    $$("[data-q]",w.body).forEach(i=>i.oninput=()=>{q.questions[+i.dataset.q].q=i.value;save();});
+    $$("[data-ex]",w.body).forEach(i=>i.oninput=()=>{q.questions[+i.dataset.ex].ex=i.value;save();});
+    $$("[data-c]",w.body).forEach(i=>i.oninput=()=>{const[a,b]=i.dataset.c.split(".").map(Number);q.questions[a].ch[b]=i.value;save();});
+    $$("[data-a2]",w.body).forEach(i=>i.onchange=()=>{const[a,b]=i.dataset.a2.split(".").map(Number);q.questions[a].a=b;save();});
+  },
+  run(w){
+    const s=w.state, q=DB.quizzes.find(x=>x.id===s.quiz);
+    if(s.i>=q.questions.length){
+      const correct=s.answers.filter((a,i)=>a===q.questions[i].a).length;
+      const pct=Math.round(correct/q.questions.length*100);
+      w.body.innerHTML=`<div class="app"><div class="grow scroll pad" style="text-align:center">
+        <div style="font-size:46px;margin-top:18px">${pct>=70?"🎉":pct>=40?"💪":"📚"}</div>
+        <div class="hero">%${pct}</div><div class="sub">${correct} / ${q.questions.length} doğru</div>
+        <div class="row" style="justify-content:center;margin:18px 0;flex-wrap:wrap">
+          <button class="btn" data-a="again">↺ Tekrar çöz</button>
+          <button class="btn pri" data-a="tocards">Yanlışları karta çevir</button>
+          <button class="btn" data-a="back">Listeye dön</button></div>
+        <div style="text-align:left">${q.questions.map((x,i)=>{const ok=s.answers[i]===x.a;
+          return `<div class="card" style="margin-bottom:8px;border-left:3px solid ${ok?"var(--good)":"var(--bad)"}">
+            <b>${i+1}. ${esc(x.q)}</b>
+            <div class="sub" style="margin-top:4px">Senin cevabın: ${esc(x.ch[s.answers[i]]??"—")} ${ok?"✓":"✗"}</div>
+            ${ok?"":`<div class="sub">Doğru: <b>${esc(x.ch[x.a])}</b></div>`}
+            ${x.ex?`<div class="sub" style="margin-top:4px">💡 ${esc(x.ex)}</div>`:""}</div>`;}).join("")}</div>
+      </div></div>`;
+      if(!s.logged){DB.quizRuns.push({id:uid(),quizId:q.id,date:today(),correct,total:q.questions.length});s.logged=true;save();}
+      const A=a=>$(`[data-a="${a}"]`,w.body);
+      A("again").onclick=()=>{s.i=0;s.answers=[];s.logged=false;s.locked=false;this.render(w);};
+      A("back").onclick=()=>{s.mode=null;s.logged=false;this.render(w);};
+      A("tocards").onclick=()=>{
+        let dk=DB.decks.find(d=>d.name==="Yanlışlarım — "+q.name);
+        if(!dk){dk={id:uid(),name:"Yanlışlarım — "+q.name,courseId:q.courseId};DB.decks.push(dk);}
+        let n=0; q.questions.forEach((x,i)=>{ if(s.answers[i]!==x.a){ n++;
+          DB.cards.push({id:uid(),deckId:dk.id,front:x.q,back:x.ch[x.a]+(x.ex?"\n\n"+x.ex:""),ef:2.5,int:0,reps:0,lapses:0,due:today()});}});
+        save(); toast(n?`${n} kart "${dk.name}" destesine eklendi`:"Yanlış yok, harika!"); rerender("cards"); updateMenubar(); };
+      return;
+    }
+    const x=q.questions[s.i], picked=s.answers[s.i];
+    w.body.innerHTML=`<div class="app">
+      <div class="toolbar"><button class="btn sm" data-a="back">‹ Çık</button>
+        <span class="grow"></span><span class="sub">${s.i+1} / ${q.questions.length}</span></div>
+      <div class="meter" style="border-radius:0;height:4px"><i style="width:${s.i/q.questions.length*100}%"></i></div>
+      <div class="grow scroll pad">
+        <div class="h1" style="margin-bottom:16px;line-height:1.45">${esc(x.q)}</div>
+        <div class="col">${x.ch.map((c,j)=>{
+          let cls="choice"; if(s.locked){ if(j===x.a)cls+=" ok"; else if(j===picked)cls+=" no"; } else if(j===picked)cls+=" pick";
+          return `<div class="${cls}" data-ch="${j}"><b>${String.fromCharCode(65+j)}</b><span>${esc(c)}</span></div>`;}).join("")}</div>
+        ${s.locked&&x.ex?`<div class="card" style="margin-top:12px">💡 ${esc(x.ex)}</div>`:""}
+      </div>
+      <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+        <span class="grow"></span>
+        <button class="btn pri" data-a="next">${s.locked?(s.i===q.questions.length-1?"Sonucu gör":"Sonraki ›"):"Cevapla"}</button></div></div>`;
+    $$("[data-ch]",w.body).forEach(b=>b.onclick=()=>{ if(s.locked)return; s.answers[s.i]=+b.dataset.ch; this.render(w); });
+    $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;this.render(w);};
+    $('[data-a="next"]',w.body).onclick=()=>{
+      if(!s.locked){ if(picked==null){toast("Bir şık seç");return;} s.locked=true; }
+      else { s.i++; s.locked=false; }
+      this.render(w); };
+  }};
+
+/* ---------------- Takvim ---------------- */
+APPS.calendar={ name:"Takvim", icon:"📅", w:800, h:560, desk:true, single:true,
+  render(w){
+    const H0=7,H1=24;
+    const hours=[];for(let h=H0;h<H1;h++)hours.push(h);
+    const total=DB.events.reduce((a,e)=>a+(e.end-e.start),0);
+    let html=`<div class="app"><div class="toolbar">
+      <b class="grow">Haftalık çalışma programı</b>
+      <span class="tag">planlanan: ${total} saat/hafta</span>
+      <button class="btn sm danger" data-a="clr">Temizle</button></div>
+      <div class="grow scroll"><div class="cal">
+      <div class="hd"></div>${trDay.map(d=>`<div class="hd">${d}</div>`).join("")}`;
+    for(const h of hours){
+      html+=`<div class="hr">${pad(h)}:00</div>`;
+      for(let d=0;d<7;d++){
+        const ev=DB.events.find(e=>e.day===d&&e.start===h);
+        html+=`<div class="cell" data-c="${d}.${h}">${ev?`<div class="ev" data-ev="${ev.id}" style="background:${ccolor(ev.courseId)};height:calc(${ev.end-ev.start}*34px - 2px)">${esc(ev.title)}<br><span style="opacity:.8">${pad(ev.start)}:00–${pad(ev.end)}:00</span></div>`:""}</div>`;
+      }
+    }
+    html+=`</div></div>
+      <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+        <span class="sub">Boş bir kutuya tıkla → blok ekle · bloğa tıkla → sil</span></div></div>`;
+    w.body.innerHTML=html;
+    $$("[data-c]",w.body).forEach(c=>c.onclick=e=>{
+      if(e.target.closest(".ev"))return;
+      const [d,h]=c.dataset.c.split(".").map(Number);
+      const t=prompt("Blok başlığı:","Çalışma"); if(!t)return;
+      const len=Math.max(1,Math.min(4,+(prompt("Kaç saat?","1")||1)));
+      DB.events.push({id:uid(),day:d,start:h,end:Math.min(24,h+len),courseId:DB.courses[0]?.id,title:t});
+      saveAnd("calendar");});
+    $$("[data-ev]",w.body).forEach(b=>b.onclick=e=>{e.stopPropagation();
+      const ev=DB.events.find(x=>x.id===b.dataset.ev);
+      const opt=prompt(`"${ev.title}"\n1 = sil, 2 = ders değiştir, 3 = yeniden adlandır`,"1");
+      if(opt==="1"){DB.events=DB.events.filter(x=>x.id!==ev.id);}
+      else if(opt==="2"){const n=prompt("Ders adı:\n"+DB.courses.map(c=>c.name).join(", "),cname(ev.courseId));
+        const c=DB.courses.find(c=>c.name.toLowerCase()===String(n).toLowerCase()); if(c)ev.courseId=c.id;}
+      else if(opt==="3"){const n=prompt("Yeni başlık:",ev.title); if(n)ev.title=n;}
+      saveAnd("calendar");});
+    $('[data-a="clr"]',w.body).onclick=()=>{if(confirm("Tüm program silinsin mi?")){DB.events=[];saveAnd("calendar");}};
+  }};
+
+/* ---------------- Konu Haritası ---------------- */
+const STLABEL={new:"Başlanmadı",learning:"Öğreniyorum",known:"Biliyorum"};
+APPS.topics={ name:"Konu Haritası", icon:"🧠", w:680, h:560, desk:true, single:true,
+  render(w){
+    const s=w.state; if(!s.course||!course(s.course)) s.course=DB.courses[0]?.id;
+    const list=DB.topics.filter(t=>t.courseId===s.course);
+    const prog=c=>{const ts=DB.topics.filter(t=>t.courseId===c); if(!ts.length)return 0;
+      return Math.round(ts.reduce((a,t)=>a+(t.status==="known"?1:t.status==="learning"?.5:0),0)/ts.length*100);};
+    const draw=(parent,depth)=>list.filter(t=>t.parentId===parent).map(t=>`
+      <div class="tree-node" style="margin-left:${depth*20}px">
+        <span class="st ${t.status}" data-s="${t.id}" title="${STLABEL[t.status]}"></span>
+        <span class="grow" style="${t.status==="known"?"opacity:.65":""}">${esc(t.name)}</span>
+        <span class="tag">${STLABEL[t.status]}</span>
+        <button class="btn sm" data-add="${t.id}" title="Alt konu">+</button>
+        <button class="btn sm danger" data-x="${t.id}">✕</button>
+      </div>${draw(t.id,depth+1)}`).join("");
+    w.body.innerHTML=`<div class="app" style="flex-direction:row">
+      <div class="sidebar">${DB.courses.map(c=>`<div class="item ${c.id===s.course?"sel":""}" data-c="${c.id}">
+          <span class="dotc" style="background:${c.color}"></span><span class="grow">${esc(c.name)}</span>
+          <span class="sub">%${prog(c.id)}</span></div>`).join("")}
+        <div class="sep"></div><button class="btn sm" style="width:100%" data-a="newcourse">+ Ders</button></div>
+      <div class="app grow">
+        <div class="toolbar"><b class="grow">${esc(cname(s.course))}</b>
+          <button class="btn pri sm" data-a="root">+ Ana konu</button></div>
+        <div class="pad" style="padding-bottom:0">
+          <div class="row sub"><span class="grow">İlerleme</span><b>%${prog(s.course)}</b></div>
+          <div class="meter" style="margin-top:6px"><i style="width:${prog(s.course)}%;background:${ccolor(s.course)}"></i></div>
+        </div>
+        <div class="grow scroll pad">${draw(null,0)||`<div class="empty">Bu derste konu yok.<br><b>+ Ana konu</b> ile ağacı kur.</div>`}</div>
+        <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+          <span class="sub">Renkli kareye tıkla: başlanmadı → öğreniyorum → biliyorum</span></div>
+      </div></div>`;
+    $$("[data-c]",w.body).forEach(b=>b.onclick=()=>{s.course=b.dataset.c;this.render(w);});
+    $$("[data-s]",w.body).forEach(b=>b.onclick=()=>{const t=DB.topics.find(x=>x.id===b.dataset.s);
+      t.status={new:"learning",learning:"known",known:"new"}[t.status];saveAnd("topics","stats");});
+    $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{const id=b.dataset.x;
+      const kill=i=>{DB.topics.filter(t=>t.parentId===i).forEach(t=>kill(t.id));DB.topics=DB.topics.filter(t=>t.id!==i);};
+      kill(id);saveAnd("topics","stats");});
+    $$("[data-add]",w.body).forEach(b=>b.onclick=()=>{const n=prompt("Alt konu adı:");if(!n)return;
+      DB.topics.push({id:uid(),courseId:s.course,parentId:b.dataset.add,name:n,status:"new"});saveAnd("topics","stats");});
+    $('[data-a="root"]',w.body).onclick=()=>{const n=prompt("Konu adı:");if(!n)return;
+      DB.topics.push({id:uid(),courseId:s.course,parentId:null,name:n,status:"new"});saveAnd("topics","stats");};
+    $('[data-a="newcourse"]',w.body).onclick=()=>{const n=prompt("Ders adı:");if(!n)return;
+      const c={id:uid(),name:n,color:COLORS[DB.courses.length%COLORS.length]};DB.courses.push(c);s.course=c.id;saveAnd("topics","stats","tasks","notes");};
+  }};
+
+/* ---------------- İstatistik ---------------- */
+function minutesByDay(n){ const out=[]; for(let i=n-1;i>=0;i--){ const d=addDays(today(),-i);
+  out.push({d, m:DB.sessions.filter(s=>s.date===d).reduce((a,b)=>a+b.min,0)}); } return out; }
+function streak(){ let n=0,d=today();
+  if(!DB.sessions.some(s=>s.date===d)) d=addDays(d,-1);
+  while(DB.sessions.some(s=>s.date===d)){n++;d=addDays(d,-1);} return n; }
+APPS.stats={ name:"İstatistik", icon:"📊", w:760, h:600, desk:true, single:true,
+  render(w){
+    const days=minutesByDay(14), week=minutesByDay(7).reduce((a,b)=>a+b.m,0);
+    const max=Math.max(60,...days.map(d=>d.m));
+    const CW=Math.max(420,(w.node.clientWidth||700)-90), CH=150, bw=CW/days.length;
+    const bars=days.map((d,i)=>{ const h=d.m/max*CH;
+      return `<g><rect class="bar" x="${(i*bw+bw*0.18).toFixed(1)}" y="${(CH-h).toFixed(1)}" width="${(bw*0.64).toFixed(1)}" height="${Math.max(h,d.m?2:0).toFixed(1)}" rx="4"><title>${d.d}: ${d.m} dk</title></rect>
+        ${d.m?`<text class="axis" x="${(i*bw+bw/2).toFixed(1)}" y="${(CH-h-5).toFixed(1)}" text-anchor="middle">${d.m}</text>`:""}
+        <text class="axis" x="${(i*bw+bw/2).toFixed(1)}" y="${CH+14}" text-anchor="middle">${d.d.slice(8)}</text></g>`;}).join("");
+    /* 12 haftalık ısı haritası — tek hue, açıktan koyuya */
+    const hm=minutesByDay(84), hmax=Math.max(60,...hm.map(d=>d.m));
+    const heat=hm.map(d=>{ const r=d.m/hmax;
+      const bg=d.m?`color-mix(in srgb, var(--s1) ${Math.round(18+r*82)}%, var(--surface-3))`:"var(--surface-3)";
+      return `<i style="background:${bg}" title="${d.d}: ${d.m} dk"></i>`;}).join("");
+    /* ders bazlı */
+    const byCourse=DB.courses.map(c=>({c, m:DB.sessions.filter(s=>s.courseId===c.id).reduce((a,b)=>a+b.min,0)}))
+      .sort((a,b)=>b.m-a.m);
+    const totalAll=byCourse.reduce((a,b)=>a+b.m,0)||1;
+    const prog=c=>{const ts=DB.topics.filter(t=>t.courseId===c);if(!ts.length)return 0;
+      return Math.round(ts.reduce((a,t)=>a+(t.status==="known"?1:t.status==="learning"?.5:0),0)/ts.length*100);};
+    w.body.innerHTML=`<div class="app"><div class="toolbar"><b class="grow">Çalışma istatistikleri</b>
+      <span class="tag">🔥 ${streak()} günlük seri</span></div>
+      <div class="grow scroll pad">
+        <div class="stat-grid">
+          <div class="card"><div class="sub">Bu hafta</div><div class="hero">${fmtMin(week)}</div></div>
+          <div class="card"><div class="sub">Toplam</div><div class="hero">${fmtMin(totalAll)}</div></div>
+          <div class="card"><div class="sub">Oturum</div><div class="hero">${DB.sessions.length}</div></div>
+          <div class="card"><div class="sub">Tekrar bekleyen</div><div class="hero">${dueCards().length}</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="h2">Son 14 gün · dakika</div>
+          <svg viewBox="0 0 ${CW} ${CH+22}" width="100%" height="${CH+22}" style="margin-top:8px;overflow:visible" role="img" aria-label="Son 14 günün günlük çalışma dakikaları">
+            <line class="gridline" x1="0" y1="${CH}" x2="${CW}" y2="${CH}"></line>${bars}</svg>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="h2">Son 12 hafta</div>
+          <div class="heat" style="margin-top:10px">${heat}</div>
+          <div class="sub" style="margin-top:8px">Koyu = daha çok çalışma · her kare bir gün</div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="h2">Derslere göre</div>
+          ${byCourse.map(x=>`<div style="margin-top:10px">
+            <div class="row"><span class="dotc" style="background:${x.c.color}"></span>
+              <span class="grow">${esc(x.c.name)}</span>
+              <span class="sub">${fmtMin(x.m)} · konu %${prog(x.c.id)}</span></div>
+            <div class="meter" style="margin-top:5px"><i style="width:${(x.m/totalAll*100).toFixed(1)}%;background:${x.c.color}"></i></div>
+          </div>`).join("")||`<div class="empty">Henüz veri yok</div>`}
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="h2">Günlük döküm</div>
+          <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px">
+            <tr class="sub"><th style="text-align:left">Gün</th><th style="text-align:right">Dakika</th><th style="text-align:right">Oturum</th></tr>
+            ${days.slice().reverse().filter(d=>d.m).map(d=>`<tr><td style="padding:3px 0">${d.d}</td>
+              <td style="text-align:right">${d.m}</td><td style="text-align:right">${DB.sessions.filter(s=>s.date===d.d).length}</td></tr>`).join("")
+              ||`<tr><td colspan="3" class="sub" style="padding:8px 0">Kayıt yok</td></tr>`}
+          </table>
+        </div>
+      </div></div>`;
+  }, onResize(w){ this.render(w); }};
+</script>
+<script>
+/* ============================================================
+   UYGULAMALAR — 3: Günlük, Terminal, Ayarlar + Odak modu
+   ============================================================ */
+
+/* ---------------- Günlük ---------------- */
+const MOODS=["😞","😕","🙂","😃","🤩"];
+APPS.journal={ name:"Günlük", icon:"🗒", w:620, h:540, desk:true, single:true,
+  render(w){
+    const s=w.state; s.date=s.date||today();
+    let e=DB.journal.find(j=>j.date===s.date);
+    if(!e){ e={date:s.date,mood:2,text:""}; DB.journal.push(e); }
+    const days=DB.journal.slice().sort((a,b)=>b.date.localeCompare(a.date));
+    w.body.innerHTML=`<div class="app" style="flex-direction:row">
+      <div class="sidebar">
+        <button class="btn pri sm" style="width:100%" data-a="today">Bugün</button><div class="sep"></div>
+        ${days.map(j=>`<div class="item ${j.date===s.date?"sel":""}" data-j="${j.date}">
+          <span>${MOODS[j.mood??2]}</span><span class="grow">${j.date.slice(5)}</span></div>`).join("")}
+      </div>
+      <div class="app grow">
+        <div class="toolbar"><b class="grow">${esc(s.date)}</b>
+          <input class="inp" type="date" data-a="pick" value="${s.date}" style="width:150px"></div>
+        <div class="toolbar"><span class="sub">Bugün nasıldı?</span>
+          ${MOODS.map((m,i)=>`<button class="mood ${e.mood===i?"on":""}" data-m="${i}">${m}</button>`).join("")}</div>
+        <textarea class="note-ed grow" data-a="txt" placeholder="Bugün ne öğrendim? Neyi zor buldum? Yarın neye öncelik vereceğim?">${esc(e.text)}</textarea>
+        <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+          <span class="sub">${DB.journal.filter(j=>j.text.trim()).length} günlük kaydı</span>
+          <span class="grow"></span><button class="btn sm danger" data-a="del">Bu günü sil</button></div>
+      </div></div>`;
+    const A=a=>$(`[data-a="${a}"]`,w.body);
+    A("today").onclick=()=>{s.date=today();this.render(w);};
+    A("pick").onchange=ev=>{s.date=ev.target.value;this.render(w);};
+    A("txt").oninput=ev=>{e.text=ev.target.value;save();};
+    A("del").onclick=()=>{DB.journal=DB.journal.filter(j=>j.date!==s.date);s.date=today();saveAnd("journal");};
+    $$("[data-j]",w.body).forEach(b=>b.onclick=()=>{s.date=b.dataset.j;this.render(w);});
+    $$("[data-m]",w.body).forEach(b=>b.onclick=()=>{e.mood=+b.dataset.m;saveAnd("journal");});
+  }};
+
+/* ---------------- Terminal ---------------- */
+APPS.term={ name:"Terminal", icon:">_", w:640, h:420, desk:true, single:true,
+  render(w){
+    const s=w.state; s.log=s.log||[{t:"dim",x:"StudyOS terminal · komutlar için `yardim` yaz"}];
+    w.body.innerHTML=`<div class="term" data-a="scr">
+      ${s.log.map(l=>`<div class="${l.t||""}">${l.x}</div>`).join("")}
+      <div class="row"><span class="pr">study&nbsp;›&nbsp;</span><input class="in" data-a="in" autocomplete="off" spellcheck="false"></div></div>`;
+    const scr=$('[data-a="scr"]',w.body), inp=$('[data-a="in"]',w.body);
+    scr.onclick=()=>inp.focus(); setTimeout(()=>inp.focus(),30);
+    scr.scrollTop=scr.scrollHeight;
+    const out=(x,t)=>s.log.push({x,t});
+    inp.onkeydown=ev=>{
+      if(ev.key!=="Enter")return;
+      const line=inp.value.trim(); inp.value="";
+      out(`<span class="pr">study ›</span> ${esc(line)}`);
+      const [cmd,...rest]=line.split(" "); const arg=rest.join(" ");
+      switch((cmd||"").toLowerCase()){
+        case "": break;
+        case "yardim": case "help": out(`<span class="ok">komutlar</span>
+  <b>ac</b> &lt;uygulama&gt;     uygulama aç (notlar, gorevler, kartlar, pomodoro, quiz, takvim, konular, istatistik, gunluk)
+  <b>gorev</b> &lt;metin&gt;      yeni görev ekle
+  <b>not</b> &lt;başlık&gt;       yeni not oluştur
+  <b>kart</b> &lt;ön&gt; | &lt;arka&gt;  hızlı kart ekle
+  <b>calis</b> [dakika]      pomodoro başlat
+  <b>odak</b>                odak moduna gir
+  <b>durum</b>               bugünün özeti
+  <b>seri</b>                çalışma serisi
+  <b>tema</b>                açık/koyu geçiş
+  <b>yedek</b>               JSON dışa aktar
+  <b>temizle</b>             ekranı temizle`); break;
+        case "ac": { const map={notlar:"notes",gorevler:"tasks",kartlar:"cards",pomodoro:"pomodoro",quiz:"quiz",takvim:"calendar",konular:"topics",istatistik:"stats",gunluk:"journal",ayarlar:"settings"};
+          const a=map[arg.toLowerCase()]; if(a){openApp(a);out(`<span class="ok">${arg} açıldı</span>`);} else out(`bilinmeyen uygulama: ${esc(arg)}`,"er"); break; }
+        case "gorev": if(!arg){out("kullanım: gorev <metin>","er");break;}
+          DB.tasks.push({id:uid(),courseId:DB.courses[0]?.id,title:arg,done:false,pri:1,due:null,created:today()});
+          saveAnd("tasks"); out(`<span class="ok">✓ görev eklendi:</span> ${esc(arg)}`); break;
+        case "not": { const t=today(); const n={id:uid(),courseId:DB.courses[0]?.id,title:arg||"Yeni not",body:"",created:t,updated:t};
+          DB.notes.push(n); saveAnd("notes"); openApp("notes",{state:{id:n.id}}); out(`<span class="ok">✓ not oluşturuldu</span>`); break; }
+        case "kart": { const [f,b]=arg.split("|").map(x=>x&&x.trim());
+          if(!f||!b){out("kullanım: kart Soru | Cevap","er");break;}
+          let dk=DB.decks[0]; if(!dk){dk={id:uid(),name:"Hızlı kartlar",courseId:DB.courses[0]?.id};DB.decks.push(dk);}
+          DB.cards.push({id:uid(),deckId:dk.id,front:f,back:b,ef:2.5,int:0,reps:0,lapses:0,due:today()});
+          saveAnd("cards"); out(`<span class="ok">✓ "${esc(dk.name)}" destesine eklendi</span>`); break; }
+        case "calis": { const m=+arg||DB.settings.pomo; DB.settings.pomo=m; save();
+          Pomo.start(DB.courses[0]?.id,"terminal"); openApp("pomodoro"); out(`<span class="ok">▶ ${m} dakika başladı</span>`); break; }
+        case "odak": enterFocus(); out(`<span class="ok">odak modu</span>`); break;
+        case "durum": { const m=DB.sessions.filter(x=>x.date===today()).reduce((a,b)=>a+b.min,0);
+          out(`bugün: <b>${fmtMin(m)}</b> · hedef ${fmtMin(DB.settings.goal)}
+açık görev: <b>${DB.tasks.filter(t=>!t.done).length}</b>
+tekrar bekleyen kart: <b>${dueCards().length}</b>
+seri: <b>${streak()} gün</b>`); break; }
+        case "seri": out(`🔥 ${streak()} gün`); break;
+        case "tema": toggleTheme(); out("tema değişti"); break;
+        case "yedek": exportJSON(); out(`<span class="ok">yedek indirildi</span>`); break;
+        case "temizle": s.log=[]; break;
+        default: out(`komut bulunamadı: ${esc(cmd)} — <b>yardim</b> yaz`,"er");
+      }
+      this.render(w);
+    };
+  }};
+
+/* ---------------- Ayarlar ---------------- */
+APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
+  render(w){
+    w.body.innerHTML=`<div class="app"><div class="grow scroll pad col">
+      <div class="card"><div class="h2">Kişisel</div>
+        <div class="row" style="margin-top:8px"><span class="grow sub">Adın</span>
+          <input class="inp" data-a="name" value="${esc(DB.settings.name)}" placeholder="Örn. Burak" style="width:180px"></div>
+        <div class="row" style="margin-top:8px"><span class="grow sub">Günlük hedef (dk)</span>
+          <input class="inp" type="number" data-a="goal" value="${DB.settings.goal}" style="width:100px"></div>
+      </div>
+      <div class="card"><div class="h2">Görünüm</div>
+        <div class="row" style="margin-top:8px"><span class="grow sub">Tema</span>
+          <button class="btn sm" data-a="theme">${DB.settings.theme==="dark"?"🌙 Koyu":"☀️ Açık"}</button></div>
+        <div class="row" style="margin-top:8px"><span class="grow sub">Duvar kağıdı</span>
+          ${["mesh","plain","grid"].map(x=>`<button class="btn sm ${DB.settings.wall===x?"pri":""}" data-w="${x}">${x}</button>`).join("")}</div>
+      </div>
+      <div class="card"><div class="h2">Dersler</div>
+        <div data-a="courses" style="margin-top:8px"></div>
+        <button class="btn sm" data-a="addc" style="margin-top:8px">+ Ders ekle</button>
+      </div>
+      <div class="card"><div class="h2">Veri</div>
+        <div class="sub" style="margin:6px 0">Her şey tarayıcının localStorage'ında tutulur. Düzenli yedek al.</div>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn" data-a="exp">⬇ JSON yedek al</button>
+          <button class="btn" data-a="imp">⬆ Yedek yükle</button>
+          <button class="btn danger" data-a="reset">Her şeyi sıfırla</button>
+        </div>
+        <div class="sub" style="margin-top:8px">${DB.notes.length} not · ${DB.cards.length} kart · ${DB.tasks.length} görev · ${DB.sessions.length} oturum</div>
+      </div>
+      <div class="card"><div class="h2">Kısayollar</div>
+        <div class="sub" style="margin-top:6px;line-height:2">
+          <span class="kbd">Esc</span> odak modundan çık · <span class="kbd">Boşluk</span> kart çevir ·
+          <span class="kbd">1-4</span> kart değerlendir · <span class="kbd">Ctrl</span>+<span class="kbd">1..9</span> uygulama aç</div>
+      </div>
+    </div></div>`;
+    const A=a=>$(`[data-a="${a}"]`,w.body);
+    A("name").oninput=e=>{DB.settings.name=e.target.value;save();};
+    A("goal").onchange=e=>{DB.settings.goal=Math.max(5,+e.target.value||120);saveAnd("pomodoro","stats");};
+    A("theme").onclick=()=>{toggleTheme();this.render(w);};
+    $$("[data-w]",w.body).forEach(b=>b.onclick=()=>{DB.settings.wall=b.dataset.w;document.body.dataset.wall=b.dataset.w;saveAnd("settings");});
+    A("courses").innerHTML=DB.courses.map(c=>`<div class="row" style="margin:6px 0">
+      <input type="color" value="${c.color}" data-cc="${c.id}" style="width:30px;height:26px;border:none;background:none;padding:0">
+      <input class="inp grow" value="${esc(c.name)}" data-cn="${c.id}">
+      <button class="btn sm danger" data-cx="${c.id}">✕</button></div>`).join("")||`<div class="sub">Ders yok</div>`;
+    $$("[data-cn]",w.body).forEach(i=>i.oninput=()=>{course(i.dataset.cn).name=i.value;save();});
+    $$("[data-cc]",w.body).forEach(i=>i.oninput=()=>{course(i.dataset.cc).color=i.value;save();refreshAll();});
+    $$("[data-cx]",w.body).forEach(b=>b.onclick=()=>{ if(!confirm("Ders silinsin mi? (İçerikler 'Genel' olur)"))return;
+      DB.courses=DB.courses.filter(c=>c.id!==b.dataset.cx); refreshAll(); save(); this.render(w);});
+    A("addc").onclick=()=>{const n=prompt("Ders adı:");if(!n)return;
+      DB.courses.push({id:uid(),name:n,color:COLORS[DB.courses.length%COLORS.length]});saveAnd("settings","topics","tasks");this.render(w);};
+    A("exp").onclick=exportJSON;
+    A("imp").onclick=importJSON;
+    A("reset").onclick=()=>{ if(!confirm("TÜM veriler silinecek. Emin misin?"))return;
+      localStorage.removeItem(KEY); DB=seed(); save(); refreshAll(); toast("Sıfırlandı"); };
+  }};
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
+  const a=el("a"); a.href=URL.createObjectURL(blob); a.download=`studyos-yedek-${today()}.json`;
+  document.body.appendChild(a); a.click(); a.remove(); toast("Yedek indirildi");
+}
+function importJSON(){
+  const i=el("input"); i.type="file"; i.accept="application/json";
+  i.onchange=()=>{ const f=i.files[0]; if(!f)return; const r=new FileReader();
+    r.onload=()=>{ try{ const d=JSON.parse(r.result);
+      if(!d||!Array.isArray(d.notes)) throw 0;
+      DB=Object.assign(blank(),d); save(); applySettings(); refreshAll(); toast("Yedek yüklendi");
+    }catch(e){ toast("⚠️ Geçersiz dosya"); } };
+    r.readAsText(f); };
+  i.click();
+}
+
+/* ============================================================
+   ODAK MODU
+   ============================================================ */
+let noiseNode=null, noiseCtx=null;
+function toggleNoise(){
+  if(noiseNode){ try{noiseNode.stop();}catch(e){} noiseNode=null; $("#foNoise").textContent="🔇 Gürültü"; return; }
+  try{
+    noiseCtx=noiseCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const len=noiseCtx.sampleRate*2, buf=noiseCtx.createBuffer(1,len,noiseCtx.sampleRate), d=buf.getChannelData(0);
+    let last=0; for(let i=0;i<len;i++){ const wn=Math.random()*2-1; last=(last+0.02*wn)/1.02; d[i]=last*3.5; }
+    const src=noiseCtx.createBufferSource(); src.buffer=buf; src.loop=true;
+    const g=noiseCtx.createGain(); g.gain.value=0.12;
+    const f=noiseCtx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=900;
+    src.connect(f); f.connect(g); g.connect(noiseCtx.destination); src.start();
+    noiseNode=src; $("#foNoise").textContent="🔊 Gürültü açık";
+  }catch(e){ toast("Ses başlatılamadı"); }
+}
+function enterFocus(){ $("#focusOverlay").classList.add("on"); paintFocus(); }
+function exitFocus(){ $("#focusOverlay").classList.remove("on"); if(noiseNode)toggleNoise(); }
+function paintFocus(){
+  if(!$("#focusOverlay").classList.contains("on"))return;
+  $("#foTime").textContent=mmss(Pomo.left||DB.settings.pomo*60);
+  $("#foLabel").textContent=Pomo.mode==="focus"?"odak":"mola";
+  $("#foTask").textContent=Pomo.label||cname(Pomo.courseId);
+  $("#foToggle").textContent=Pomo.running?"Duraklat":"Devam";
+}
+
+/* ============================================================
+   MASAÜSTÜ, DOCK, MENÜ ÇUBUĞU, KISAYOLLAR, AÇILIŞ
+   ============================================================ */
+const DOCK=["notes","tasks","cards","pomodoro","quiz","calendar","topics","stats","journal","term","|","focus","settings"];
+function buildDock(){
+  const d=$("#dock"); d.innerHTML="";
+  DOCK.forEach(id=>{
+    if(id==="|"){ d.appendChild(el("div","dock-sep")); return; }
+    const a=id==="focus"?{name:"Odak modu",icon:"🌙"}:APPS[id];
+    const n=el("div","dockicon",`${a.icon}<span class="dot"></span><span class="tip">${esc(a.name)}</span>`);
+    n.dataset.app=id;
+    n.onclick=()=> id==="focus" ? enterFocus() : openApp(id);
+    d.appendChild(n);
+  });
+}
+function syncDock(){ $$(".dockicon").forEach(n=>{
+  n.classList.toggle("open",[...WINS.values()].some(w=>w.appId===n.dataset.app)); }); }
+function buildDesktop(){
+  const box=$("#icons"); box.innerHTML="";
+  Object.entries(APPS).filter(([,a])=>a.desk).forEach(([id,a])=>{
+    const n=el("div","dicon",`<span class="gl">${a.icon}</span><span class="lb">${esc(a.name)}</span>`);
+    n.ondblclick=()=>openApp(id);
+    n.onclick=()=>{$$(".dicon").forEach(x=>x.classList.remove("sel"));n.classList.add("sel");};
+    box.appendChild(n);
+  });
+}
+function updateMenubar(){
+  const m=DB.sessions.filter(s=>s.date===today()).reduce((a,b)=>a+b.min,0);
+  $("#mbToday").querySelector("b").textContent=fmtMin(m);
+  $("#mbStreak").querySelector("b").textContent=streak();
+  $("#mbDue").querySelector("b").textContent=dueCards().length;
+  $("#mbTheme").textContent=DB.settings.theme==="dark"?"🌙":"☀️";
+}
+function clock(){ const d=new Date();
+  $("#mbClock").textContent=`${trDay[(d.getDay()+6)%7]} ${pad(d.getDate())}.${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function toggleTheme(){ DB.settings.theme=DB.settings.theme==="dark"?"light":"dark";
+  document.documentElement.dataset.theme=DB.settings.theme; save(); updateMenubar(); rerender("stats"); }
+function applySettings(){ document.documentElement.dataset.theme=DB.settings.theme||"dark";
+  document.body.dataset.wall=DB.settings.wall||"mesh"; }
+
+document.addEventListener("keydown",e=>{
+  if($("#focusOverlay").classList.contains("on")){ if(e.key==="Escape"){exitFocus();} return; }
+  const tag=(e.target.tagName||"").toLowerCase();
+  if(tag==="input"||tag==="textarea"||tag==="select")return;
+  const top=[...WINS.values()].sort((a,b)=>+a.node.style.zIndex-+b.node.style.zIndex).pop();
+  if(top&&top.keys){ top.keys(e); }
+  if(e.ctrlKey&&/^[1-9]$/.test(e.key)){ const id=DOCK.filter(x=>x!=="|")[+e.key-1]; if(id)id==="focus"?enterFocus():openApp(id); e.preventDefault(); }
+  if(e.key==="Escape"&&top) closeWin(top);
+});
+$("#mbTheme").onclick=toggleTheme;
+$("#mbDue").onclick=()=>openApp("cards");
+$("#mbToday").onclick=()=>openApp("stats");
+$("#mbStreak").onclick=()=>openApp("stats");
+$("#foExit").onclick=exitFocus;
+$("#foNoise").onclick=toggleNoise;
+$("#foToggle").onclick=()=>{ if(Pomo.running)Pomo.pause(); else { if(!Pomo.left)Pomo.start(Pomo.courseId,Pomo.label); else Pomo.run(); } paintFocus(); };
+
+/* --------- açılış --------- */
+load(); applySettings(); buildDesktop(); buildDock(); updateMenubar(); clock();
+setInterval(clock,10000);
+Pomo.left=DB.settings.pomo*60; Pomo.total=Pomo.left; Pomo.courseId=DB.courses[0]?.id;
+window.addEventListener("beforeunload",e=>{ if(Pomo.running){ e.preventDefault(); e.returnValue=""; } });
+setTimeout(()=>{
+  const due=dueCards().length, open=DB.tasks.filter(t=>!t.done).length;
+  const hi=DB.settings.name?`Hoş geldin ${DB.settings.name}`:"Hoş geldin";
+  toast(`${hi} 👋 ${due?`${due} kart tekrar bekliyor · `:""}${open} açık görev`);
+},600);
+openApp("pomodoro"); openApp("tasks");
+</script>
+</body>
+</html>
