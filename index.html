@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>StudyOS</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#1b2333">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -382,7 +384,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="1.4", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="1.5", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -2010,7 +2012,10 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       const caps=[
         ["Cihaz dosyasına canlı bağlantı", canLinkFiles(), "🔗 düğmesi kopya almadan bağlanır"],
         ["Dosya seçici (işaretleme)", true, "📌 her cihazda çalışır"],
-        ["Paylaş menüsünden dosya alma", !!navigator.serviceWorker && location.protocol.startsWith("http"), "Paylaş → StudyOS (kurulu uygulamada)"],
+        ["Paylaş menüsünden dosya alma", !!(await (async()=>{ try{
+            const r=await fetch("manifest.json",{cache:"no-store"}); const m=await r.json();
+            return m.share_target && m.icons?.some(i=>i.type==="image/png"&&i.sizes==="192x192"); }catch(e){ return false; } })()),
+          "manifest hazır — kurulum WebAPK ise listede çıkar"],
         ["Uygulama olarak kurulu", matchMedia("(display-mode: standalone)").matches, "tam ekran, adres çubuğu yok"],
         ["Kalıcı depolama", persisted, "tarayıcı verini kendiliğinden silemez"],
         ["Ayrılan alan", est.quota?bytesFmt(est.quota):"?", ""],
@@ -2328,10 +2333,7 @@ setInterval(clock,10000); setInterval(paintWidgets,30000);
 Pomo.left=DB.settings.pomo*60; Pomo.total=Pomo.left; Pomo.courseId=DB.courses[0]?.id;
 window.addEventListener("beforeunload",e=>{ if(Pomo.running){ e.preventDefault(); e.returnValue=""; } });
 /* PWA: http(s) üzerinden açıldığında çevrimdışı çalışsın (file:// ile atlanır) */
-if(location.protocol.startsWith("http")){
-  const l=el("link"); l.rel="manifest"; l.href="manifest.json"; document.head.appendChild(l);
-  navigator.serviceWorker?.register("sw.js").catch(()=>{});
-}
+if(location.protocol.startsWith("http")) navigator.serviceWorker?.register("sw.js").catch(()=>{});
 setTimeout(()=>{
   const due=dueCards().length, open=DB.tasks.filter(t=>!t.done).length;
   const hi=DB.settings.name?`Hoş geldin ${DB.settings.name}`:"Hoş geldin";
