@@ -266,6 +266,46 @@ etiketleriyle çakıştı (`node --check` yakaladı). Yaslama tarafı `YASLA_*` 
 **Yan düzeltme (kapsam dışı, testte görüldü):** Görüntüleyici dock'tan dosyasız açılınca
 başlığı "undefined" oluyor, gövdesinde çalışmayan "Tarayıcıda aç / İndir" düğmeleri çıkıyordu.
 Düzgün bir boş durum eklendi.
+## Cihazda denendikten sonra (sürüm 2.8)
+
+Kullanıcı 2.7'yi Huawei MatePad'de denedi. Sonuçlar:
+
+- **Yaslama çalışıyor.** ✅
+- **Ses motoru yok** — cihaz panelindeki ölçüm satırı ✕ verdi, yani sesli okuma konusu kapandı.
+  İyi ki yazmamışız.
+- **Çizim tahtasında üç kusur çıktı, üçü de düzeltildi:**
+
+### ☑ Çizilenler kayboluyordu
+Tuval yalnızca **artımlı** çiziliyordu (`paint()` sadece geri al/temizle'de). Android Chrome
+arka plana atılan sekmenin tuval belleğini atabiliyor — cihazın kalem el yazısı katmanı sayfayı
+arka plana aldığında da oluyor. Çizgiler `strokes` dizisinde durduğu için artık
+`visibilitychange/pageshow/focus/resize/contextrestored` olaylarında hepsi yeniden çiziliyor.
+
+### ☑ Kaydetmeden çıkılamıyordu
+`Escape` dinleyicisi odaklanamayan bir `div`'e bağlıydı, **hiç çalışmıyordu**. Üstelik
+uygulamanın genel Escape kısayolu en üstteki pencereyi kapatıyordu, yani Esc çalışsaydı bile
+altındaki not penceresini de kapatacaktı. Şimdi: ✕ düğmesi, Vazgeç, Escape, **cihazın geri
+tuşu** (`pushState`/`popstate`) ve karartıya dokunma — hepsi kapatıyor, çizim varsa onay
+soruluyor. Tam ekran katmanlar `class="ovl"` alıyor ve genel klavye işleyicisi onlar varken
+susuyor (bu, bozuk veri uyarısı gibi ekranları da koruyor).
+
+### ☑ Düğmeler ekran dışında kalabiliyordu
+Tuval yüksekliği `innerHeight-180` sabitiyle hesaplanıyordu; araç çubuğu iki satıra sarınca
+alt düğme çubuğu aşağı taşıyordu. Düzen gerçek flex oldu (çubuklar `flex:0 0 auto`, tuval
+`flex:1 1 auto; min-height:0`), tuval CSS ile kutuya sığdırılıyor. Üç ekran oranında
+(dikey 800×1280, yatay 1280×800, alçak 1024×620) düğmelerin görünürlüğü teste bağlandı.
+
+### ⚠ Kalem el yazısının tetiklenmesi — kısmen
+Cihazın kalem-yazıya-çevirme katmanı web sayfasından kapatılamıyor. Web tarafında yapılabilecek
+her şey yapıldı: açılışta odaktaki yazı alanı bırakılıyor, alttaki her şey `inert` oluyor,
+katmanda `touch-action:none` ve seçim kapalı, `pointercancel` gelirse o ana kadarki çizgi
+korunuyor, tuval kendini yeniden çiziyor. Kalanı cihaz ayarından kapatmak gerekiyor; tahtanın
+alt satırında bu yazıyor.
+
+### Yan düzelt(il)enler
+- Tuval mantıksal boyu artık ekrana uyuyor (dikeyde 1200'e kadar), döndürmede içerik bozulmuyor.
+- "Temizle" artık onay soruyor.
+
 ## Reddedilen / ertelenen
 
 - **Kaynağı 4 dosyaya bölüp build betiğiyle birleştirmek.** "Klonla, `index.html`'i aç, çalışır"

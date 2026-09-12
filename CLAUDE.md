@@ -19,6 +19,10 @@ Yeni oturumda önce bunu oku, sonra `README.md`'ye ve `git log`'a bak.
   bellekte tutuluyor, "↻ Tazele" ile yeniden okunuyor.
 - Tarayıcının yerleşik PDF görüntüleyicisi yok → PDF'ler `vendor/pdf.js` ile çiziliyor.
 - Kalıcı depolama izni ✕ → **düzenli JSON yedek** önemli.
+- **Cihazın kalem el yazısı (yazıya çevirme) katmanı web sayfasından kapatılamaz.** Çizim
+  tahtasında kalemi kapıp sayfayı arka plana alabiliyor. Web tarafında yapılabilecekler yapıldı
+  (açılışta odak bırakma, alttaki içeriği `inert`, katmanda `touch-action:none`, tuvalin
+  kendini yeniden çizmesi); kalanı cihaz ayarından kapatmak gerekiyor, tahtada da öyle yazıyor.
 
 ## Dosyalar
 
@@ -67,9 +71,16 @@ Script blokları sırayla:
 - **Pencere yaslama** `dragify` içinde: `snapZone()` bölgeyi bulur, `snapGhost()` önizler,
   `applySnap()` uygular. Köşede yan yaslama kazanır (tam ekran değil) — amaç yan yana çalışmak.
   Sabitler `YASLA_*`; **`SNAP_*` anlık görüntülere ait**, karıştırma.
+- **Tam ekran katmanlara `class="ovl"` ver** (`bigNotice`, `drawPad`). Genel klavye işleyicisi
+  `.ovl` varken susar; yoksa Escape hem katmanı hem altındaki pencereyi kapatır (yaşandı).
 - **Çizim tahtası** `drawPad()` bir `Promise<Blob|null>` döndürür; çağıran `putMedia()` ile
   gömer. Tuval kağıt gibidir (beyaz zemin, koyu mürekkep) — iki temada da okunur, dışarı
   çıkınca da doğru görünür. Basınç yalnızca `pointerType==="pen"` iken kullanılır.
+  **Tuval içeriği tek gerçek kaynak değildir:** çizgiler `strokes` dizisinde durur ve
+  `visibilitychange/pageshow/focus/resize/contextrestored` olaylarında `paint()` ile yeniden
+  çizilir — Android Chrome arka plana atılan sekmenin tuval belleğini atabiliyor.
+  Mantıksal tuval boyu açılışta sabitlenir, ekran döndüğünde CSS ölçekler; `pos()` görünen
+  boyla mantıksal boy arasındaki oranı uygular.
 - **Kartlarda "yeni" demek `!c.seen` demek.** `sm2()` her değerlendirmede `seen` yazar, bu yüzden
   bilinemeyen bir kart ikinci kez yeni sayılmaz. `dueCards()` günlük yeni kart kotasını **global**
   harcar ve `DB.cards` sırası sabit olduğu için deste deste çağrılsa da aynı kartları seçer —

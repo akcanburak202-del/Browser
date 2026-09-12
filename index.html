@@ -396,7 +396,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.7", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.8", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -672,7 +672,7 @@ function confirmBox(msg){ return confirm(msg); }
 
 /* --------- kaçırılmaması gereken uyarılar (toast yetmez) --------- */
 function bigNotice(title,bodyHtml,actions){
-  const o=el("div",null,`<div style="max-width:540px;width:100%;background:var(--surface-solid);
+  const o=el("div","ovl",`<div style="max-width:540px;width:100%;background:var(--surface-solid);
       border:1px solid var(--border-2);border-radius:14px;padding:22px;max-height:86vh;overflow:auto">
       <div style="font-size:19px;font-weight:700;margin-bottom:10px">${title}</div>
       <div style="font-size:13.5px;line-height:1.65;color:var(--text-2)">${bodyHtml}</div>
@@ -875,28 +875,46 @@ window.addEventListener("storage",e=>{
 function drawPad(){
   return new Promise(res=>{
     const RENK=["#16181d","#e34948","#2a78d6","#1baf7a"];
-    const o=el("div",null,`
-      <div class="row" style="gap:7px;flex-wrap:wrap;justify-content:center">
+    /* Odaktaki yazı alanını bırak: cihazın kalem-el-yazısı katmanı odaklı bir
+       metin alanı varken devreye girip kalemi kapabiliyor. */
+    try{ document.activeElement?.blur?.(); }catch(_){}
+
+    const o=el("div","ovl",`
+      <div class="row" style="gap:7px;flex-wrap:wrap;justify-content:center;flex:0 0 auto;width:100%">
         ${RENK.map((c,i)=>`<button class="btn sm" data-c="${i}" title="Renk"
-          style="width:36px;height:30px;background:${c}"></button>`).join("")}
+          style="width:38px;height:32px;background:${c}"></button>`).join("")}
         <button class="btn sm" data-a="silgi">🧽 Silgi</button>
         <button class="btn sm" data-a="geri">↶ Geri al</button>
         <button class="btn sm danger" data-a="temizle">Temizle</button>
+        <span class="grow"></span>
+        <button class="btn sm" data-a="kapat" title="Kapat (Esc / geri tuşu)">✕</button>
       </div>
-      <canvas style="background:#fff;border-radius:12px;touch-action:none;max-width:100%;
-        box-shadow:0 20px 50px rgba(0,0,0,.5)"></canvas>
-      <div class="row" style="gap:8px;width:100%;max-width:980px">
-        <span class="sub grow" data-a="ipuc">Kalemle ya da parmakla çiz</span>
+      <div data-a="tuval" style="flex:1 1 auto;min-height:0;width:100%;display:flex;
+        align-items:center;justify-content:center">
+        <canvas style="background:#fff;border-radius:12px;touch-action:none;
+          max-width:100%;max-height:100%;box-shadow:0 20px 50px rgba(0,0,0,.5)"></canvas>
+      </div>
+      <div class="row" style="gap:8px;width:100%;max-width:1000px;flex:0 0 auto">
+        <span class="sub grow" style="font-size:11.5px">Kalemle ya da parmakla çiz.
+          Kalem yazıya çevriliyorsa cihazın kalem el yazısı ayarını kapat.</span>
         <button class="btn" data-a="vazgec">Vazgeç</button>
         <button class="btn pri" data-a="ekle">✓ Nota ekle</button>
       </div>`);
-    o.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.84);display:flex;"+
-      "flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px";
+    o.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.86);display:flex;"+
+      "flex-direction:column;align-items:center;gap:9px;padding:12px;touch-action:none;"+
+      "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none";
     document.body.appendChild(o);
+    /* Alttaki her şeyi etkisizleştir: odak ve cihazın kalem-el-yazısı hedefi
+       arkadaki metin alanlarında kalmasın. */
+    const etkisiz=[...document.body.children].filter(x=>x!==o);
+    etkisiz.forEach(x=>{ try{ x.inert=true; }catch(_){} });
 
     const cv=$("canvas",o), ctx=cv.getContext("2d");
+    /* Mantıksal tuval boyu açılışta sabitlenir; ekran döner ya da boyut değişirse
+       CSS ölçekler. Böylece koordinatlar ve çizilenler bozulmaz. */
+    const W=Math.round(Math.max(320,Math.min(1400,innerWidth-44)));
+    const H=Math.round(Math.max(240,Math.min(1200,innerHeight-200)));
     const dpr=Math.min(2,window.devicePixelRatio||1);
-    const W=Math.min(980,innerWidth-40), H=Math.min(620,innerHeight-180);
     cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
     cv.style.width=W+"px"; cv.style.height=H+"px";
     ctx.scale(dpr,dpr); ctx.lineCap="round"; ctx.lineJoin="round";
@@ -911,9 +929,22 @@ function drawPad(){
       for(const st of strokes) for(let i=1;i<st.p.length;i++) seg(st,i); };
     paint();
 
+    /* Android Chrome arka plana atılan sekmenin tuval içeriğini atabiliyor —
+       cihazın kalem el yazısı katmanı sayfayı arka plana aldığında da olur.
+       Çizgiler bellekte durduğu için geri dönüldüğünde hepsini yeniden çiziyoruz. */
+    const tazele=()=>{ try{ paint(); }catch(_){} };
+    document.addEventListener("visibilitychange",tazele);
+    window.addEventListener("pageshow",tazele);
+    window.addEventListener("focus",tazele);
+    window.addEventListener("resize",tazele);
+    cv.addEventListener("contextlost",e=>e.preventDefault());
+    cv.addEventListener("contextrestored",tazele);
+
+    /* ekranda gösterilen boy mantıksal boydan farklı olabilir (döndürme, dar ekran) */
     const pos=e=>{ const r=cv.getBoundingClientRect();
-      return { x:e.clientX-r.left, y:e.clientY-r.top,
-        /* basınç yalnızca kalemde anlamlı; dokunuş/fare sabit kalınlık verir */
+      const sx=W/(r.width||W), sy=H/(r.height||H);
+      return { x:(e.clientX-r.left)*sx, y:(e.clientY-r.top)*sy,
+        /* basınç yalnızca kalemde anlamlı; dokunuş ve fare sabit kalınlık verir */
         pr: (e.pointerType==="pen"&&e.pressure>0) ? e.pressure : 0.5 }; };
     cv.addEventListener("pointerdown",e=>{ e.preventDefault();
       try{ cv.setPointerCapture(e.pointerId); }catch(_){}
@@ -921,10 +952,10 @@ function drawPad(){
       strokes.push(ciz); seg(ciz,1); });
     cv.addEventListener("pointermove",e=>{ if(!ciz) return; e.preventDefault();
       ciz.p.push(pos(e)); seg(ciz,ciz.p.length-1); });
+    /* pointercancel: cihaz kalemi kapmış olabilir — o ana kadarki çizgi korunur */
     const bitir=()=>{ ciz=null; };
     cv.addEventListener("pointerup",bitir);
     cv.addEventListener("pointercancel",bitir);
-    cv.addEventListener("pointerleave",bitir);
 
     const A=a=>$(`[data-a="${a}"]`,o);
     const renkSec=i=>{ renk=RENK[i]; silgi=false;
@@ -935,12 +966,41 @@ function drawPad(){
     A("silgi").onclick=()=>{ silgi=!silgi; A("silgi").classList.toggle("pri",silgi);
       if(silgi) $$("[data-c]",o).forEach(b=>b.style.outline="none"); else renkSec(RENK.indexOf(renk)); };
     A("geri").onclick=()=>{ strokes.pop(); paint(); };
-    A("temizle").onclick=()=>{ strokes.length=0; paint(); };
-    const kapat=v=>{ o.remove(); res(v); };
-    A("vazgec").onclick=()=>kapat(null);
+    A("temizle").onclick=()=>{ if(strokes.length&&!confirm("Tüm çizim silinsin mi?")) return;
+      strokes.length=0; paint(); };
+
+    /* --- kapanış yolları: ✕, Vazgeç, Esc, geri tuşu, karartıya dokunma --- */
+    let gecmis=false;
+    try{ history.pushState({studyosDraw:1},""); gecmis=true; }catch(_){}
+    const onPop=()=>{ gecmis=false; vazgec(true); };
+    const onKey=e=>{ if(e.key==="Escape"){ e.preventDefault(); vazgec(false); } };
+    window.addEventListener("popstate",onPop);
+    document.addEventListener("keydown",onKey);
+    const kapat=v=>{
+      document.removeEventListener("keydown",onKey);
+      window.removeEventListener("popstate",onPop);
+      document.removeEventListener("visibilitychange",tazele);
+      window.removeEventListener("pageshow",tazele);
+      window.removeEventListener("focus",tazele);
+      window.removeEventListener("resize",tazele);
+      etkisiz.forEach(x=>{ try{ x.inert=false; }catch(_){} });
+      o.remove();
+      if(gecmis){ gecmis=false; try{ history.back(); }catch(_){} }
+      res(v);
+    };
+    function vazgec(geriTusundan){
+      if(strokes.length&&!confirm("Çizim kaydedilmeden kapatılsın mı?")){
+        /* geri tuşuyla gelindiyse yığındaki kaydı geri koy, bir sonraki geri de çalışsın */
+        if(geriTusundan){ try{ history.pushState({studyosDraw:1},""); gecmis=true; }catch(_){} }
+        return;
+      }
+      kapat(null);
+    }
+    A("vazgec").onclick=()=>vazgec(false);
+    A("kapat").onclick=()=>vazgec(false);
+    o.addEventListener("pointerdown",e=>{ if(e.target===o) vazgec(false); });
     A("ekle").onclick=()=>{ if(!strokes.length){ toast("Çizim boş"); return; }
       cv.toBlob(b=>kapat(b),"image/png"); };
-    o.addEventListener("keydown",e=>{ if(e.key==="Escape") kapat(null); });
   });
 }
 
@@ -2943,7 +3003,9 @@ function applySettings(){ document.documentElement.dataset.theme=DB.settings.the
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){ e.preventDefault();
     $("#spot").classList.contains("on")?closeSpot():openSpot(); return; }
-  if($("#spot").classList.contains("on")||$("#modal").classList.contains("on")) return;
+  /* tam ekran bir katman açıkken (çizim tahtası, bozuk veri uyarısı…) genel kısayollar
+     susar — yoksa Escape hem katmanı hem altındaki pencereyi kapatıyordu */
+  if($("#spot").classList.contains("on")||$("#modal").classList.contains("on")||$(".ovl")) return;
   if(e.altKey&&(e.key==="Tab"||e.key.toLowerCase()==="q")){ e.preventDefault(); switcher(); return; }
   if($("#focusOverlay").classList.contains("on")){ if(e.key==="Escape"){exitFocus();} return; }
   const tag=(e.target.tagName||"").toLowerCase();

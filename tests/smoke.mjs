@@ -459,15 +459,61 @@ check("çizim IndexedDB'ye yazılıyor", await p2.evaluate(async () => {
   return !!m && (await idbKeys()).includes(m[1]);
 }));
 const oncekiGovde = await p2.evaluate(() => DB.notes.find(n => n.id === "dn").body);
+
+/* --- kapanış yolları (sürüm 2.8): Vazgeç, ✕, Esc, geri tuşu --- */
+const acVeKapat = async (nasil) => {
+  await p2.evaluate(() => {
+    const w = [...WINS.values()].find(x => x.appId === "notes");
+    w.body.querySelector('[data-a="draw"]').click();
+  });
+  await p2.waitForTimeout(250);
+  const acildi = await p2.evaluate(() => !!document.querySelector("canvas"));
+  await nasil();
+  await p2.waitForTimeout(350);
+  return acildi && (await p2.evaluate(() => !document.querySelector("canvas")));
+};
+check("Vazgeç kapatıyor",
+  await acVeKapat(() => p2.evaluate(() => document.querySelector('[data-a="vazgec"]').click())));
+check("✕ düğmesi kapatıyor",
+  await acVeKapat(() => p2.evaluate(() => document.querySelector('[data-a="kapat"]').click())));
+check("Esc kapatıyor", await acVeKapat(() => p2.keyboard.press("Escape")));
+check("cihazın geri tuşu kapatıyor", await acVeKapat(() => p2.goBack()));
+check("kapanış yolları nota bir şey eklemiyor",
+  (await p2.evaluate(() => DB.notes.find(n => n.id === "dn").body)) === oncekiGovde);
+
+/* --- tuval içeriği kaybolursa geri geliyor (arka plana atılma benzetimi) --- */
 await p2.evaluate(() => {
   const w = [...WINS.values()].find(x => x.appId === "notes");
   w.body.querySelector('[data-a="draw"]').click();
 });
 await p2.waitForTimeout(250);
-await p2.evaluate(() => document.querySelector('[data-a="vazgec"]').click());
-await p2.waitForTimeout(250);
-check("vazgeçince nota bir şey eklenmiyor",
-  (await p2.evaluate(() => DB.notes.find(n => n.id === "dn").body)) === oncekiGovde);
+const tv = await p2.evaluate(() => {
+  const r = document.querySelector("canvas").getBoundingClientRect();
+  return { x: Math.round(r.left), y: Math.round(r.top) };
+});
+await p2.mouse.move(tv.x + 50, tv.y + 50);
+await p2.mouse.down();
+await p2.mouse.move(tv.x + 230, tv.y + 180, { steps: 12 });
+await p2.mouse.up();
+await p2.waitForTimeout(120);
+const doluMu = () => p2.evaluate(() => {
+  const cv = document.querySelector("canvas"), c = cv.getContext("2d");
+  const d = c.getImageData(0, 0, cv.width, cv.height).data;
+  /* saydam piksel "boş" sayılır: clearRect sonrası alfa 0 olur */
+  for (let i = 0; i < d.length; i += 4)
+    if (d[i + 3] > 10 && (d[i] < 200 || d[i + 1] < 200 || d[i + 2] < 200)) return true;
+  return false;
+});
+check("çizim tuvalde", await doluMu());
+/* tarayıcı tuval belleğini attığında olan şey: içerik gider, çizgiler bellekte kalır */
+await p2.evaluate(() => { const cv = document.querySelector("canvas");
+  const c = cv.getContext("2d"); c.clearRect(0, 0, cv.width, cv.height); });
+check("benzetim: tuval boşaldı", (await doluMu()) === false);
+await p2.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+await p2.waitForTimeout(200);
+check("geri dönünce çizim kendini yeniden çiziyor", await doluMu());
+await p2.evaluate(() => document.querySelector('[data-a="kapat"]').click());
+await p2.waitForTimeout(300);
 
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
