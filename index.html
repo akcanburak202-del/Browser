@@ -386,7 +386,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="1.7", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="1.8", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -2057,11 +2057,11 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
         ["Tarayıcı", brand||"bilinmiyor", ""],
         ["Cihaz dosyasına canlı bağlantı", canLinkFiles(), "🔗 düğmesi kopya almadan bağlanır"],
         ["Dosya seçici (işaretleme)", true, "📌 her cihazda çalışır"],
-        ["Paylaş menüsünden dosya alma", !!(await (async()=>{ try{
+        ["Paylaşım hedefi hazır (manifest)", !!(await (async()=>{ try{
             if(!location.protocol.startsWith("http")) return false;
             const r=await fetch("manifest.json",{cache:"no-store"}); const m=await r.json();
             return m.share_target && m.icons?.some(i=>i.type==="image/png"&&i.sizes==="192x192"); }catch(e){ return false; } })()),
-          "Google Play Servisleri olmayan cihazlarda (ör. Huawei) çalışmaz"],
+          "✓ = dosyalar hazır. Menüde görünmesi ayrı: Play Servisleri gerekir"],
         ["Uygulama olarak kurulu", matchMedia("(display-mode: standalone)").matches, "tam ekran, adres çubuğu yok"],
         ["Kalıcı depolama", persisted, "tarayıcı verini kendiliğinden silemez"],
         ["Ayrılan alan", est.quota?bytesFmt(est.quota):"?", ""],
