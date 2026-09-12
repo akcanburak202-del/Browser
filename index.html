@@ -2013,6 +2013,7 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
         ["Cihaz dosyasına canlı bağlantı", canLinkFiles(), "🔗 düğmesi kopya almadan bağlanır"],
         ["Dosya seçici (işaretleme)", true, "📌 her cihazda çalışır"],
         ["Paylaş menüsünden dosya alma", !!(await (async()=>{ try{
+            if(!location.protocol.startsWith("http")) return false;
             const r=await fetch("manifest.json",{cache:"no-store"}); const m=await r.json();
             return m.share_target && m.icons?.some(i=>i.type==="image/png"&&i.sizes==="192x192"); }catch(e){ return false; } })()),
           "manifest hazır — kurulum WebAPK ise listede çıkar"],
