@@ -325,6 +325,8 @@ textarea.inp{resize:none;line-height:1.6}
 /* bağlantı haritası */
 .vwrap{position:absolute;inset:0;display:grid;place-items:center;padding:10px;background:var(--surface-2)}
 .vframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.pdfbox{position:absolute;inset:0;overflow:auto;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:12px;align-items:center}
+.pdfpage{border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.25);background:#fff;max-width:100%}
 .vtext{position:absolute;inset:0;margin:0;padding:14px;overflow:auto;font:12.5px/1.6 var(--mono);white-space:pre-wrap}
 .gedge{stroke:var(--border);stroke-width:1.5}
 .gnode{cursor:pointer}
@@ -384,7 +386,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="1.5", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="1.6", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -554,8 +556,9 @@ async function pickDeviceFile(){
 /* Dosyayı kopyalamadan "işaretle": sadece adı/türü saklanır, açarken
    dosya seçici açılır ve dosyanın o anki hali gösterilir. Her yerde çalışır. */
 function openFileRef(a){
+  /* accept KOYMUYORUZ: bazı Android dosya seçicileri filtreyle sadece
+     indirilenleri gösteriyor, tam dosya yöneticisi açılmıyor */
   const i=el("input"); i.type="file";
-  if(a.type) i.accept=a.type;
   i.onchange=()=>{ const f=i.files[0]; if(!f) return;
     if(a.name&&f.name!==a.name) toast(`Farklı dosya seçtin: ${f.name}`);
     openViewer(f); };
@@ -1683,6 +1686,36 @@ async function mediaBlob(ref){
   if(ref.startsWith("data:")) return dataURLtoBlob(ref);
   return null;
 }
+/* pdf.js repoya gömülü: internet gerekmez, ilk açılışta bile çalışır */
+const PDFJS_LIB="vendor/pdf.min.js", PDFJS_WORKER="vendor/pdf.worker.min.js";
+function ensurePdfJs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise((res,rej)=>{
+    const sc=el("script"); sc.src=PDFJS_LIB;
+    sc.onload=()=>{ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER; }catch(e){}
+      res(window.pdfjsLib); };
+    sc.onerror=()=>rej(new Error("pdfjs yüklenemedi"));
+    document.head.appendChild(sc);
+  });
+}
+async function renderPdf(file,box,info){
+  const lib=await ensurePdfJs();
+  const doc=await lib.getDocument({data:await file.arrayBuffer()}).promise;
+  const max=Math.min(doc.numPages,80);
+  box.innerHTML="";
+  if(info) info.textContent=doc.numPages+" sayfa";
+  for(let i=1;i<=max;i++){
+    const page=await doc.getPage(i);
+    const w1=page.getViewport({scale:1}).width;
+    const target=Math.max(320,(box.clientWidth||700)-26);
+    const vp=page.getViewport({scale:Math.min(3,target/w1)*Math.min(2,window.devicePixelRatio||1)});
+    const c=el("canvas","pdfpage"); c.width=vp.width; c.height=vp.height;
+    c.style.width="100%"; box.appendChild(c);
+    await page.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+    if(i===1&&box.scrollTop) box.scrollTop=0;
+  }
+  if(doc.numPages>max) box.appendChild(el("div","sub","… ilk "+max+" sayfa gösterildi"));
+}
 function openViewer(file,name){
   const w=openApp("viewer",{state:{file,name:name||file.name||"dosya",type:file.type||"",size:file.size}});
   return w;
@@ -1699,9 +1732,7 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
     if(isImg)      body=`<div class="vwrap"><img src="${s.url}" style="max-width:100%;max-height:100%;object-fit:contain"></div>`;
     else if(isVid) body=`<div class="vwrap"><video src="${s.url}" controls style="max-width:100%;max-height:100%"></video></div>`;
     else if(isAud) body=`<div class="vwrap"><audio src="${s.url}" controls style="width:90%"></audio></div>`;
-    else if(isPdf) body=`<iframe src="${s.url}" class="vframe"></iframe>
-        <div class="sub" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;pointer-events:none">
-          PDF görünmüyorsa ↗ ile tarayıcıda aç</div>`;
+    else if(isPdf) body=`<div class="pdfbox" data-a="pdf"><div class="empty">PDF açılıyor…</div></div>`;
     else if(isTxt) body=`<pre class="vtext" data-a="txt">yükleniyor…</pre>`;
     else           body=`<div class="empty"><div style="font-size:42px">📦</div>
         Bu tür uygulama içinde gösterilemiyor.<br><b>${esc(s.name)}</b><br>
@@ -1717,6 +1748,15 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
     $('[data-a="dl"]',w.body).onclick=()=>{ const a=el("a"); a.href=s.url; a.download=s.name;
       document.body.appendChild(a); a.click(); a.remove(); };
     if(isTxt) s.file.text().then(x=>{ const n=$('[data-a="txt"]',w.body); if(n) n.textContent=x.slice(0,200000); });
+    if(isPdf){
+      const box=$('[data-a="pdf"]',w.body), info=$(".tag",w.body);
+      renderPdf(s.file,box,info).catch(err=>{
+        box.innerHTML=`<div class="empty"><div style="font-size:40px">📕</div>
+          <b>PDF uygulama içinde açılamadı</b><br>
+          <span class="sub">Görüntüleyici bileşeni yüklenemedi (${esc(String(err&&err.message||err).slice(0,60))}).</span><br><br>
+          <span class="sub">⬇ İndir ile cihazının PDF uygulamasında açabilirsin.</span></div>`;
+      });
+    }
   },
   onClose(w){ if(w.state.url) URL.revokeObjectURL(w.state.url); }};
 
@@ -2016,7 +2056,7 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
             if(!location.protocol.startsWith("http")) return false;
             const r=await fetch("manifest.json",{cache:"no-store"}); const m=await r.json();
             return m.share_target && m.icons?.some(i=>i.type==="image/png"&&i.sizes==="192x192"); }catch(e){ return false; } })()),
-          "manifest hazır — kurulum WebAPK ise listede çıkar"],
+          "Google Play Servisleri olmayan cihazlarda (ör. Huawei) çalışmaz"],
         ["Uygulama olarak kurulu", matchMedia("(display-mode: standalone)").matches, "tam ekran, adres çubuğu yok"],
         ["Kalıcı depolama", persisted, "tarayıcı verini kendiliğinden silemez"],
         ["Ayrılan alan", est.quota?bytesFmt(est.quota):"?", ""],

@@ -64,6 +64,7 @@ Ayrıca: **masaüstü widget'ları** (bugünkü hedef, tekrar kuyruğu, sınav g
 ## Dosyalar
 
 - `index.html` — uygulamanın tamamı (tek başına çalışır)
+- `vendor/pdf.min.js`, `vendor/pdf.worker.min.js` — [pdf.js](https://mozilla.github.io/pdf.js/) (Mozilla, Apache-2.0). PDF'leri uygulama içinde göstermek için; yalnızca bir PDF açıldığında yüklenir. Tarayıcısında yerleşik PDF görüntüleyici olmayan cihazlar için gerekli
 - `manifest.json`, `sw.js`, `icon.svg` — sadece PWA olarak kurmak için; `file://` ile açıldığında yok sayılır
 
 ## Teknik
