@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>StudyOS</title>
+<meta name="theme-color" content="#1b2333">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
 <style>
 /* ============================================================
    StudyOS — tek dosya çalışma masaüstü
@@ -127,7 +132,7 @@ button,input,textarea,select{font:inherit;color:inherit}
 @keyframes pop{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:none}}
 .win.min{display:none}
 .win.max{border-radius:0}
-.titlebar{height:38px;flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 12px;cursor:default;
+.titlebar{touch-action:none;height:38px;flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 12px;cursor:default;
   border-bottom:1px solid var(--border-2);user-select:none;background:var(--surface-2)}
 .lights{display:flex;gap:7px}
 .light{width:12px;height:12px;border-radius:50%;cursor:pointer;border:1px solid rgba(0,0,0,.14);font-size:9px;line-height:10px;text-align:center;color:rgba(0,0,0,.55)}
@@ -135,7 +140,9 @@ button,input,textarea,select{font:inherit;color:inherit}
 .lights:not(:hover) .light{color:transparent}
 .wtitle{font-size:13px;font-weight:600;flex:1;text-align:center;margin-right:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wbody{flex:1;overflow:auto;position:relative}
-.resize{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize}
+.resize{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;touch-action:none}
+.win.dragging{transition:none;user-select:none}
+.win.dragging .wbody{pointer-events:none}
 .win.focus{box-shadow:0 24px 60px rgba(0,0,0,.45), 0 0 0 1px var(--border)}
 
 /* ---------- 6. Ortak bileşenler ---------- */
@@ -172,7 +179,7 @@ textarea.inp{resize:none;line-height:1.6}
 .checkbox{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--muted);display:grid;place-items:center;cursor:pointer;flex:0 0 auto;font-size:11px;color:transparent}
 .checkbox.on{background:var(--good);border-color:var(--good);color:#fff}
 .pop{position:fixed;z-index:9500;background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:170px}
-#toasts{position:fixed;top:40px;right:12px;z-index:9600;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+#toasts{position:fixed;bottom:78px;right:14px;z-index:9600;display:flex;flex-direction:column;gap:8px;pointer-events:none;align-items:flex-end}
 .toast{background:var(--surface-solid);border:1px solid var(--border);border-radius:12px;padding:10px 14px;box-shadow:var(--shadow);font-size:13px;animation:pop .2s;max-width:290px}
 </style>
 </head>
@@ -246,6 +253,51 @@ textarea.inp{resize:none;line-height:1.6}
 /* Günlük */
 .mood{font-size:22px;cursor:pointer;opacity:.35;transition:.15s;background:none;border:none;padding:2px}
 .mood.on{opacity:1;transform:scale(1.2)}
+/* Masaüstü widget'ları */
+#widgets{position:absolute;top:14px;right:14px;width:252px;display:flex;flex-direction:column;gap:10px;z-index:5;max-height:calc(100% - 96px);overflow:auto;scrollbar-width:none}
+#widgets::-webkit-scrollbar{display:none}
+.wg{background:var(--surface);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid var(--border-2);border-radius:16px;padding:13px;box-shadow:0 10px 30px rgba(0,0,0,.20)}
+.wg .wgh{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px}
+.wg .big{font:700 27px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.wg .rowi{display:flex;gap:7px;align-items:center;padding:4px 0;font-size:12.5px}
+.wg.clickable{cursor:pointer;transition:transform .15s}
+.wg.clickable:hover{transform:translateY(-2px)}
+/* Spotlight */
+#spot{position:fixed;inset:0;z-index:9550;background:rgba(0,0,0,.35);display:none;padding-top:13vh;justify-content:center;backdrop-filter:blur(3px)}
+#spot.on{display:flex}
+#spotbox{width:min(640px,94vw);height:max-content;max-height:70vh;background:var(--surface);backdrop-filter:blur(30px) saturate(180%);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+#spotin{border:none;background:transparent;padding:16px 18px;font-size:18px;outline:none;width:100%}
+#spotres{overflow:auto;border-top:1px solid var(--border-2);max-height:54vh}
+.sres{display:flex;gap:10px;align-items:center;padding:9px 16px;cursor:pointer;font-size:13.5px}
+.sres.on{background:var(--surface-3)}
+.sres .k{font-size:18px;width:24px;text-align:center;flex:0 0 auto}
+.sres .m{color:var(--muted);font-size:11.5px}
+/* Diyalog */
+#modal{position:fixed;inset:0;z-index:9560;background:rgba(0,0,0,.4);display:none;place-items:center;backdrop-filter:blur(2px)}
+#modal.on{display:grid}
+#modalbox{width:min(420px,92vw);background:var(--surface-solid);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+#modalbox .fl{margin-bottom:10px}
+#modalbox label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+/* Pencere geçişi (Alt+Tab) */
+#switcher{position:fixed;inset:0;z-index:9500;display:none;place-items:center;background:rgba(0,0,0,.4)}
+#switcher.on{display:grid}
+#switcher .sw{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:80vw;background:var(--surface);backdrop-filter:blur(26px);
+  border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+#switcher .sw>div{width:92px;text-align:center;padding:10px 6px;border-radius:12px;font-size:11.5px}
+#switcher .sw>div.on{background:var(--surface-3);outline:2px solid var(--accent)}
+#switcher .sw .g{font-size:30px;display:block}
+/* Ek */
+.exam{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:10px;background:var(--surface-2);margin-bottom:6px;font-size:12.5px}
+.exam .cd{font-weight:700;font-variant-numeric:tabular-nums}
+.cal .todaycol{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.cal .hd.tdy{color:var(--accent)}
+.att{display:inline-flex;gap:6px;align-items:center;background:var(--surface-3);border:1px solid var(--border-2);border-radius:9px;padding:4px 9px;font-size:12px;margin:3px 5px 0 0;cursor:pointer}
+.md-prev img{max-width:100%;border-radius:10px;margin:6px 0}
+.cardimg{max-width:100%;max-height:190px;border-radius:12px;margin-bottom:10px;object-fit:contain}
+@media (max-width:860px){ #widgets{display:none} }
+@media (max-width:560px){ #mbStreak,#mbDue{display:none} #menubar{gap:8px} .wtitle{margin-right:0} }
 @media (max-width:640px){ .sidebar{width:130px} .dicon{width:74px} }
 </style>
 
@@ -256,16 +308,28 @@ textarea.inp{resize:none;line-height:1.6}
   <span class="mb-item" id="mbStreak" title="Çalışma serisi">🔥 <b>0</b></span>
   <span class="mb-item" id="mbToday" title="Bugün çalışılan süre">⏱ <b class="pill">0dk</b></span>
   <span class="mb-item" id="mbDue" title="Tekrar bekleyen kart">🗂 <b>0</b></span>
+  <span class="mb-item" id="mbSearch" title="Ara (Ctrl+K)">🔍</span>
   <span class="mb-item" id="mbTheme" title="Tema">🌙</span>
   <span class="mb-item pill" id="mbClock">--:--</span>
 </div>
 
 <div id="desktop">
   <div id="icons"></div>
+  <div id="widgets"></div>
 </div>
 
 <div id="dock"></div>
 <div id="toasts"></div>
+<div id="spot"><div id="spotbox">
+  <input id="spotin" placeholder="Ara: not, görev, kart, konu, uygulama…" autocomplete="off" spellcheck="false">
+  <div id="spotres"></div></div></div>
+<div id="modal"><div id="modalbox">
+  <div class="h2" id="modaltitle"></div>
+  <div id="modalfields" style="margin-top:12px"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:14px">
+    <button class="btn" id="modalcancel">Vazgeç</button>
+    <button class="btn pri" id="modalok">Tamam</button></div></div></div>
+<div id="switcher"><div class="sw"></div></div>
 <div id="focusOverlay">
   <div>
     <div class="sub" id="foLabel" style="letter-spacing:3px;text-transform:uppercase">odak</div>
@@ -306,9 +370,9 @@ function load(){
   save();
 }
 function blank(){
-  return {v:1, settings:{theme:"dark", wall:"mesh", name:"", pomo:25, brk:5, goal:120},
+  return {v:1, settings:{theme:"dark", wall:"mesh", name:"", pomo:25, brk:5, goal:120, widgets:true},
     courses:[], notes:[], decks:[], cards:[], tasks:[], sessions:[], topics:[],
-    quizzes:[], quizRuns:[], events:[], journal:[]};
+    quizzes:[], quizRuns:[], events:[], journal:[], exams:[], files:[]};
 }
 function seed(){
   const d=blank(); const t=today();
@@ -342,6 +406,7 @@ function seed(){
             {id:uid(),day:2,start:19,end:20,courseId:c2.id,title:"Biyoloji kart"}];
   for(let i=1;i<=6;i++){ d.sessions.push({id:uid(),courseId:[c1,c2,c3][i%3].id,date:addDays(t,-i),min:[50,25,75,25,50,25][i-1],kind:"focus"}); }
   d.sessions.push({id:uid(),courseId:c1.id,date:t,min:25,kind:"focus"});
+  d.exams=[{id:uid(),courseId:c1.id,name:"Matematik deneme sınavı",date:addDays(t,14)}];
   d.journal=[{date:t,mood:3,text:"StudyOS'a hoş geldin. Bugün ne öğrendiğini buraya yaz."}];
   return d;
 }
@@ -350,6 +415,52 @@ const cname=id=>course(id)?.name||"Genel";
 const ccolor=id=>course(id)?.color||"var(--muted)";
 function toast(msg){ const t=el("div","toast",esc(msg)); $("#toasts").appendChild(t);
   setTimeout(()=>{t.style.transition="opacity .3s";t.style.opacity="0";setTimeout(()=>t.remove(),300)},2600); }
+
+/* --------- modal diyalog (prompt yerine) --------- */
+function dialog(title,fields){
+  return new Promise(res=>{
+    const box=$("#modal"); $("#modaltitle").textContent=title;
+    $("#modalfields").innerHTML=fields.map(f=>{
+      if(f.type==="select") return `<div class="fl"><label>${esc(f.label)}</label>
+        <select class="inp" data-f="${f.k}">${f.options.map(o=>`<option value="${esc(o.v)}" ${o.v==f.value?"selected":""}>${esc(o.l)}</option>`).join("")}</select></div>`;
+      return `<div class="fl"><label>${esc(f.label)}</label>
+        <input class="inp" data-f="${f.k}" type="${f.type||"text"}" value="${esc(f.value??"")}" ${f.min!=null?`min="${f.min}"`:""} ${f.max!=null?`max="${f.max}"`:""} placeholder="${esc(f.ph||"")}"></div>`;
+    }).join("");
+    box.classList.add("on");
+    const first=$("#modalfields .inp"); setTimeout(()=>first?.focus(),40);
+    const done=v=>{ box.classList.remove("on"); $("#modalok").onclick=null; $("#modalcancel").onclick=null;
+      box.onclick=null; $("#modalfields").onkeydown=null; res(v); };
+    const ok=()=>{ const out={}; $$("#modalfields [data-f]").forEach(i=>out[i.dataset.f]=i.value); done(out); };
+    $("#modalok").onclick=ok;
+    $("#modalcancel").onclick=()=>done(null);
+    box.onclick=e=>{ if(e.target===box) done(null); };
+    $("#modalfields").onkeydown=e=>{ if(e.key==="Enter")ok(); if(e.key==="Escape")done(null); };
+  });
+}
+function confirmBox(msg){ return confirm(msg); }
+
+/* --------- dosya / görsel --------- */
+function pickFile(accept){ return new Promise(res=>{ const i=el("input"); i.type="file"; if(accept)i.accept=accept;
+  i.onchange=()=>res(i.files[0]||null); i.click(); }); }
+function fileToDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader();
+  r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
+/* görselleri küçültüp sıkıştır — localStorage ~5MB, orijinal foto sığmaz */
+function imageScaled(file,max=1100,q=.82){
+  return new Promise(async(res,rej)=>{
+    try{
+      const url=await fileToDataURL(file);
+      if(file.type==="image/gif"||file.type==="image/svg+xml") return res(url);
+      const img=new Image();
+      img.onload=()=>{ const sc=Math.min(1,max/Math.max(img.width,img.height));
+        const c=el("canvas"); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+        res(c.toDataURL("image/jpeg",q)); };
+      img.onerror=()=>res(url); img.src=url;
+    }catch(e){ rej(e); }
+  });
+}
+const bytesFmt=n=>n>1048576?(n/1048576).toFixed(1)+" MB":n>1024?Math.round(n/1024)+" KB":n+" B";
+function storageUsed(){ try{ return new Blob([JSON.stringify(DB)]).size; }catch(e){ return JSON.stringify(DB).length; } }
 
 /* --------- markdown (mini) --------- */
 function md(src){
@@ -360,6 +471,7 @@ function md(src){
   s=s.replace(/^---$/gm,"<hr>");
   s=s.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/(^|\W)\*([^*\n]+)\*/g,"$1<i>$2</i>");
   s=s.replace(/==([^=]+)==/g,"<mark>$1</mark>");
+  s=s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,(m,a,u)=>/^(data:image|https?:)/.test(u)?`<img src="${u}" alt="${a}">`:m);
   s=s.replace(/`([^`\n]+)`/g,"<code>$1</code>");
   s=s.replace(/^\s*[-*] (.*)$/gm,"<li>$1</li>").replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g,"<ul>$1</ul>");
   s=s.replace(/\n{2,}/g,"<br><br>").replace(/\n/g,"<br>");
@@ -414,31 +526,70 @@ function toggleMax(w){
 function dragify(w){
   const bar=$(".titlebar",w.node);
   bar.addEventListener("pointerdown",e=>{
-    if(e.target.classList.contains("light"))return;
-    if(w.node.classList.contains("max"))return;
-    const r=w.node.getBoundingClientRect(), d=$("#desktop").getBoundingClientRect();
-    const ox=e.clientX-r.left, oy=e.clientY-r.top;
-    const move=ev=>{ w.node.style.left=Math.max(-r.width+80,Math.min(ev.clientX-ox, window.innerWidth-60))+"px";
-                     w.node.style.top=Math.max(0,Math.min(ev.clientY-oy-d.top, window.innerHeight-70))+"px"; };
-    const up=()=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);};
-    document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);
+    if(e.target.classList.contains("light")) return;
+    if(w.node.classList.contains("max")) return;
+    e.preventDefault();
     focusWin(w);
+    const d=$("#desktop").getBoundingClientRect(), r=w.node.getBoundingClientRect();
+    const ox=e.clientX-r.left, oy=e.clientY-r.top;
+    let nx=r.left-d.left, ny=r.top-d.top, raf=0;
+    w.node.classList.add("dragging");
+    try{ bar.setPointerCapture(e.pointerId); }catch(_){}
+    const paint=()=>{ raf=0; w.node.style.left=nx+"px"; w.node.style.top=ny+"px"; };
+    const move=ev=>{
+      if(ev.pointerId!==e.pointerId) return;
+      ev.preventDefault();
+      nx=Math.max(-r.width+90, Math.min(ev.clientX-ox-d.left, d.width-90));
+      ny=Math.max(0,          Math.min(ev.clientY-oy-d.top,  d.height-38));
+      if(!raf) raf=requestAnimationFrame(paint);
+    };
+    const up=()=>{
+      if(raf){ cancelAnimationFrame(raf); paint(); }
+      w.node.classList.remove("dragging");
+      bar.removeEventListener("pointermove",move);
+      bar.removeEventListener("pointerup",up);
+      bar.removeEventListener("pointercancel",up);
+      bar.removeEventListener("lostpointercapture",up);
+      try{ bar.releasePointerCapture(e.pointerId); }catch(_){}
+    };
+    bar.addEventListener("pointermove",move);
+    bar.addEventListener("pointerup",up);
+    bar.addEventListener("pointercancel",up);
+    bar.addEventListener("lostpointercapture",up);
   });
 }
 function resizify(w){
-  $(".resize",w.node).addEventListener("pointerdown",e=>{
-    e.stopPropagation();
+  const h=$(".resize",w.node);
+  h.addEventListener("pointerdown",e=>{
+    e.preventDefault(); e.stopPropagation(); focusWin(w);
     const r=w.node.getBoundingClientRect(), sx=e.clientX, sy=e.clientY;
-    const move=ev=>{ w.node.style.width=Math.max(300,r.width+ev.clientX-sx)+"px";
-                     w.node.style.height=Math.max(200,r.height+ev.clientY-sy)+"px"; APPS[w.appId].onResize?.(w); };
-    const up=()=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);};
-    document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);
+    let nw=r.width, nh=r.height, raf=0;
+    w.node.classList.add("dragging");
+    try{ h.setPointerCapture(e.pointerId); }catch(_){}
+    const paint=()=>{ raf=0; w.node.style.width=nw+"px"; w.node.style.height=nh+"px"; };
+    const move=ev=>{
+      if(ev.pointerId!==e.pointerId) return;
+      ev.preventDefault();
+      nw=Math.max(300, r.width+ev.clientX-sx);
+      nh=Math.max(200, r.height+ev.clientY-sy);
+      if(!raf) raf=requestAnimationFrame(paint);
+    };
+    const up=()=>{
+      if(raf){ cancelAnimationFrame(raf); paint(); }
+      w.node.classList.remove("dragging");
+      h.removeEventListener("pointermove",move); h.removeEventListener("pointerup",up);
+      h.removeEventListener("pointercancel",up); h.removeEventListener("lostpointercapture",up);
+      try{ h.releasePointerCapture(e.pointerId); }catch(_){}
+      APPS[w.appId].onResize?.(w);
+    };
+    h.addEventListener("pointermove",move); h.addEventListener("pointerup",up);
+    h.addEventListener("pointercancel",up); h.addEventListener("lostpointercapture",up);
   });
 }
 /* aynı uygulamanın açık pencerelerini yeniden çiz */
 function rerender(appId){ for(const w of WINS.values()) if(w.appId===appId) APPS[w.appId].render(w); }
-function refreshAll(){ for(const w of WINS.values()) APPS[w.appId].render(w); updateMenubar(); }
-function saveAnd(...apps){ save(); apps.forEach(rerender); updateMenubar(); }
+function refreshAll(){ for(const w of WINS.values()) APPS[w.appId].render(w); updateMenubar(); paintWidgets(); }
+function saveAnd(...apps){ save(); apps.forEach(rerender); updateMenubar(); paintWidgets(); }
 </script>
 <script>
 /* ============================================================
@@ -462,6 +613,9 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
         <div class="toolbar">
           <input class="inp grow" data-a="title" placeholder="Başlık" value="${esc(n?.title||"")}" ${n?"":"disabled"}>
           <select class="inp" data-a="course" style="width:130px">${DB.courses.map(c=>`<option value="${c.id}" ${n&&n.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+          <button class="btn sm" data-a="img" title="Görsel ekle">🖼</button>
+          <button class="btn sm" data-a="file" title="Dosya ekle">📎</button>
+          <button class="btn sm" data-a="tocards" title="Karta çevir (Soru :: Cevap satırları)">🗂</button>
           <button class="btn" data-a="prev">${s.prev?"✏️ Yaz":"👁 Önizle"}</button>
           <button class="btn danger sm" data-a="del">Sil</button>
         </div>
@@ -469,7 +623,8 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
                     :`<textarea class="note-ed grow" data-a="body" placeholder="Markdown yazabilirsin: # başlık, **kalın**, - liste, ==vurgu==, \`kod\`">${esc(n.body)}</textarea>`)
             :`<div class="empty">Henüz not yok.<br>Soldan <b>+ Yeni not</b> ile başla.</div>`}
         <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
-          <span class="sub">${n?`${n.body.trim().split(/\s+/).filter(Boolean).length} kelime · güncellendi ${esc(n.updated)}`:""}</span>
+          <span class="sub grow">${n?`${n.body.trim().split(/\s+/).filter(Boolean).length} kelime · güncellendi ${esc(n.updated)}`:""}</span>
+          <span>${(n?.att||[]).map((a,i)=>`<span class="att" data-att="${i}" title="Aç">📎 ${esc(a.name)} <b data-rmatt="${i}">✕</b></span>`).join("")}</span>
         </div>
       </div></div>`;
     const q=(s.q||"").toLowerCase();
@@ -491,7 +646,35 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       $$('[data-id="'+n.id+'"] span:last-child',w.body).forEach(sp=>sp.textContent=n.title||"Adsız");});
     on("course","change",e=>{n.courseId=e.target.value;n.updated=today();save();this.render(w);});
     on("body","input",e=>{n.body=e.target.value;n.updated=today();save();});
+    on("img","click",async()=>{ if(!n)return; const f=await pickFile("image/*"); if(!f)return;
+      try{ const d=await imageScaled(f); n.body+=`\n\n![${f.name}](${d})\n`; n.updated=today(); save(); this.render(w);
+        toast("Görsel eklendi ("+bytesFmt(d.length)+")"); }catch(e){ toast("Görsel eklenemedi"); } });
+    on("file","click",async()=>{ if(!n)return; const f=await pickFile(); if(!f)return;
+      if(f.size>2.5e6){ toast("⚠️ Dosya çok büyük (max ~2.5 MB)"); return; }
+      const d=await fileToDataURL(f); (n.att=n.att||[]).push({name:f.name,type:f.type,data:d});
+      n.updated=today(); save(); this.render(w); toast("Dosya eklendi"); });
+    on("tocards","click",()=>{ if(!n)return; noteToCards(n); });
+    $$("[data-att]",w.body).forEach(b=>b.onclick=e=>{
+      if(e.target.dataset.rmatt!=null){ n.att.splice(+e.target.dataset.rmatt,1); save(); this.render(w); return; }
+      const a=n.att[+b.dataset.att]; const win=window.open(); if(win) win.document.write(
+        a.type.startsWith("image")?`<img src="${a.data}" style="max-width:100%">`:`<iframe src="${a.data}" style="border:0;width:100%;height:100%"></iframe>`); });
   }};
+
+/* not içindeki "Soru :: Cevap" satırlarından deste üret */
+function noteToCards(n){
+  const pairs=n.body.split("\n").map(l=>l.trim()).filter(l=>l.includes("::"))
+    .map(l=>{ const i=l.indexOf("::"); return [l.slice(0,i).replace(/^[-*]\s*/,"").trim(), l.slice(i+2).trim()]; })
+    .filter(([a,b])=>a&&b);
+  if(!pairs.length){ toast('Bu notta "Soru :: Cevap" satırı yok'); return; }
+  const name="Not: "+(n.title||"Adsız");
+  let dk=DB.decks.find(d=>d.name===name);
+  if(!dk){ dk={id:uid(),name,courseId:n.courseId}; DB.decks.push(dk); }
+  let add=0;
+  pairs.forEach(([f,b])=>{ if(DB.cards.some(c=>c.deckId===dk.id&&c.front===f)) return;
+    DB.cards.push({id:uid(),deckId:dk.id,front:f,back:b,ef:2.5,int:0,reps:0,lapses:0,due:today()}); add++; });
+  save(); rerender("cards"); updateMenubar();
+  toast(add?`${add} yeni kart → "${name}"`:"Tüm satırlar zaten kartta");
+}
 
 /* ---------------- Görevler ---------------- */
 const PRI=["Düşük","Orta","Yüksek"], PRICOL=["var(--muted)","var(--s4)","var(--bad)"];
@@ -583,12 +766,14 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
         <div class="toolbar">
           <input class="inp grow" data-a="f" placeholder="Ön yüz (soru)">
           <input class="inp grow" data-a="b" placeholder="Arka yüz (cevap)">
+          <button class="btn sm" data-a="pic" title="Karta görsel ekle">${s.pendingImg?"🖼 ✓":"🖼"}</button>
           <button class="btn" data-a="add">+ Ekle</button>
         </div>
         <div class="grow scroll pad" data-a="list"></div>
       </div></div>`;
     $('[data-a="list"]',w.body).innerHTML=cards.map(c=>`
       <div class="card" style="margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
+        ${c.img?`<img src="${c.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px">`:""}
         <div class="grow"><div><b>${esc(c.front)}</b></div><div class="sub" style="margin-top:3px">${esc(c.back)}</div></div>
         <span class="tag">${c.due&&c.due>today()?`⏳ ${dayDiff(today(),c.due)}g`:"🔔 hazır"}</span>
         <button class="btn sm danger" data-x="${c.id}">✕</button></div>`).join("")
@@ -600,8 +785,11 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
       const d={id:uid(),name:n,courseId:DB.courses[0]?.id};DB.decks.push(d);s.deck=d.id;saveAnd("cards");};
     A("deldeck").onclick=()=>{ if(!s.deck||!confirm("Deste ve içindeki kartlar silinsin mi?"))return;
       DB.cards=DB.cards.filter(c=>c.deckId!==s.deck);DB.decks=DB.decks.filter(d=>d.id!==s.deck);s.deck=null;saveAnd("cards");};
+    A("pic").onclick=async()=>{ const file=await pickFile("image/*"); if(!file)return;
+      s.pendingImg=await imageScaled(file,900,.8); toast("Görsel sonraki karta eklenecek"); this.render(w); };
     const add=()=>{const f=A("f").value.trim(),b=A("b").value.trim(); if(!f||!b||!s.deck)return;
-      DB.cards.push({id:uid(),deckId:s.deck,front:f,back:b,ef:2.5,int:0,reps:0,lapses:0,due:today()});
+      DB.cards.push({id:uid(),deckId:s.deck,front:f,back:b,img:s.pendingImg||null,ef:2.5,int:0,reps:0,lapses:0,due:today()});
+      s.pendingImg=null;
       A("f").value="";A("b").value="";saveAnd("cards");$('[data-a="f"]',w.body).focus();};
     A("add").onclick=add; A("b").onkeydown=e=>{if(e.key==="Enter")add();};
     A("study").onclick=()=>{s.mode="study";s.queue=dueCards(s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
@@ -618,7 +806,7 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
       <div class="flash grow">
         <div>
           <div class="flash-card" data-a="flip">
-            <div><div class="side">${s.show?"cevap":"soru"}</div>
+            <div>${c.img?`<img class="cardimg" src="${c.img}">`:""}<div class="side">${s.show?"cevap":"soru"}</div>
             <div style="margin-top:10px">${esc(s.show?c.back:c.front)}</div>
             ${s.show?"":'<div class="sub" style="margin-top:16px">çevirmek için tıkla / Boşluk</div>'}</div>
           </div>
@@ -827,45 +1015,98 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
       this.render(w); };
   }};
 
-/* ---------------- Takvim ---------------- */
-APPS.calendar={ name:"Takvim", icon:"📅", w:800, h:560, desk:true, single:true,
+/* ---------------- Takvim (gerçek tarihli) + Sınavlar ---------------- */
+function mondayOf(d){ const x=new Date(d+"T12:00:00"); const wd=(x.getDay()+6)%7; return addDays(d,-wd); }
+function examList(){ return DB.exams.slice().filter(e=>e.date>=addDays(today(),-1)).sort((a,b)=>a.date.localeCompare(b.date)); }
+APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true,
   render(w){
-    const H0=7,H1=24;
-    const hours=[];for(let h=H0;h<H1;h++)hours.push(h);
-    const total=DB.events.reduce((a,e)=>a+(e.end-e.start),0);
-    let html=`<div class="app"><div class="toolbar">
-      <b class="grow">Haftalık çalışma programı</b>
-      <span class="tag">planlanan: ${total} saat/hafta</span>
-      <button class="btn sm danger" data-a="clr">Temizle</button></div>
-      <div class="grow scroll"><div class="cal">
-      <div class="hd"></div>${trDay.map(d=>`<div class="hd">${d}</div>`).join("")}`;
-    for(const h of hours){
-      html+=`<div class="hr">${pad(h)}:00</div>`;
-      for(let d=0;d<7;d++){
-        const ev=DB.events.find(e=>e.day===d&&e.start===h);
-        html+=`<div class="cell" data-c="${d}.${h}">${ev?`<div class="ev" data-ev="${ev.id}" style="background:${ccolor(ev.courseId)};height:calc(${ev.end-ev.start}*34px - 2px)">${esc(ev.title)}<br><span style="opacity:.8">${pad(ev.start)}:00–${pad(ev.end)}:00</span></div>`:""}</div>`;
+    const s=w.state; s.week=s.week||mondayOf(today());
+    const H0=7,H1=24, days=[...Array(7)].map((_,i)=>addDays(s.week,i));
+    const evOf=(date,i)=>DB.events.filter(e=>e.date?e.date===date:e.day===i);
+    const weekEvents=days.flatMap((d,i)=>evOf(d,i));
+    const total=weekEvents.reduce((a,e)=>a+(e.end-e.start),0);
+    const label=`${s.week.slice(8)}.${s.week.slice(5,7)} – ${days[6].slice(8)}.${days[6].slice(5,7)}.${days[6].slice(0,4)}`;
+    let grid=`<div class="cal"><div class="hd"></div>`;
+    days.forEach((d,i)=>{ const tdy=d===today();
+      grid+=`<div class="hd ${tdy?"tdy":""}">${trDay[i]}<br><span style="font-weight:400;opacity:.75">${d.slice(8)}.${d.slice(5,7)}</span></div>`; });
+    for(let h=H0;h<H1;h++){
+      grid+=`<div class="hr">${pad(h)}:00</div>`;
+      for(let i=0;i<7;i++){
+        const d=days[i], ev=evOf(d,i).find(e=>e.start===h);
+        grid+=`<div class="cell ${d===today()?"todaycol":""}" data-c="${i}.${h}">${ev?
+          `<div class="ev" data-ev="${ev.id}" style="background:${ccolor(ev.courseId)};height:calc(${ev.end-ev.start}*34px - 2px)">
+             <div style="display:flex;gap:4px"><span style="flex:1;overflow:hidden">${esc(ev.title)}</span><span data-del="${ev.id}" style="opacity:.75">✕</span></div>
+             <span style="opacity:.85">${pad(ev.start)}:00–${pad(ev.end)}:00${ev.date?"":" ↻"}</span></div>`:""}</div>`;
       }
     }
-    html+=`</div></div>
-      <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
-        <span class="sub">Boş bir kutuya tıkla → blok ekle · bloğa tıkla → sil</span></div></div>`;
-    w.body.innerHTML=html;
-    $$("[data-c]",w.body).forEach(c=>c.onclick=e=>{
+    grid+=`</div>`;
+    w.body.innerHTML=`<div class="app" style="flex-direction:row">
+      <div class="sidebar" style="width:210px">
+        <div class="h2">🎓 Sınav geri sayımı</div>
+        <div style="margin-top:8px">${examList().map(e=>{const n=dayDiff(today(),e.date);
+          return `<div class="exam"><span class="dotc" style="background:${ccolor(e.courseId)}"></span>
+            <div class="grow" style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</div>
+            <div class="sub">${esc(e.date)}</div></div>
+            <span class="cd" style="color:${n<=3?"var(--bad)":n<=7?"var(--warn)":"var(--text)"}">${n<=0?"bugün":n+"g"}</span>
+            <span data-xe="${e.id}" style="cursor:pointer;opacity:.6">✕</span></div>`;}).join("")
+          ||`<div class="sub">Yaklaşan sınav yok</div>`}</div>
+        <button class="btn sm" style="width:100%;margin-top:8px" data-a="addexam">+ Sınav ekle</button>
+        <div class="sep"></div>
+        <div class="sub">Bu hafta planlanan<br><b style="font-size:18px;color:var(--text)">${total} saat</b></div>
+        <div class="sep"></div>
+        <div class="sub">↻ işareti olan bloklar her hafta tekrar eder.</div>
+      </div>
+      <div class="app grow">
+        <div class="toolbar">
+          <button class="btn sm" data-a="prev">‹</button>
+          <button class="btn sm" data-a="today">Bugün</button>
+          <button class="btn sm" data-a="next">›</button>
+          <b class="grow" style="text-align:center">${label}</b>
+          <button class="btn sm danger" data-a="clr">Temizle</button>
+        </div>
+        <div class="grow scroll">${grid}</div>
+        <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+          <span class="sub">Boş kutuya tıkla → blok ekle · bloğa tıkla → düzenle · ✕ → sil</span></div>
+      </div></div>`;
+    const A=a=>$(`[data-a="${a}"]`,w.body);
+    A("prev").onclick=()=>{s.week=addDays(s.week,-7);this.render(w);};
+    A("next").onclick=()=>{s.week=addDays(s.week,7);this.render(w);};
+    A("today").onclick=()=>{s.week=mondayOf(today());this.render(w);};
+    A("clr").onclick=()=>{ if(confirm("Bu haftanın blokları ve tekrar edenler silinsin mi?")){
+      const ids=new Set(weekEvents.map(e=>e.id)); DB.events=DB.events.filter(e=>!ids.has(e.id)); saveAnd("calendar"); }};
+    A("addexam").onclick=async()=>{
+      const v=await dialog("Sınav ekle",[
+        {k:"name",label:"Sınav adı",value:"Deneme sınavı"},
+        {k:"date",label:"Tarih",type:"date",value:addDays(today(),7)},
+        {k:"course",label:"Ders",type:"select",value:DB.courses[0]?.id,options:DB.courses.map(c=>({v:c.id,l:c.name}))}]);
+      if(!v||!v.date)return; DB.exams.push({id:uid(),name:v.name||"Sınav",date:v.date,courseId:v.course});
+      saveAnd("calendar"); paintWidgets(); };
+    $$("[data-xe]",w.body).forEach(b=>b.onclick=()=>{ DB.exams=DB.exams.filter(e=>e.id!==b.dataset.xe); saveAnd("calendar"); paintWidgets(); });
+    $$("[data-c]",w.body).forEach(c=>c.onclick=async e=>{
       if(e.target.closest(".ev"))return;
-      const [d,h]=c.dataset.c.split(".").map(Number);
-      const t=prompt("Blok başlığı:","Çalışma"); if(!t)return;
-      const len=Math.max(1,Math.min(4,+(prompt("Kaç saat?","1")||1)));
-      DB.events.push({id:uid(),day:d,start:h,end:Math.min(24,h+len),courseId:DB.courses[0]?.id,title:t});
-      saveAnd("calendar");});
-    $$("[data-ev]",w.body).forEach(b=>b.onclick=e=>{e.stopPropagation();
+      const [i,h]=c.dataset.c.split(".").map(Number);
+      const v=await dialog(`${trDay[i]} ${pad(h)}:00 — blok ekle`,[
+        {k:"title",label:"Başlık",value:"Çalışma"},
+        {k:"course",label:"Ders",type:"select",value:DB.courses[0]?.id,options:DB.courses.map(c=>({v:c.id,l:c.name}))},
+        {k:"len",label:"Süre (saat)",type:"number",value:1,min:1,max:6},
+        {k:"rep",label:"Tekrar",type:"select",value:"week",options:[{v:"week",l:"Her hafta"},{v:"once",l:"Sadece bu hafta"}]}]);
+      if(!v)return;
+      const len=Math.max(1,Math.min(6,+v.len||1));
+      DB.events.push({id:uid(), ...(v.rep==="once"?{date:days[i]}:{day:i}),
+        start:h, end:Math.min(24,h+len), courseId:v.course, title:v.title||"Çalışma"});
+      saveAnd("calendar"); });
+    $$("[data-ev]",w.body).forEach(b=>b.onclick=async e=>{
+      e.stopPropagation();
       const ev=DB.events.find(x=>x.id===b.dataset.ev);
-      const opt=prompt(`"${ev.title}"\n1 = sil, 2 = ders değiştir, 3 = yeniden adlandır`,"1");
-      if(opt==="1"){DB.events=DB.events.filter(x=>x.id!==ev.id);}
-      else if(opt==="2"){const n=prompt("Ders adı:\n"+DB.courses.map(c=>c.name).join(", "),cname(ev.courseId));
-        const c=DB.courses.find(c=>c.name.toLowerCase()===String(n).toLowerCase()); if(c)ev.courseId=c.id;}
-      else if(opt==="3"){const n=prompt("Yeni başlık:",ev.title); if(n)ev.title=n;}
-      saveAnd("calendar");});
-    $('[data-a="clr"]',w.body).onclick=()=>{if(confirm("Tüm program silinsin mi?")){DB.events=[];saveAnd("calendar");}};
+      if(e.target.dataset.del){ DB.events=DB.events.filter(x=>x.id!==ev.id); saveAnd("calendar"); return; }
+      const v=await dialog("Bloğu düzenle",[
+        {k:"title",label:"Başlık",value:ev.title},
+        {k:"course",label:"Ders",type:"select",value:ev.courseId,options:DB.courses.map(c=>({v:c.id,l:c.name}))},
+        {k:"start",label:"Başlangıç saati",type:"number",value:ev.start,min:0,max:23},
+        {k:"len",label:"Süre (saat)",type:"number",value:ev.end-ev.start,min:1,max:6}]);
+      if(!v)return;
+      ev.title=v.title; ev.courseId=v.course; ev.start=Math.max(0,Math.min(23,+v.start));
+      ev.end=Math.min(24,ev.start+Math.max(1,+v.len||1)); saveAnd("calendar"); });
   }};
 
 /* ---------------- Konu Haritası ---------------- */
@@ -1091,6 +1332,8 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       <div class="card"><div class="h2">Görünüm</div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Tema</span>
           <button class="btn sm" data-a="theme">${DB.settings.theme==="dark"?"🌙 Koyu":"☀️ Açık"}</button></div>
+        <div class="row" style="margin-top:8px"><span class="grow sub">Masaüstü widget'ları</span>
+          <button class="btn sm ${DB.settings.widgets?"pri":""}" data-a="wg">${DB.settings.widgets?"Açık":"Kapalı"}</button></div>
         <div class="row" style="margin-top:8px"><span class="grow sub">Duvar kağıdı</span>
           ${["mesh","plain","grid"].map(x=>`<button class="btn sm ${DB.settings.wall===x?"pri":""}" data-w="${x}">${x}</button>`).join("")}</div>
       </div>
@@ -1105,18 +1348,24 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
           <button class="btn" data-a="imp">⬆ Yedek yükle</button>
           <button class="btn danger" data-a="reset">Her şeyi sıfırla</button>
         </div>
-        <div class="sub" style="margin-top:8px">${DB.notes.length} not · ${DB.cards.length} kart · ${DB.tasks.length} görev · ${DB.sessions.length} oturum</div>
+        <div class="sub" style="margin-top:8px">${DB.notes.length} not · ${DB.cards.length} kart · ${DB.tasks.length} görev · ${DB.sessions.length} oturum · ${DB.exams.length} sınav</div>
+        <div class="row" style="margin-top:8px"><span class="sub grow">Kullanılan yer</span><span class="sub">${bytesFmt(storageUsed())} / ~5 MB</span></div>
+        <div class="meter" style="margin-top:5px"><i style="width:${Math.min(100,storageUsed()/5242880*100).toFixed(1)}%;background:${storageUsed()>4e6?"var(--bad)":"var(--s3)"}"></i></div>
+        <div class="sub" style="margin-top:6px">Görseller otomatik küçültülür; yine de yer dolarsa eski görselleri sil.</div>
       </div>
       <div class="card"><div class="h2">Kısayollar</div>
         <div class="sub" style="margin-top:6px;line-height:2">
           <span class="kbd">Esc</span> odak modundan çık · <span class="kbd">Boşluk</span> kart çevir ·
-          <span class="kbd">1-4</span> kart değerlendir · <span class="kbd">Ctrl</span>+<span class="kbd">1..9</span> uygulama aç</div>
+          <span class="kbd">1-4</span> kart değerlendir · <span class="kbd">Ctrl</span>+<span class="kbd">1..9</span> uygulama aç ·
+          <span class="kbd">Ctrl</span>+<span class="kbd">K</span> her şeyde ara ·
+          <span class="kbd">Alt</span>+<span class="kbd">Q</span> pencereler arası geçiş</div>
       </div>
     </div></div>`;
     const A=a=>$(`[data-a="${a}"]`,w.body);
     A("name").oninput=e=>{DB.settings.name=e.target.value;save();};
     A("goal").onchange=e=>{DB.settings.goal=Math.max(5,+e.target.value||120);saveAnd("pomodoro","stats");};
     A("theme").onclick=()=>{toggleTheme();this.render(w);};
+    A("wg").onclick=()=>{DB.settings.widgets=!DB.settings.widgets;save();paintWidgets();this.render(w);};
     $$("[data-w]",w.body).forEach(b=>b.onclick=()=>{DB.settings.wall=b.dataset.w;document.body.dataset.wall=b.dataset.w;saveAnd("settings");});
     A("courses").innerHTML=DB.courses.map(c=>`<div class="row" style="margin:6px 0">
       <input type="color" value="${c.color}" data-cc="${c.id}" style="width:30px;height:26px;border:none;background:none;padding:0">
@@ -1218,6 +1467,10 @@ function applySettings(){ document.documentElement.dataset.theme=DB.settings.the
   document.body.dataset.wall=DB.settings.wall||"mesh"; }
 
 document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){ e.preventDefault();
+    $("#spot").classList.contains("on")?closeSpot():openSpot(); return; }
+  if($("#spot").classList.contains("on")||$("#modal").classList.contains("on")) return;
+  if(e.altKey&&(e.key==="Tab"||e.key.toLowerCase()==="q")){ e.preventDefault(); switcher(); return; }
   if($("#focusOverlay").classList.contains("on")){ if(e.key==="Escape"){exitFocus();} return; }
   const tag=(e.target.tagName||"").toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select")return;
@@ -1226,6 +1479,7 @@ document.addEventListener("keydown",e=>{
   if(e.ctrlKey&&/^[1-9]$/.test(e.key)){ const id=DOCK.filter(x=>x!=="|")[+e.key-1]; if(id)id==="focus"?enterFocus():openApp(id); e.preventDefault(); }
   if(e.key==="Escape"&&top) closeWin(top);
 });
+$("#mbSearch").onclick=openSpot;
 $("#mbTheme").onclick=toggleTheme;
 $("#mbDue").onclick=()=>openApp("cards");
 $("#mbToday").onclick=()=>openApp("stats");
@@ -1234,11 +1488,140 @@ $("#foExit").onclick=exitFocus;
 $("#foNoise").onclick=toggleNoise;
 $("#foToggle").onclick=()=>{ if(Pomo.running)Pomo.pause(); else { if(!Pomo.left)Pomo.start(Pomo.courseId,Pomo.label); else Pomo.run(); } paintFocus(); };
 
+/* ============================================================
+   MASAÜSTÜ WIDGET'LARI
+   ============================================================ */
+function paintWidgets(){
+  const box=$("#widgets"); if(!box) return;
+  if(!DB.settings.widgets){ box.innerHTML=""; return; }
+  const min=DB.sessions.filter(s=>s.date===today()).reduce((a,b)=>a+b.min,0);
+  const pct=Math.min(100,Math.round(min/DB.settings.goal*100));
+  const due=dueCards().length;
+  const open=DB.tasks.filter(t=>!t.done).sort((a,b)=>(b.pri-a.pri)||((a.due||"9")>(b.due||"9")?1:-1)).slice(0,4);
+  const ex=examList()[0];
+  box.innerHTML=`
+    <div class="wg clickable" data-wg="stats">
+      <div class="wgh">🎯 Bugün</div>
+      <div class="row"><span class="big">${fmtMin(min)}</span><span class="grow"></span><span class="sub">/ ${fmtMin(DB.settings.goal)}</span></div>
+      <div class="meter" style="margin-top:9px"><i style="width:${pct}%"></i></div>
+      <div class="sub" style="margin-top:7px">🔥 ${streak()} günlük seri · ${DB.sessions.filter(s=>s.date===today()).length} oturum</div>
+    </div>
+    <div class="wg clickable" data-wg="cards">
+      <div class="wgh">🗂 Tekrar kuyruğu</div>
+      <div class="row"><span class="big" style="color:${due?"var(--accent)":"var(--text)"}">${due}</span>
+        <span class="sub grow" style="margin-left:8px">kart hazır</span>
+        ${due?`<button class="btn pri sm" data-wgo="study">Çalış</button>`:""}</div>
+    </div>
+    ${ex?`<div class="wg clickable" data-wg="calendar">
+      <div class="wgh">🎓 Sınav</div>
+      <div class="row"><span class="big" style="color:${dayDiff(today(),ex.date)<=3?"var(--bad)":"var(--text)"}">${Math.max(0,dayDiff(today(),ex.date))}</span>
+        <span class="sub grow" style="margin-left:8px">gün kaldı</span></div>
+      <div class="sub" style="margin-top:5px">${esc(ex.name)} · ${esc(ex.date)}</div></div>`:""}
+    <div class="wg">
+      <div class="wgh">✅ Görevler <span class="grow"></span><span class="sub" style="text-transform:none">${DB.tasks.filter(t=>!t.done).length}</span></div>
+      ${open.map(t=>`<div class="rowi"><span class="checkbox" data-wgt="${t.id}">✓</span>
+        <span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span>
+        ${t.due&&t.due<=today()?`<span class="tag" style="color:var(--bad)">!</span>`:""}</div>`).join("")
+        ||`<div class="sub">Açık görev yok 🎉</div>`}
+      <button class="btn sm" style="width:100%;margin-top:8px" data-wgo="tasks">Tümünü aç</button>
+    </div>`;
+  $$("[data-wg]",box).forEach(n=>n.onclick=e=>{ if(e.target.closest("[data-wgo],[data-wgt]"))return; openApp(n.dataset.wg); });
+  $$("[data-wgt]",box).forEach(n=>n.onclick=()=>{ const t=DB.tasks.find(x=>x.id===n.dataset.wgt); t.done=true; saveAnd("tasks","stats"); });
+  const study=$('[data-wgo="study"]',box);
+  if(study) study.onclick=()=>{ const w=openApp("cards");
+    w.state.deck=DB.decks.find(d=>dueCards(d.id).length)?.id||w.state.deck;
+    w.state.mode="study"; w.state.queue=dueCards(w.state.deck).map(c=>c.id); w.state.show=false; w.state.done=0;
+    APPS.cards.render(w); };
+  const all=$('[data-wgo="tasks"]',box); if(all) all.onclick=()=>openApp("tasks");
+}
+
+/* ============================================================
+   SPOTLIGHT ARAMA (Ctrl+K)
+   ============================================================ */
+let spotSel=0, spotItems=[];
+function spotSearch(q){
+  q=q.trim().toLowerCase(); const out=[];
+  const add=(icon,title,meta,run)=>out.push({icon,title,meta,run});
+  Object.entries(APPS).forEach(([id,a])=>{ if(!q||a.name.toLowerCase().includes(q)) add(a.icon,a.name,"uygulama",()=>openApp(id)); });
+  if(q){
+    DB.notes.filter(n=>n.title.toLowerCase().includes(q)||n.body.toLowerCase().includes(q)).slice(0,6)
+      .forEach(n=>add("📝",n.title||"Adsız","not · "+cname(n.courseId),()=>{const w=openApp("notes");w.state.id=n.id;w.state.prev=false;APPS.notes.render(w);}));
+    DB.tasks.filter(t=>t.title.toLowerCase().includes(q)).slice(0,6)
+      .forEach(t=>add(t.done?"☑️":"✅",t.title,"görev · "+cname(t.courseId),()=>openApp("tasks")));
+    DB.cards.filter(c=>c.front.toLowerCase().includes(q)||c.back.toLowerCase().includes(q)).slice(0,6)
+      .forEach(c=>add("🗂",c.front,"kart · "+(DB.decks.find(d=>d.id===c.deckId)?.name||""),()=>{const w=openApp("cards");w.state.deck=c.deckId;w.state.mode=null;APPS.cards.render(w);}));
+    DB.topics.filter(t=>t.name.toLowerCase().includes(q)).slice(0,5)
+      .forEach(t=>add("🧠",t.name,"konu · "+cname(t.courseId),()=>{const w=openApp("topics");w.state.course=t.courseId;APPS.topics.render(w);}));
+    DB.quizzes.filter(x=>x.name.toLowerCase().includes(q)).slice(0,4)
+      .forEach(x=>add("❓",x.name,"test · "+x.questions.length+" soru",()=>{const w=openApp("quiz");w.state.quiz=x.id;w.state.mode="run";w.state.i=0;w.state.answers=[];APPS.quiz.render(w);}));
+    DB.exams.filter(e=>e.name.toLowerCase().includes(q)).slice(0,4)
+      .forEach(e=>add("🎓",e.name,"sınav · "+e.date,()=>openApp("calendar")));
+    add("➕","“"+q+"” görevini ekle","yeni görev",()=>{ DB.tasks.push({id:uid(),courseId:DB.courses[0]?.id,title:q,done:false,pri:1,due:null,created:today()});
+      saveAnd("tasks"); toast("Görev eklendi"); });
+    add("📝","“"+q+"” notunu oluştur","yeni not",()=>{ const t=today(); const n={id:uid(),courseId:DB.courses[0]?.id,title:q,body:"",created:t,updated:t};
+      DB.notes.push(n); save(); const w=openApp("notes"); w.state.id=n.id; APPS.notes.render(w); });
+  }
+  return out.slice(0,12);
+}
+function paintSpot(){
+  $("#spotres").innerHTML=spotItems.map((r,i)=>`<div class="sres ${i===spotSel?"on":""}" data-i="${i}">
+    <span class="k">${r.icon}</span><span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.title)}</span>
+    <span class="m">${esc(r.meta)}</span></div>`).join("")||`<div class="sres m">sonuç yok</div>`;
+  $$("#spotres .sres").forEach(n=>n.onclick=()=>{ const r=spotItems[+n.dataset.i]; closeSpot(); r&&r.run(); });
+}
+function openSpot(){ $("#spot").classList.add("on"); const i=$("#spotin"); i.value=""; spotSel=0;
+  spotItems=spotSearch(""); paintSpot(); setTimeout(()=>i.focus(),30); }
+function closeSpot(){ $("#spot").classList.remove("on"); }
+$("#spotin").addEventListener("input",e=>{ spotItems=spotSearch(e.target.value); spotSel=0; paintSpot(); });
+$("#spotin").addEventListener("keydown",e=>{
+  if(e.key==="ArrowDown"){spotSel=Math.min(spotItems.length-1,spotSel+1);paintSpot();e.preventDefault();}
+  else if(e.key==="ArrowUp"){spotSel=Math.max(0,spotSel-1);paintSpot();e.preventDefault();}
+  else if(e.key==="Enter"){const r=spotItems[spotSel];closeSpot();r&&r.run();}
+  else if(e.key==="Escape"){closeSpot();}
+});
+$("#spot").addEventListener("click",e=>{ if(e.target.id==="spot")closeSpot(); });
+
+/* ============================================================
+   PENCERE GEÇİŞİ (Alt+Tab / Alt+Q)
+   ============================================================ */
+let swIdx=0, swOn=false;
+function switcher(){
+  const list=[...WINS.values()];
+  if(list.length<2) return;
+  if(!swOn){ swOn=true; swIdx=1; } else swIdx=(swIdx+1)%list.length;
+  $("#switcher").classList.add("on");
+  $("#switcher .sw").innerHTML=list.map((w,i)=>`<div class="${i===swIdx?"on":""}">
+    <span class="g">${APPS[w.appId].icon}</span>${esc(APPS[w.appId].name)}</div>`).join("");
+}
+function switcherEnd(){
+  if(!swOn) return; swOn=false; $("#switcher").classList.remove("on");
+  const w=[...WINS.values()][swIdx]; if(w){ w.node.classList.remove("min"); focusWin(w); syncDock(); }
+}
+document.addEventListener("keyup",e=>{ if(e.key==="Alt") switcherEnd(); });
+window.addEventListener("blur",switcherEnd);
+/* ekran küçülünce pencereleri görünür alana sığdır */
+window.addEventListener("resize",()=>{
+  const d=$("#desktop").getBoundingClientRect();
+  for(const w of WINS.values()){
+    const n=w.node; if(n.classList.contains("max")) continue;
+    const wd=Math.min(n.offsetWidth, d.width-16), ht=Math.min(n.offsetHeight, d.height-70);
+    n.style.width=wd+"px"; n.style.height=ht+"px";
+    n.style.left=Math.max(8,Math.min(parseInt(n.style.left)||0, d.width-wd-8))+"px";
+    n.style.top =Math.max(0,Math.min(parseInt(n.style.top)||0,  d.height-60))+"px";
+  }
+  paintWidgets();
+});
+
 /* --------- açılış --------- */
-load(); applySettings(); buildDesktop(); buildDock(); updateMenubar(); clock();
-setInterval(clock,10000);
+load(); applySettings(); buildDesktop(); buildDock(); updateMenubar(); clock(); paintWidgets();
+setInterval(clock,10000); setInterval(paintWidgets,30000);
 Pomo.left=DB.settings.pomo*60; Pomo.total=Pomo.left; Pomo.courseId=DB.courses[0]?.id;
 window.addEventListener("beforeunload",e=>{ if(Pomo.running){ e.preventDefault(); e.returnValue=""; } });
+/* PWA: http(s) üzerinden açıldığında çevrimdışı çalışsın (file:// ile atlanır) */
+if(location.protocol.startsWith("http")){
+  const l=el("link"); l.rel="manifest"; l.href="manifest.json"; document.head.appendChild(l);
+  navigator.serviceWorker?.register("sw.js").catch(()=>{});
+}
 setTimeout(()=>{
   const due=dueCards().length, open=DB.tasks.filter(t=>!t.done).length;
   const hi=DB.settings.name?`Hoş geldin ${DB.settings.name}`:"Hoş geldin";
