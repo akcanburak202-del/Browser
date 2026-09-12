@@ -386,7 +386,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="1.9", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.0", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -564,16 +564,30 @@ function openFileRef(a){
     openViewer(f); };
   i.click();
 }
-async function openDeviceFile(hid){
+const HANDLE_CACHE=new Map();   /* hid -> {file, at} : oturum boyunca */
+async function readDeviceFile(hid){
   const h=await idbOp("readonly",st=>st.get(hid),"handles");
-  if(!h){ toast("⚠️ Dosya bağlantısı kayboldu"); return; }
+  if(!h) throw new Error("bağlantı yok");
+  let perm=await h.queryPermission?.({mode:"read"});
+  if(perm!=="granted") perm=await h.requestPermission?.({mode:"read"});
+  if(perm&&perm!=="granted") throw new Error("izin verilmedi");
+  const f=await h.getFile();
+  HANDLE_CACHE.set(hid,{file:f,at:Date.now()});
+  return f;
+}
+/* fresh=true ise diskten yeniden okur (izin sorabilir),
+   değilse bu oturumda okunmuş kopyayı kullanır (izin sormaz) */
+async function openDeviceFile(hid,fresh){
   try{
-    let perm=await h.queryPermission?.({mode:"read"});
-    if(perm!=="granted") perm=await h.requestPermission?.({mode:"read"});
-    if(perm&&perm!=="granted"){ toast("Dosyaya erişim izni verilmedi"); return; }
-    const f=await h.getFile();
-    openViewer(f);
-  }catch(e){ toast("⚠️ Dosya bulunamadı — taşınmış veya silinmiş olabilir"); }
+    const hit=HANDLE_CACHE.get(hid);
+    const f=(!fresh&&hit)?hit.file:await readDeviceFile(hid);
+    return openViewer(f,null,{hid,at:(HANDLE_CACHE.get(hid)||{}).at});
+  }catch(e){
+    const m=String(e&&e.message||e);
+    toast(m==="izin verilmedi"?"Dosyaya erişim izni verilmedi"
+        :m==="bağlantı yok"?"⚠️ Dosya bağlantısı kayboldu"
+        :"⚠️ Dosya bulunamadı — taşınmış veya silinmiş olabilir");
+  }
 }
 
 /* ---- eski sürümden taşıma: gömülü data: URL'lerini IndexedDB'ye al ---- */
@@ -871,7 +885,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
         n.att.splice(i,1); save(); this.render(w); return; }
       const a=n.att[+b.dataset.att];
       if(a.manual) return openFileRef(a);
-      if(a.hid) return openDeviceFile(a.hid);
+      if(a.hid) return openDeviceFile(a.hid,false);
       const blob=await mediaBlob(a.ref||a.data);
       if(blob) openViewer(new File([blob],a.name,{type:a.type||blob.type}));
       else toast("⚠️ Dosya bulunamadı"); });
@@ -1733,8 +1747,9 @@ async function openElsewhere(file,name){
   return false;
 }
 const canOpenElsewhere=f=>{ try{ return !!(navigator.canShare&&navigator.canShare({files:[f]})); }catch(e){ return false; } };
-function openViewer(file,name){
-  const w=openApp("viewer",{state:{file,name:name||file.name||"dosya",type:file.type||"",size:file.size}});
+function openViewer(file,name,opts){
+  const w=openApp("viewer",{state:{file,name:name||file.name||"dosya",type:file.type||"",size:file.size,
+    hid:opts&&opts.hid, at:opts&&opts.at}});
   return w;
 }
 APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
@@ -1758,12 +1773,25 @@ APPS.viewer={ name:"Görüntüleyici", icon:"📄", w:780, h:640,
     w.body.innerHTML=`<div class="app">
       <div class="toolbar"><b class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</b>
         <span class="tag">${s.size?bytesFmt(s.size):""}</span>
+        ${s.hid?`<button class="btn sm" data-a="refresh" title="Dosyayı diskten yeniden oku (izin sorabilir)">↻ Tazele</button>`:""}
         <button class="btn sm" data-a="new" title="${canOpenElsewhere(s.file)?"Cihazındaki uygulamalarla aç":"Yeni sekmede aç"}">${canOpenElsewhere(s.file)?"📤 Cihazda aç":"↗ Tarayıcıda aç"}</button>
         <button class="btn sm" data-a="dl">⬇ İndir</button></div>
-      <div class="grow" style="position:relative;min-height:0">${body}</div></div>`;
+      <div class="grow" style="position:relative;min-height:0">${body}</div>
+      ${s.hid?`<div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+        <span class="sub">🔗 cihazdaki dosyaya bağlı${s.at?" · bu oturumda okundu":""} — güncellediysen ↻ Tazele</span></div>`:""}
+      </div>`;
     $('[data-a="new"]',w.body).onclick=()=>openElsewhere(s.file,s.name);
     $('[data-a="dl"]',w.body).onclick=()=>{ const a=el("a"); a.href=s.url; a.download=s.name;
       document.body.appendChild(a); a.click(); a.remove(); };
+    const rf=$('[data-a="refresh"]',w.body);
+    if(rf) rf.onclick=async()=>{
+      try{
+        const f=await readDeviceFile(s.hid);
+        if(s.url){ URL.revokeObjectURL(s.url); s.url=null; }
+        s.file=f; s.size=f.size; s.at=Date.now();
+        this.render(w); toast("Dosya yeniden okundu");
+      }catch(e){ toast("Tazelenemedi — izin verilmedi ya da dosya taşınmış"); }
+    };
     if(isTxt) s.file.text().then(x=>{ const n=$('[data-a="txt"]',w.body); if(n) n.textContent=x.slice(0,200000); });
     if(isPdf){
       const box=$('[data-a="pdf"]',w.body), info=$(".tag",w.body);
