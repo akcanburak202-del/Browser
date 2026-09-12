@@ -390,7 +390,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.3", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="2.4", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -459,7 +459,7 @@ function load(){
 function blank(){
   return {v:2, terms:[], settings:{theme:"dark", wall:"mesh", name:"", pomo:25, brk:5, goal:120, widgets:true, autoOpen:""},
     courses:[], notes:[], decks:[], cards:[], tasks:[], sessions:[], topics:[],
-    quizzes:[], quizRuns:[], events:[], journal:[], exams:[], files:[]};
+    quizzes:[], quizRuns:[], events:[], journal:[], exams:[], files:[], trash:[]};
 }
 function seed(){
   const d=blank(); const t=today();
@@ -521,10 +521,11 @@ const MEDIA_URL=new Map();           // id -> objectURL (önbellek)
 function idb(){
   return new Promise((res,rej)=>{
     if(_idb) return res(_idb);
-    const r=indexedDB.open("studyos",2);
+    const r=indexedDB.open("studyos",3);
     r.onupgradeneeded=()=>{ const d=r.result;
       if(!d.objectStoreNames.contains("media"))   d.createObjectStore("media");
-      if(!d.objectStoreNames.contains("handles")) d.createObjectStore("handles"); };
+      if(!d.objectStoreNames.contains("handles")) d.createObjectStore("handles");
+      if(!d.objectStoreNames.contains("snaps"))   d.createObjectStore("snaps"); };
     r.onsuccess=()=>{ _idb=r.result; res(_idb); };
     r.onerror=()=>rej(r.error);
   });
@@ -683,6 +684,83 @@ function downloadText(txt,name,mime){
   a.download=name; document.body.appendChild(a); a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
 }
+/* ============================================================
+   GERİ DÖNÜŞ YOLLARI
+   Anlık görüntü: IndexedDB "snaps" deposunda, YALNIZCA metin DB'si.
+     Medya bilerek dışarıda — 7 kopya blob'ları çoğaltıp kotayı patlatırdı,
+     zaten bozulan/kaybolan taraf metin.
+   Çöp kutusu: DB.trash, 30 gün. Medya ancak kalıcı silinince bırakılır.
+   ============================================================ */
+const SNAP_GUNLUK=7, SNAP_ETIKET=3;
+const SNAP_AD={gunluk:"günlük",import:"içe aktarmadan önce",reset:"sıfırlamadan önce",
+  restore:"geri almadan önce",elle:"elle alındı"};
+const snapPut=(k,v)=>idbOp("readwrite",st=>st.put(v,k),"snaps");
+const snapAll=()=>idbOp("readonly",st=>st.getAll(),"snaps").then(a=>(a||[]).sort((x,y)=>y.ts-x.ts));
+const snapDel=k=>idbOp("readwrite",st=>st.delete(k),"snaps");
+async function takeSnapshot(reason){
+  try{
+    const json=JSON.stringify(DB), ts=Date.now(), key="s"+ts+"-"+uid().slice(0,4);
+    await snapPut(key,{key,ts,date:today(),reason:reason||"gunluk",size:json.length,
+      notes:DB.notes.length,cards:DB.cards.length,json});
+    await pruneSnapshots();
+    return true;
+  }catch(e){ console.warn("anlık görüntü alınamadı",e); return false; }
+}
+/* son SNAP_GUNLUK günlük + son SNAP_ETIKET etiketli tutulur */
+async function pruneSnapshots(){
+  const all=await snapAll();
+  const g=all.filter(x=>x.reason==="gunluk"), e=all.filter(x=>x.reason!=="gunluk");
+  for(const x of [...g.slice(SNAP_GUNLUK),...e.slice(SNAP_ETIKET)]) await snapDel(x.key).catch(()=>{});
+}
+async function snapBytes(){ try{ return (await snapAll()).reduce((a,x)=>a+(x.size||0),0); }catch(e){ return 0; } }
+async function dailySnapshot(){
+  if(DB.settings.lastSnap===today()||LOCK_SAVE) return;
+  if(await takeSnapshot("gunluk")){ DB.settings.lastSnap=today(); save(); }
+}
+
+const COP_GUN=30, COP_BAYT=300000;
+const COP_AD={note:"Not",card:"Kart",deck:"Deste",task:"Görev",quiz:"Test",
+  topic:"Konu",term:"Terim",course:"Ders",exam:"Sınav"};
+const COP_DIZI={note:"notes",card:"cards",task:"tasks",quiz:"quizzes",
+  term:"terms",course:"courses",exam:"exams"};
+function toTrash(type,label,data){
+  (DB.trash=DB.trash||[]).push({id:uid(),type,at:today(),ts:Date.now(),label:String(label||"").slice(0,120),data});
+  trimTrash();
+}
+/* çöpteki kaydın tuttuğu medya — yalnızca kalıcı silinince bırakılır */
+function trashRefs(e){
+  const out=[], nota=x=>{ if(!x) return;
+    (String(x.body||"").match(/idb:[a-z0-9]+/g)||[]).forEach(r=>out.push(r));
+    (x.att||[]).forEach(a=>{ if(a.ref) out.push(a.ref); }); };
+  if(e.type==="note") nota(e.data);
+  else if(e.type==="card"||e.type==="term"){ if(e.data?.img) out.push(e.data.img); }
+  else if(e.type==="deck") (e.data?.cards||[]).forEach(c=>{ if(c.img) out.push(c.img); });
+  return out;
+}
+/* 30 günü geçenleri ve 300 KB'ı aşan fazlalığı kalıcı siler — çöp,
+   5 MB'lık metin deposunu yemesin */
+function trimTrash(){
+  if(!DB.trash?.length) return 0;
+  const sinir=addDays(today(),-COP_GUN), kalan=[], atilan=[];
+  for(const e of DB.trash) (e.at<sinir?atilan:kalan).push(e);
+  DB.trash=kalan;
+  while(DB.trash.length&&JSON.stringify(DB.trash).length>COP_BAYT) atilan.push(DB.trash.shift());
+  atilan.forEach(e=>trashRefs(e).forEach(dropMedia));
+  return atilan.length;
+}
+function restoreTrash(id){
+  const i=(DB.trash||[]).findIndex(e=>e.id===id); if(i<0) return null;
+  const e=DB.trash.splice(i,1)[0], d=e.data;
+  if(e.type==="deck"){ DB.decks.push(d.deck); DB.cards.push(...(d.cards||[])); }
+  else if(e.type==="topic"){ DB.topics.push(...(d.topics||[])); }
+  else DB[COP_DIZI[e.type]].push(d);
+  return e;
+}
+function dropTrash(id){
+  const i=(DB.trash||[]).findIndex(e=>e.id===id); if(i<0) return;
+  trashRefs(DB.trash[i]).forEach(dropMedia); DB.trash.splice(i,1);
+}
+
 /* localStorage bozuksa: üstüne yazmadan kullanıcıya sor */
 function corruptScreen(){
   bigNotice("⚠️ Kayıtlı veri okunamadı",
@@ -702,6 +780,73 @@ function corruptScreen(){
         CORRUPT_RAW=null; LOCK_SAVE=false; saveNow(); close();
         toast("Boş başlandı"); }}]);
 }
+/* --------- anlık görüntü ekranı --------- */
+async function snapScreen(){
+  let list=[]; try{ list=await snapAll(); }catch(e){}
+  const govde=list.length
+    ? `<div style="max-height:42vh;overflow:auto;margin-top:6px">${list.map(x=>`
+        <div class="row" style="padding:7px 0;border-bottom:1px solid var(--border-2)">
+          <div class="grow" style="min-width:0">
+            <b>${esc(x.date)}</b> <span class="sub">${pad(new Date(x.ts).getHours())}:${pad(new Date(x.ts).getMinutes())}</span>
+            <span class="tag">${esc(SNAP_AD[x.reason]||x.reason)}</span>
+            <div class="sub">${x.notes} not · ${x.cards} kart · ${bytesFmt(x.size)}</div></div>
+          <button class="btn sm pri" data-geri="${x.key}">↩ Dön</button>
+          <button class="btn sm danger" data-sil="${x.key}">✕</button>
+        </div>`).join("")}</div>`
+    : `<div class="sub" style="margin-top:6px">Henüz anlık görüntü yok — ilki bugünkü açılışta alınır.</div>`;
+  const o=bigNotice("🕘 Anlık görüntüler",
+    govde+`<div class="sub" style="margin-top:10px">Her gün ilk açılışta kendiliğinden alınır;
+      son ${SNAP_GUNLUK} günlük ve ${SNAP_ETIKET} etiketli kopya tutulur.
+      <b>Görseller dahil değildir</b> — geri dönünce aradan silinmiş bir görsel boş görünebilir.
+      Tam kopya için JSON yedek al.</div>`,
+    [{label:"📸 Şimdi al",run:async c=>{ c(); await takeSnapshot("elle"); toast("Anlık görüntü alındı"); snapScreen(); }},
+     {label:"Kapat",pri:true,run:c=>c()}]);
+  $$("[data-geri]",o).forEach(b=>b.onclick=()=>{ o.remove(); restoreSnapshot(b.dataset.geri); });
+  $$("[data-sil]",o).forEach(b=>b.onclick=async()=>{ o.remove(); await snapDel(b.dataset.sil); snapScreen(); });
+}
+async function restoreSnapshot(key){
+  let x=null; try{ x=(await snapAll()).find(y=>y.key===key); }catch(e){}
+  if(!x){ toast("⚠️ Anlık görüntü bulunamadı"); return; }
+  if(!confirm(`${x.date} tarihli hale dönülecek (${x.notes} not, ${x.cards} kart).\n\n`+
+    `Şu anki hal önce ayrı bir anlık görüntüye alınır, geri dönebilirsin.\n\nDevam edilsin mi?`)) return;
+  await takeSnapshot("restore");
+  try{
+    const d=JSON.parse(x.json);
+    DB=Object.assign(blank(),d);
+    DB.settings=Object.assign(blank().settings,d.settings||{});
+    saveNow(); buildTerms(); applySettings(); refreshAll();
+    toast(`${x.date} tarihli hale dönüldü`);
+  }catch(e){ toast("⚠️ Anlık görüntü okunamadı"); }
+}
+
+/* --------- çöp kutusu ekranı --------- */
+function trashScreen(sonra){
+  const list=(DB.trash||[]).slice().sort((a,b)=>b.ts-a.ts);
+  const tekrar=()=>{ save(); refreshAll(); sonra?.(); };
+  const govde=list.length
+    ? `<div style="max-height:42vh;overflow:auto;margin-top:6px">${capped(list).map(e=>`
+        <div class="row" style="padding:6px 0;border-bottom:1px solid var(--border-2)">
+          <span class="tag">${COP_AD[e.type]||e.type}</span>
+          <span class="grow" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.label||"—")}</span>
+          <span class="sub">${esc(e.at)}</span>
+          <button class="btn sm pri" data-geri="${e.id}">↩</button>
+          <button class="btn sm danger" data-sil="${e.id}">✕</button>
+        </div>`).join("")}${list.length>CAP?`<div class="sub" style="padding:8px;text-align:center">… ve ${list.length-CAP} kayıt daha (en yeniler gösteriliyor)</div>`:""}</div>`
+    : `<div class="sub" style="margin-top:6px">Çöp kutusu boş.</div>`;
+  const o=bigNotice("🗑 Çöp kutusu",
+    govde+`<div class="sub" style="margin-top:10px">Kayıtlar ${COP_GUN} gün sonra kendiliğinden
+      kalıcı silinir. Görseller ancak o zaman bırakılır.</div>`,
+    [...(list.length?[{label:"Tümünü boşalt",danger:true,run(c){
+        if(!confirm("Çöp kutusundaki her şey kalıcı silinsin mi? Bu geri alınamaz.")) return;
+        [...DB.trash].forEach(e=>dropTrash(e.id)); c(); tekrar(); toast("Çöp kutusu boşaltıldı"); }}]:[]),
+     {label:"Kapat",pri:true,run:c=>c()}]);
+  $$("[data-geri]",o).forEach(b=>b.onclick=()=>{ const e=restoreTrash(b.dataset.geri);
+    o.remove(); tekrar(); toast(e?`${COP_AD[e.type]||"Kayıt"} geri alındı`:"Bulunamadı"); trashScreen(sonra); });
+  $$("[data-sil]",o).forEach(b=>b.onclick=()=>{
+    if(!confirm("Bu kayıt kalıcı silinsin mi? Geri alınamaz.")) return;
+    dropTrash(b.dataset.sil); o.remove(); tekrar(); trashScreen(sonra); });
+}
+
 /* aynı veriyi açan ikinci bir sekme yazdı — son yazan kazanmasın */
 let _tabWarned=false;
 function tabConflictScreen(){
@@ -929,8 +1074,11 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       DB.notes.push(nn);s.id=nn.id;s.prev=false;save();this.render(w);});
     on("q","input",e=>{s.q=e.target.value;const v=e.target.selectionStart;this.render(w);const f=$('[data-a="q"]',w.body);f.focus();f.setSelectionRange(v,v);});
     on("prev","click",()=>{s.prev=!s.prev;this.render(w);});
-    on("del","click",()=>{ if(!n)return; if(!confirm("Bu not silinsin mi?"))return;
-      DB.notes=DB.notes.filter(x=>x.id!==n.id); s.id=null; save(); this.render(w); });
+    on("del","click",()=>{ if(!n)return;
+      if(!confirm("Bu not çöp kutusuna taşınsın mı? (30 gün içinde geri alınabilir)"))return;
+      toTrash("note",n.title||"Adsız",n);
+      DB.notes=DB.notes.filter(x=>x.id!==n.id); s.id=null; save(); this.render(w);
+      toast("🗑 Çöp kutusuna taşındı"); });
     on("title","input",e=>{n.title=e.target.value;n.updated=today();save();
       $$('[data-id="'+n.id+'"] span:last-child',w.body).forEach(sp=>sp.textContent=n.title||"Adsız");});
     on("course","change",e=>{n.courseId=e.target.value;n.updated=today();save();this.render(w);});
@@ -1034,7 +1182,9 @@ APPS.tasks={ name:"Görevler", icon:"✅", w:640, h:520, desk:true, single:true,
       || `<div class="empty">Bu filtrede görev yok 🎉</div>`;
     $$("[data-f]",w.body).forEach(b=>b.onclick=()=>{s.filter=b.dataset.f;this.render(w);});
     $$("[data-t]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.t);x.done=!x.done;saveAnd("tasks","stats");});
-    $$("[data-d]",box).forEach(b=>b.onclick=()=>{DB.tasks=DB.tasks.filter(y=>y.id!==b.dataset.d);saveAnd("tasks");});
+    $$("[data-d]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.d);
+      if(x) toTrash("task",x.title,x);
+      DB.tasks=DB.tasks.filter(y=>y.id!==b.dataset.d);saveAnd("tasks");});
     $$("[data-p]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.p);x.pri=(x.pri+1)%3;saveAnd("tasks");});
     $$("[data-s]",box).forEach(b=>b.onclick=()=>{const x=DB.tasks.find(y=>y.id===b.dataset.s);
       Pomo.start(x.courseId,x.title); openApp("pomodoro"); });
@@ -1107,12 +1257,15 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
         <button class="btn sm danger" data-x="${c.id}">✕</button></div>`).join("")+capNote(cards,"kart")
       ||`<div class="empty">Bu destede kart yok.<br>Yukarıdan ön/arka yüz yazıp ekle.</div>`;
     $$("[data-d]",w.body).forEach(b=>b.onclick=()=>{s.deck=b.dataset.d;this.render(w);});
-    $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{ const c=DB.cards.find(c=>c.id===b.dataset.x); dropMedia(c?.img);
+    $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{ const c=DB.cards.find(c=>c.id===b.dataset.x);
+      if(c) toTrash("card",c.front,c);        /* görseli çöpten kalıcı silinince bırakılır */
       DB.cards=DB.cards.filter(c=>c.id!==b.dataset.x);saveAnd("cards");});
     const A=a=>$(`[data-a="${a}"]`,w.body);
     A("newdeck").onclick=()=>{const n=prompt("Deste adı:");if(!n)return;
       const d={id:uid(),name:n,courseId:DB.courses[0]?.id};DB.decks.push(d);s.deck=d.id;saveAnd("cards");};
-    A("deldeck").onclick=()=>{ if(!s.deck||!confirm("Deste ve içindeki kartlar silinsin mi?"))return;
+    A("deldeck").onclick=()=>{ if(!s.deck||!confirm("Deste ve içindeki kartlar çöp kutusuna taşınsın mı?"))return;
+      const dk=DB.decks.find(d=>d.id===s.deck), kt=DB.cards.filter(c=>c.deckId===s.deck);
+      if(dk) toTrash("deck",`${dk.name} (${kt.length} kart)`,{deck:dk,cards:kt});
       DB.cards=DB.cards.filter(c=>c.deckId!==s.deck);DB.decks=DB.decks.filter(d=>d.id!==s.deck);s.deck=null;saveAnd("cards");};
     A("pic").onclick=async()=>{ const file=await pickFile("image/*"); if(!file)return;
       s.pendingImg=await putMedia(await imageScaled(file,900,.8)); toast("Görsel sonraki karta eklenecek"); this.render(w); };
@@ -1253,7 +1406,9 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
       </div></div>`;
     $$("[data-r]",w.body).forEach(b=>b.onclick=()=>{s.quiz=b.dataset.r;s.mode="run";s.i=0;s.answers=[];s.locked=false;this.render(w);});
     $$("[data-e]",w.body).forEach(b=>b.onclick=()=>{s.quiz=b.dataset.e;s.mode="edit";this.render(w);});
-    $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{if(!confirm("Test silinsin mi?"))return;
+    $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{if(!confirm("Test çöp kutusuna taşınsın mı?"))return;
+      const q=DB.quizzes.find(x=>x.id===b.dataset.x);
+      if(q) toTrash("quiz",`${q.name} (${q.questions.length} soru)`,q);
       DB.quizzes=DB.quizzes.filter(q=>q.id!==b.dataset.x);saveAnd("quiz");});
     $('[data-a="new"]',w.body).onclick=()=>{const n=prompt("Test adı:");if(!n)return;
       const q={id:uid(),name:n,courseId:DB.courses[0]?.id,questions:[]};DB.quizzes.push(q);
@@ -1410,7 +1565,9 @@ APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true
         {k:"course",label:"Ders",type:"select",value:DB.courses[0]?.id,options:DB.courses.map(c=>({v:c.id,l:c.name}))}]);
       if(!v||!v.date)return; DB.exams.push({id:uid(),name:v.name||"Sınav",date:v.date,courseId:v.course});
       saveAnd("calendar"); paintWidgets(); };
-    $$("[data-xe]",w.body).forEach(b=>b.onclick=()=>{ DB.exams=DB.exams.filter(e=>e.id!==b.dataset.xe); saveAnd("calendar"); paintWidgets(); });
+    $$("[data-xe]",w.body).forEach(b=>b.onclick=()=>{ const x=DB.exams.find(e=>e.id===b.dataset.xe);
+      if(x) toTrash("exam",`${x.name} · ${x.date}`,x);
+      DB.exams=DB.exams.filter(e=>e.id!==b.dataset.xe); saveAnd("calendar"); paintWidgets(); });
     $$("[data-c]",w.body).forEach(c=>c.onclick=async e=>{
       if(e.target.closest(".ev"))return;
       const [i,h]=c.dataset.c.split(".").map(Number);
@@ -1474,8 +1631,13 @@ APPS.topics={ name:"Konu Haritası", icon:"🧠", w:680, h:560, desk:true, singl
     $$("[data-s]",w.body).forEach(b=>b.onclick=()=>{const t=DB.topics.find(x=>x.id===b.dataset.s);
       t.status={new:"learning",learning:"known",known:"new"}[t.status];saveAnd("topics","stats");});
     $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{const id=b.dataset.x;
-      const kill=i=>{DB.topics.filter(t=>t.parentId===i).forEach(t=>kill(t.id));DB.topics=DB.topics.filter(t=>t.id!==i);};
-      kill(id);saveAnd("topics","stats");});
+      /* alt konularıyla birlikte tek parça çöpe gider, geri alınca ağaç bozulmaz */
+      const topla=i=>[DB.topics.find(t=>t.id===i),...DB.topics.filter(t=>t.parentId===i).flatMap(t=>topla(t.id))].filter(Boolean);
+      const agac=topla(id); if(!agac.length) return;
+      toTrash("topic",agac[0].name+(agac.length>1?` (+${agac.length-1} alt konu)`:""),{topics:agac});
+      const idler=new Set(agac.map(t=>t.id));
+      DB.topics=DB.topics.filter(t=>!idler.has(t.id));
+      saveAnd("topics","stats");});
     $$("[data-add]",w.body).forEach(b=>b.onclick=()=>{const n=prompt("Alt konu adı:");if(!n)return;
       DB.topics.push({id:uid(),courseId:s.course,parentId:b.dataset.add,name:n,status:"new"});saveAnd("topics","stats");});
     $('[data-a="root"]',w.body).onclick=()=>{const n=prompt("Konu adı:");if(!n)return;
@@ -2193,7 +2355,8 @@ APPS.glossary={ name:"Sözlük", icon:"📖", w:720, h:560, desk:true, single:tr
         s.edit=null; buildTerms(); save(); refreshAll(); toast("Kaydedildi");
       };
       A("cancel").onclick=()=>{ if(!t.term) DB.terms=DB.terms.filter(x=>x.id!==t.id); s.edit=null; save(); this.render(w); };
-      A("del").onclick=()=>{ if(!confirm("Terim silinsin mi?"))return;
+      A("del").onclick=()=>{ if(!confirm("Terim çöp kutusuna taşınsın mı?"))return;
+        toTrash("term",t.term,t);
         DB.terms=DB.terms.filter(x=>x.id!==t.id); s.edit=null; buildTerms(); save(); refreshAll(); };
     }
   }};
@@ -2236,6 +2399,10 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
           <button class="btn" data-a="imp">⬆ Yedek yükle</button>
           <button class="btn danger" data-a="reset">Her şeyi sıfırla</button>
         </div>
+        <div class="row" style="margin-top:8px;flex-wrap:wrap">
+          <button class="btn" data-a="snaps">🕘 Anlık görüntüler</button>
+          <button class="btn" data-a="trash">🗑 Çöp kutusu${(DB.trash||[]).length?` (${DB.trash.length})`:""}</button>
+        </div>
         ${(()=>{ let v=null; try{ v=localStorage.getItem(KEY+".oncesi"); }catch(e){} return v
           ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-a="undoimp">↩ İçe aktarmadan önceki hale dön</button></div>`:""; })()}
         <div class="sub" style="margin-top:8px">${DB.notes.length} not · ${DB.cards.length} kart · ${DB.tasks.length} görev · ${DB.sessions.length} oturum · ${DB.exams.length} sınav</div>
@@ -2243,6 +2410,7 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
         <div class="meter" style="margin-top:5px"><i style="width:${Math.min(100,storageUsed()/5242880*100).toFixed(1)}%;background:${storageUsed()>4e6?"var(--bad)":"var(--s3)"}"></i></div>
         <div class="row" style="margin-top:10px"><span class="sub grow">Görsel ve dosyalar</span><span class="sub">${bytesFmt(IDB_BYTES)} / GB'larca yer var</span></div>
         <div class="meter" style="margin-top:5px"><i style="width:${Math.min(100,IDB_BYTES/1e9*100).toFixed(2)}%;background:var(--s1)"></i></div>
+        <div class="row" style="margin-top:10px"><span class="sub grow">Anlık görüntüler (geri dönüş)</span><span class="sub" data-a="snapsize">…</span></div>
         <div class="sub" style="margin-top:8px">Görseller ayrı depoda tutulur, metin deposunu doldurmaz.${DB.settings.lastBackup?` Son yedek: ${esc(DB.settings.lastBackup)}.`:" Henüz yedek almadın."}</div>
       </div>
       <div class="card"><div class="h2">Bu cihaz neyi destekliyor?</div>
@@ -2278,7 +2446,8 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       <button class="btn sm danger" data-cx="${c.id}">✕</button></div>`).join("")||`<div class="sub">Ders yok</div>`;
     $$("[data-cn]",w.body).forEach(i=>i.oninput=()=>{course(i.dataset.cn).name=i.value;save();});
     $$("[data-cc]",w.body).forEach(i=>i.oninput=()=>{course(i.dataset.cc).color=i.value;save();refreshAll();});
-    $$("[data-cx]",w.body).forEach(b=>b.onclick=()=>{ if(!confirm("Ders silinsin mi? (İçerikler 'Genel' olur)"))return;
+    $$("[data-cx]",w.body).forEach(b=>b.onclick=()=>{ if(!confirm("Ders çöp kutusuna taşınsın mı? (İçerikler 'Genel' olur)"))return;
+      const c=course(b.dataset.cx); if(c) toTrash("course",c.name,c);
       DB.courses=DB.courses.filter(c=>c.id!==b.dataset.cx); refreshAll(); save(); this.render(w);});
     A("addc").onclick=()=>{const n=prompt("Ders adı:");if(!n)return;
       DB.courses.push({id:uid(),name:n,color:COLORS[DB.courses.length%COLORS.length]});saveAnd("settings","topics","tasks");this.render(w);};
@@ -2317,13 +2486,18 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
     A("exp").onclick=exportJSON;
     A("imp").onclick=importJSON;
     if(A("undoimp")) A("undoimp").onclick=()=>{ undoImport(); this.render(w); };
+    A("snaps").onclick=()=>snapScreen();
+    A("trash").onclick=()=>trashScreen(()=>this.render(w));
+    (async()=>{ const b=A("snapsize"); if(b) b.textContent=bytesFmt(await snapBytes()); })();
     A("reset").onclick=async()=>{
       const v=await dialog("Her şeyi sıfırla",[{k:"m",label:"Tüm notlar, kartlar, görevler, görseller silinecek. Nasıl başlansın?",
         type:"select",value:"empty",options:[
           {v:"empty",l:"Bomboş başla (kendi derslerimi gireceğim)"},
           {v:"seed",l:"Örnek verilerle başla (deneme amaçlı)"}]}]);
       if(!v) return;
-      if(!confirm("Emin misin? Bu işlem geri alınamaz. Önce yedek aldıysan sorun yok.")) return;
+      if(!confirm("Emin misin? Notlar, kartlar ve görseller silinir.\n\nAnlık görüntüler SİLİNMEZ — "+
+        "Ayarlar → Veri → 🕘 ile bugünkü hale geri dönebilirsin.")) return;
+      await takeSnapshot("reset");
       try{ for(const k of await idbKeys()) await idbDel(k); }catch(e){}
       try{ await idbOp("readwrite",st=>st.clear(),"handles"); }catch(e){}
       MEDIA_URL.clear(); HANDLE_CACHE.clear(); IDB_BYTES=0;
@@ -2357,7 +2531,8 @@ function importJSON(){
       catch(e){ toast("⚠️ Geçersiz dosya"); return; }
       const say=o=>`${(o.notes||[]).length} not · ${(o.cards||[]).length} kart · ${(o.sessions||[]).length} oturum`;
       if(!confirm(`Yedek yüklenecek — mevcut veri silinecek.\n\nGelen:  ${say(d)}\nŞu anki: ${say(DB)}\n\nDevam edilsin mi?\n(Şu anki hal saklanır, Ayarlar'dan geri dönebilirsin.)`)) return;
-      /* geri dönüş için mevcut ham metni sakla */
+      /* geri dönüş için: hem anlık görüntü hem ham metin kopyası */
+      await takeSnapshot("import");
       try{ const cur=localStorage.getItem(KEY); if(cur) localStorage.setItem(PREV_KEY,cur); }
       catch(e){ if(!confirm("Uyarı: mevcut halin kopyası alınamadı (depo dolu). Yine de devam edilsin mi?")) return; }
       const media=d._media||{}; delete d._media;
@@ -2739,6 +2914,10 @@ Object.values(APPS).forEach(a=>{ const orig=a.render.bind(a);
   a.render=w=>{ orig(w); hydrateMedia(w.body); decorate(w.body); }; });
 load(); buildTerms(); applySettings(); buildDesktop(); buildDock(); updateMenubar(); clock(); paintWidgets();
 if(CORRUPT_RAW) corruptScreen();
+else{
+  if(trimTrash()) save();                    /* 30 günü geçen çöp kalıcı silinir */
+  setTimeout(dailySnapshot,3000);            /* açılışı yavaşlatmamak için geciktirilir */
+}
 migrateMedia().then(idbUsage).then(()=>refreshAll()).then(importShared);
 /* verinin tarayıcı tarafından silinmemesi için kalıcı depolama iste */
 if(navigator.storage?.persist) navigator.storage.persisted?.().then(p=>{ if(!p) navigator.storage.persist().catch(()=>{}); });

@@ -24,7 +24,7 @@ Yeni oturumda önce bunu oku, sonra `README.md`'ye ve `git log`'a bak.
 
 | Dosya | Ne |
 |---|---|
-| `index.html` | Uygulamanın tamamı (~2500 satır): CSS, HTML iskeleti, 4 script bloğu |
+| `index.html` | Uygulamanın tamamı (~2900 satır): CSS, HTML iskeleti, 4 script bloğu |
 | `vendor/pdf*.js` | pdf.js (Apache-2.0), yalnızca PDF açılınca yüklenir |
 | `sw.js` | Çevrimdışı önbellek + paylaşım hedefi. **Değişiklikte `C` sabitini artır** |
 | `manifest.json`, `icon*.png` | PWA kurulumu |
@@ -57,12 +57,18 @@ Script blokları sırayla:
   `_dirty` işaretliyse yazar; içe aktarma/sıfırlama gibi yerlerde sessizce hiçbir şey yapmaz.
 - Kaydetme kilidi: `LOCK_SAVE` açıkken `flush()` yazmaz (bozuk veri veya sekme çakışması).
   Kullanıcı karar verene kadar `localStorage` olduğu gibi kalır.
+- **Bir şey silen her yerde `toTrash(type,label,data)` çağır, `dropMedia` çağırma.**
+  Medya ancak çöpten kalıcı silinince (`dropTrash` / `trimTrash`) bırakılır; erken bırakırsan
+  geri alınan kayıttan görsel eksik çıkar. Çok parçalı silmelerde (deste+kartları, konu ağacı)
+  tek bir çöp kaydı yaz — geri alınca ilişki bozulmasın.
+- Anlık görüntüler IndexedDB `snaps` deposunda ve **yalnızca metin DB'si** tutar; medya bilerek
+  dışarıda. Yeni bir toplu silme/değiştirme eklersen öncesinde `takeSnapshot("<sebep>")` çağır.
 
 ## Veri modeli (localStorage `studyos.v1`, `DB.v = 2`)
 
 `courses, notes, decks, cards, tasks, sessions, topics, quizzes, quizRuns, events, exams,
-journal, terms, settings`. Görseller/dosyalar **IndexedDB**'de (`media`), dosya tutamaçları
-`handles` deposunda. Yedek JSON'u medyayı base64 olarak içerir (`_media`).
+journal, terms, trash, settings`. Görseller/dosyalar **IndexedDB**'de (`media`), dosya tutamaçları `handles`,
+günlük anlık görüntüler `snaps` deposunda (IndexedDB sürümü 3). Yedek JSON'u medyayı base64 olarak içerir (`_media`).
 
 `sessions` kayıtları: `{courseId, topicId?, date, min, kind:"focus"|"study", label?}`.
 

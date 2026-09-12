@@ -118,9 +118,9 @@ ayrıştırma kısmı saf bir fonksiyona çıkarılınca test edilecek.
 
 ---
 
-## 2. parti — Geri dönülebilirlik  (hedef sürüm 2.4)
+## 2. parti — Geri dönülebilirlik  (sürüm 2.4) ✅ BİTTİ
 
-### 2.1 ☐ Günlük otomatik anlık görüntü
+### 2.1 ☑ Günlük otomatik anlık görüntü
 
 Kalıcı depolama izni olmayan bir cihazda en ucuz sigorta.
 
@@ -135,7 +135,7 @@ Kalıcı depolama izni olmayan bir cihazda en ucuz sigorta.
   onay → **önce mevcut hali `reason:"restore-oncesi"` ile kaydet** → `DB=…; flush(); refreshAll()`.
 - Ayarlar'daki depolama ölçerine ayrı bir "anlık görüntüler" satırı.
 
-### 2.2 ☐ Çöp kutusu (30 gün)
+### 2.2 ☑ Çöp kutusu (30 gün)
 
 - `blank()`'e `trash:[]` eklenir. `Object.assign(blank(), d)` eksik alanı doldurduğu için
   şema sürümü artırmaya gerek yok.
@@ -149,9 +149,19 @@ Kalıcı depolama izni olmayan bir cihazda en ucuz sigorta.
   yoksa 5 MB'lık localStorage silinen notlarla dolar.
 - UI: Ayarlar → Veri → `🗑 Çöp kutusu (N)` → `↩ Geri al` · `Kalıcı sil` · `Tümünü boşalt`.
 
-### 2. parti bitiş ölçütü
-Anlık görüntü al → veriyi boz → geri al → aynı veri geri gelir (elle doğrulama) ·
-`VERSION=2.4` · `sw.js` `C="studyos-v9"`
+### 2. parti sonucu ✅
+`node tests/unit.mjs` (4 zaman dilimi × 57 kontrol) ve `node tests/smoke.mjs` (46 kontrol) geçiyor ·
+`VERSION=2.4` · `sw.js` `C="studyos-v9"` · IndexedDB sürümü 2 → 3 (`snaps` deposu)
+
+Çöp kutusuna bağlanan silme noktaları: not, kart, deste(+kartları), test, konu ağacı(+alt konular),
+terim, görev, ders, sınav. Her biri `toTrash` çağırıyor ve artık `dropMedia` **çağırmıyor**.
+
+**Uygularken çıkan ek kusur:** not silme hiç `dropMedia` çağırmıyordu — nottaki görseller
+IndexedDB'de öksüz kalıyordu. Çöp kutusu bunu da kapattı (kalıcı silmede gövdedeki `idb:`
+referansları ve ekler taranıyor).
+
+**Kapsam dışı:** Takvim'deki "bu haftanın bloklarını temizle" toplu silmesi çöpe bağlanmadı —
+tek kayıt değil, yinelenen blok kümesi; ayrı bir çöp türü gerektiriyor.
 
 ---
 

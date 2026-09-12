@@ -163,6 +163,80 @@ await p2.waitForTimeout(200);
 check("başka sekme yazınca uyarılıyor",
   await p2.evaluate(() => document.body.textContent.includes("başka bir sekmede değişti")));
 
+/* ---------- anlık görüntü + çöp kutusu (sürüm 2.4) ---------- */
+await p2.goto(URL); await p2.waitForTimeout(700);
+
+/* çöpteki görsel duruyor, ancak kalıcı silinince bırakılıyor */
+const medya = await p2.evaluate(async () => {
+  const ref = await putMedia("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+  const c = { id: "mc", deckId: "d", front: "ön", back: "arka", img: ref };
+  DB.cards.push(c); DB.trash = [];
+  toTrash("card", "ön", c); DB.cards = DB.cards.filter(x => x.id !== "mc"); saveNow();
+  const copta = (await idbKeys()).includes(ref.slice(4));
+  dropTrash(DB.trash[0].id); saveNow();
+  await new Promise(r => setTimeout(r, 400));
+  return { copta, sonra: (await idbKeys()).includes(ref.slice(4)) };
+});
+check("çöpteyken görsel duruyor", medya.copta === true);
+check("kalıcı silinince görsel bırakılıyor", medya.sonra === false);
+
+/* anlık görüntü o anki hali tutuyor, medya içermiyor */
+const snap = await p2.evaluate(async () => {
+  for (const k of await idbOp("readonly", st => st.getAllKeys(), "snaps")) await snapDel(k);
+  DB.notes = [{ id: "sn1", title: "ANLIK-ONCE", body: "", created: today(), updated: today() }];
+  saveNow();
+  await takeSnapshot("elle");
+  DB.notes[0].title = "SONRA"; saveNow();
+  const l = await snapAll();
+  return { sayi: l.length, icerikteki: JSON.parse(l[0].json).notes[0].title,
+    simdiki: DB.notes[0].title, medyaYok: l[0].json.indexOf("_media") < 0 };
+});
+check("anlık görüntü alınıyor", snap.sayi === 1 && snap.medyaYok);
+check("anlık görüntü o anki hali tutuyor", snap.icerikteki === "ANLIK-ONCE" && snap.simdiki === "SONRA");
+
+/* geri dönüş: önce şu anki hal saklanıyor, sonra dönülüyor */
+await p2.evaluate(async () => { const l = await snapAll(); await restoreSnapshot(l[0].key); });
+await p2.waitForTimeout(600);
+check("anlık görüntüden geri dönülüyor",
+  (await p2.evaluate(() => DB.notes[0].title)) === "ANLIK-ONCE");
+check("geri dönmeden önce şu anki hal saklanıyor",
+  await p2.evaluate(async () => (await snapAll()).some(x => x.reason === "restore")));
+check("geri dönüş localStorage'a da yazıldı",
+  await p2.evaluate(() => JSON.parse(localStorage.getItem("studyos.v1")).notes[0].title === "ANLIK-ONCE"));
+
+/* sayı sınırı: 7 günlük + 3 etiketli */
+const budama = await p2.evaluate(async () => {
+  for (const k of await idbOp("readonly", st => st.getAllKeys(), "snaps")) await snapDel(k);
+  for (let i = 0; i < 10; i++) await takeSnapshot("gunluk");
+  for (let i = 0; i < 5; i++) await takeSnapshot("elle");
+  const l = await snapAll();
+  return { gunluk: l.filter(x => x.reason === "gunluk").length,
+           etiket: l.filter(x => x.reason !== "gunluk").length };
+});
+check("anlık görüntü sayısı sınırlanıyor", budama.gunluk === 7 && budama.etiket === 3,
+  budama.gunluk + " günlük / " + budama.etiket + " etiketli");
+
+/* günlük anlık görüntü günde bir kez */
+const gunluk = await p2.evaluate(async () => {
+  for (const k of await idbOp("readonly", st => st.getAllKeys(), "snaps")) await snapDel(k);
+  DB.settings.lastSnap = null;
+  await dailySnapshot(); await dailySnapshot();
+  return { adet: (await snapAll()).length, damga: DB.settings.lastSnap };
+});
+check("günlük anlık görüntü günde bir kez alınıyor", gunluk.adet === 1 && gunluk.damga === await p2.evaluate(() => today()));
+
+/* çöp kutusu ekranı gerçekten açılıyor ve geri alma düğmesi çalışıyor */
+await p2.evaluate(() => { DB.trash = [];
+  DB.notes = [{ id: "cp1", title: "Çöpe gidecek", body: "", created: today(), updated: today() }];
+  const n = DB.notes[0];
+  toTrash("note", n.title, n); DB.notes = DB.notes.filter(x => x.id !== n.id); saveNow(); trashScreen(); });
+await p2.waitForTimeout(300);
+check("çöp ekranı açılıyor", await p2.evaluate(() => document.body.textContent.includes("Çöp kutusu")));
+await p2.evaluate(() => document.querySelector("[data-geri]").click());
+await p2.waitForTimeout(400);
+check("çöp ekranından geri alınıyor",
+  await p2.evaluate(() => DB.notes.some(x => x.id === "cp1") && DB.trash.length === 0));
+
 check("veri güvenliği bölümünde konsol hatası yok", errs2.length === 0, errs2.slice(0, 3).join(" | "));
 
 await b.close();

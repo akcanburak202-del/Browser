@@ -37,7 +37,8 @@ if (bloklar.length !== 4) { console.error("Beklenen 4 script bloğu, bulunan " +
    İlk üç blok tek parça çalıştırılır — tarayıcıda da aynı üst kapsamı paylaşırlar. */
 const kaynak = bloklar.slice(0, 3).join("\n") + `
 globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueCards, minutesByDay,
-  setDB: v => { DB = v; } };`;
+  toTrash, trimTrash, restoreTrash, dropTrash, trashRefs, COP_GUN, COP_BAYT,
+  setDB: v => { DB = v; }, getDB: () => DB };`;
 
 const bosDugum = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {} },
   appendChild() {}, remove() {}, setAttribute() {}, querySelector: () => null, querySelectorAll: () => [] });
@@ -148,6 +149,65 @@ T.setDB({ settings: {}, cards: [], sessions: [
 ] });
 es("minutesByDay 3 gün", T.minutesByDay(3).map(x => x.m), [15, 0, 45]);
 es("minutesByDay son gün bugündür", T.minutesByDay(3)[2].d, bugun);
+
+/* ---------- çöp kutusu ---------- */
+const bosDB = () => ({ settings: {}, trash: [], notes: [], cards: [], decks: [], tasks: [],
+  quizzes: [], terms: [], courses: [], exams: [], topics: [], sessions: [] });
+
+let db = bosDB();
+db.notes.push({ id: "n1", title: "Silinecek", body: "metin" });
+T.setDB(db);
+T.toTrash("note", "Silinecek", db.notes[0]);
+db.notes = db.notes.filter(x => x.id !== "n1"); T.setDB(db);
+es("çöp: kayıt eklendi", db.trash.length, 1);
+es("çöp: bugünün tarihiyle", db.trash[0].at, bugun);
+const geri = T.restoreTrash(db.trash[0].id);
+es("çöp: geri alınan tip", geri.type, "note");
+es("çöp: not diziye döndü", T.getDB().notes.map(x => x.id), ["n1"]);
+es("çöp: kayıt çöpten çıktı", T.getDB().trash.length, 0);
+
+/* deste + kartları tek parça */
+db = bosDB(); T.setDB(db);
+T.toTrash("deck", "Deste (2 kart)", { deck: { id: "d1", name: "Deste" },
+  cards: [{ id: "c1", deckId: "d1" }, { id: "c2", deckId: "d1" }] });
+T.restoreTrash(T.getDB().trash[0].id);
+es("çöp: deste geri geldi", T.getDB().decks.map(x => x.id), ["d1"]);
+es("çöp: destenin kartları da geri geldi", T.getDB().cards.map(x => x.id), ["c1", "c2"]);
+
+/* konu ağacı tek parça */
+db = bosDB(); T.setDB(db);
+T.toTrash("topic", "Kök (+2 alt konu)", { topics: [
+  { id: "t1", parentId: null, name: "Kök" }, { id: "t2", parentId: "t1" }, { id: "t3", parentId: "t2" }] });
+T.restoreTrash(T.getDB().trash[0].id);
+es("çöp: konu ağacı bütün geri geldi", T.getDB().topics.map(x => x.id), ["t1", "t2", "t3"]);
+
+/* 30 gün kuralı */
+db = bosDB();
+db.trash = [
+  { id: "a", type: "task", at: T.addDays(bugun, -(T.COP_GUN + 1)), ts: 1, label: "eski", data: { id: "x" } },
+  { id: "b", type: "task", at: T.addDays(bugun, -(T.COP_GUN - 1)), ts: 2, label: "yeni", data: { id: "y" } }];
+T.setDB(db);
+es("çöp: 30 günü geçen atıldı", T.trimTrash(), 1);
+es("çöp: süresi dolmayan kaldı", T.getDB().trash.map(e => e.id), ["b"]);
+
+/* boyut tavanı: en eskiden başlayarak atılır */
+db = bosDB();
+const sisman = "x".repeat(20000);
+for (let i = 0; i < 40; i++) db.trash.push({ id: "e" + i, type: "note", at: bugun, ts: i, label: "n" + i, data: { body: sisman } });
+T.setDB(db);
+T.trimTrash();
+dogru("çöp: 300 KB tavanına indiriliyor", JSON.stringify(T.getDB().trash).length <= T.COP_BAYT);
+dogru("çöp: tavana rağmen en yeniler tutuluyor",
+  T.getDB().trash.length > 0 && T.getDB().trash[T.getDB().trash.length - 1].id === "e39");
+
+/* medya referansları — çöpten kalıcı silinince bırakılacak olanlar */
+es("çöp: not gövdesindeki ve ekindeki görseller bulunuyor",
+  T.trashRefs({ type: "note", data: { body: "a ![](idb:abc123) b", att: [{ ref: "idb:def456" }] } }),
+  ["idb:abc123", "idb:def456"]);
+es("çöp: kart görseli bulunuyor", T.trashRefs({ type: "card", data: { img: "idb:kart1" } }), ["idb:kart1"]);
+es("çöp: destedeki kartların görselleri bulunuyor",
+  T.trashRefs({ type: "deck", data: { cards: [{ img: "idb:k1" }, {}, { img: "idb:k2" }] } }), ["idb:k1", "idb:k2"]);
+es("çöp: görevde görsel yok", T.trashRefs({ type: "task", data: { title: "x" } }), []);
 
 /* ---------- markdown ---------- */
 dogru("md kalın", T.md("**kalın**").includes("<b>kalın</b>"));
