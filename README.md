@@ -19,6 +19,8 @@ Kaydetme, yazmayı bıraktıktan 250 ms sonra ve tarayıcı boştayken yapılır
 
 **Ayarlar → Veri**'den alınan JSON yedek görselleri de içerir — tek dosyayla başka cihaza taşınır. Her cihazın verisi kendine aittir.
 
+Aynı yerdeki **📦 Paket ekle**, dışarıda hazırlanmış kart destesi / test / terim setini **mevcut verinin üstüne** ekler (hiçbir şeyi silmez). **📋 Paket talimatı** düğmesi, başka bir yapay zekâya verilecek hazır metni panoya kopyalar — biçimin tamamı [`PAKET.md`](PAKET.md)'de.
+
 ## Uygulamalar
 
 | | Uygulama | Ne yapar |
@@ -28,8 +30,8 @@ Kaydetme, yazmayı bıraktıktan 250 ms sonra ve tarayıcı boştayken yapılır
 | 🗂 | **Kartlar** | SM-2 aralıklı tekrar algoritması, deste yönetimi, tekrar kuyruğu |
 | ⏱ | **Pomodoro** | Sayaç + otomatik mola, oturumlar derse yazılır, günlük hedef çubuğu |
 | ❓ | **Quiz** | Kendi soru bankan, test çözme, açıklamalar, **yanlışları tek tıkla karta çevirme** |
-| 📅 | **Takvim** | Haftalık çalışma programı, saat bloklarını yerleştirme |
-| 🧠 | **Konu Haritası** | Ders → konu → alt konu ağacı, "başlanmadı / öğreniyorum / biliyorum" durumları |
+| 📅 | **Takvim** | Haftalık çalışma programı, saat bloklarını yerleştirme; sınav geri sayımı — bir sınav birden çok dersi kapsayabilir (TUS, YKS…) |
+| 🧠 | **Konu Haritası** | Ders → konu → alt konu ağacı, "başlanmadı / öğreniyorum / biliyorum" durumları; **Tüm dersler** görünümü, ders ekleme/silme |
 | 📊 | **İstatistik** | 14 günlük bar grafik, 12 haftalık ısı haritası, ders dağılımı, seri (streak) |
 | 🗒 | **Günlük** | Günün özeti + ruh hali kaydı |
 | 📖 | **Sözlük** | Terim tanımları; terimler tüm metinlerde otomatik işaretlenir, üstüne gelince görselli tanım balonu açılır |
@@ -64,6 +66,8 @@ Ayrıca: **masaüstü widget'ları** (bugünkü hedef, tekrar kuyruğu, sınav g
 ## Dosyalar
 
 - `CLAUDE.md` — proje durumu, mimari ve devam notları (yeni bir sohbete başlarken önce bunu oku)
+- `PAKET.md` — dışarıda hazırlanan kart/test paketlerinin biçimi ve başka bir yapay zekâya verilecek talimat
+- `tests/unit.mjs` — `node tests/unit.mjs` ile çalışan mantık testi (dört zaman diliminde)
 - `tests/smoke.mjs` — `node tests/smoke.mjs` ile çalışan duman testi
 
 - `index.html` — uygulamanın tamamı (tek başına çalışır)

@@ -1031,6 +1031,130 @@ check("görüntüleyici dosyasız açılınca düzgün boş durum gösteriyor", 
 check("cihaz panelinde sesli okuma satırı var", await p2.evaluate(() =>
   [...WINS.values()].find(w => w.appId === "settings").body.textContent.includes("Türkçe sesli okuma")));
 
+/* ---------- takvim: blok süresi seçilir (tablette yazınca 1+3=13 oluyordu) ---------- */
+await p2.evaluate(() => { for (const w of [...WINS.values()]) if (w.appId === "calendar") closeWin(w); });
+await p2.evaluate(() => { const w = openApp("calendar"); APPS.calendar.render(w); });
+await p2.waitForTimeout(300);
+await p2.click('[data-c="3.14"]');
+await p2.waitForTimeout(200);
+check("blok süresi yazılmıyor, seçiliyor", await p2.evaluate(() =>
+  document.querySelector('#modalfields [data-f="len"]').tagName === "SELECT"));
+check("süre seçenekleri gün sonunu aşmıyor", await p2.evaluate(() =>
+  [...document.querySelectorAll('#modalfields [data-f="len"] option')].length === 8));
+await p2.selectOption('#modalfields [data-f="len"]', "3");
+await p2.click("#modalok");
+await p2.waitForTimeout(300);
+check("seçilen süre bloğa aynen yansıyor", await p2.evaluate(() => {
+  const e = DB.events[DB.events.length - 1]; return e.start === 14 && e.end === 17;
+}), await p2.evaluate(() => { const e = DB.events[DB.events.length - 1]; return e.start + "–" + e.end; }));
+check("blok ekranda süresi kadar yer kaplıyor", await p2.evaluate(() => {
+  const e = DB.events[DB.events.length - 1];
+  const n = document.querySelector(`[data-ev="${e.id}"]`);
+  return n && Math.round(n.getBoundingClientRect().height) >= 3 * 34 - 4;
+}));
+
+/* ---------- diyalog: alana dokununca eski değer seçili gelir ---------- */
+await p2.click('[data-a="addexam"]');
+await p2.waitForTimeout(250);
+/* tablet senaryosu: odakta olmayan bir alana dokunup yazmak */
+await p2.evaluate(() => document.activeElement?.blur());
+await p2.click('#modalfields [data-f="name"]');
+await p2.waitForTimeout(120);
+await p2.keyboard.type("TUS");
+check("alana dokununca eski değer seçili gelir (üstüne yazılır)",
+  (await p2.evaluate(() => document.querySelector('#modalfields [data-f="name"]').value)) === "TUS",
+  await p2.evaluate(() => document.querySelector('#modalfields [data-f="name"]').value));
+
+/* ---------- çok dersli sınav ---------- */
+check("sınav dersleri çoklu seçiliyor", await p2.evaluate(() =>
+  document.querySelectorAll('#modalfields [data-f="courses"] input[type=checkbox]').length === DB.courses.length));
+await p2.click('#modalfields [data-mall="courses"]');
+await p2.click("#modalok");
+await p2.waitForTimeout(300);
+check("sınav bütün dersleri kapsıyor", await p2.evaluate(() => {
+  const x = DB.exams[DB.exams.length - 1];
+  return x.name === "TUS" && x.courseIds.length === DB.courses.length;
+}));
+check("çok dersli sınav listede ders sayısıyla görünüyor", await p2.evaluate(() =>
+  [...WINS.values()].find(w => w.appId === "calendar").body.textContent.includes(DB.courses.length + " ders")));
+check("çok dersli sınav günlük planda bütün derslerin konularını çağırıyor", await p2.evaluate(() => {
+  const yedek = JSON.stringify(DB);
+  DB.tasks = []; DB.cards = [];                        /* plan satırları konulara kalsın */
+  const dersler = new Set(dailyPlan().filter(r => r.tip === "konu").map(r => r.courseId));
+  const beklenen = DB.courses.filter(c => DB.topics.some(t => t.courseId === c.id && t.status !== "known"));
+  const sonuc = beklenen.length > 1 && beklenen.every(c => dersler.has(c.id));
+  DB = JSON.parse(yedek); return sonuc;
+}));
+/* sınav satırına tıklayınca düzenleme açılmalı */
+await p2.evaluate(() => { const x = DB.exams[DB.exams.length - 1];
+  document.querySelector(`[data-ee="${x.id}"]`).click(); });
+await p2.waitForTimeout(250);
+check("sınav düzenlenebiliyor", await p2.evaluate(() =>
+  document.querySelector("#modaltitle").textContent.includes("düzenle")
+  && document.querySelectorAll('#modalfields [data-f="courses"] input:checked').length === DB.courses.length));
+await p2.click("#modalcancel");
+await p2.waitForTimeout(150);
+
+/* ---------- konu haritası: tüm dersler görünümü ---------- */
+await p2.evaluate(() => { const w = openApp("topics"); w.state.course = "*"; APPS.topics.render(w); });
+await p2.waitForTimeout(300);
+check("tüm dersler görünümü her dersin konularını gösteriyor", await p2.evaluate(() => {
+  const t = [...WINS.values()].find(w => w.appId === "topics").body.textContent;
+  return DB.topics.every(x => t.includes(x.name))
+    && DB.courses.every(c => t.includes(c.name));
+}));
+
+/* ---------- ders silme ---------- */
+const dersOnce = await p2.evaluate(() => {
+  const id = DB.courses[0].id;
+  return { id, ders: DB.courses.length, konu: DB.topics.length, not: DB.notes.length,
+    cop: (DB.trash || []).length,
+    kendi: DB.topics.filter(t => t.courseId === id).length };
+});
+await p2.evaluate(id => document.querySelector(`[data-delc="${id}"]`).click(), dersOnce.id);
+await p2.waitForTimeout(250);
+check("ders silmeden önce ne gideceğini söylüyor", await p2.evaluate(() => {
+  const o = document.querySelector(".ovl");
+  return !!o && o.textContent.includes("Çöp kutusu") && /\d+ konu/.test(o.textContent);
+}));
+await p2.evaluate(() => [...document.querySelectorAll(".ovl button")]
+  .find(b => b.textContent.trim() === "Sil").click());
+await p2.waitForTimeout(400);
+const dersSonra = await p2.evaluate(() => ({ ders: DB.courses.length, konu: DB.topics.length,
+  cop: DB.trash.length, tip: DB.trash[DB.trash.length - 1].type, acik: document.querySelectorAll(".ovl").length }));
+check("ders silindi ve konuları da gitti",
+  dersSonra.ders === dersOnce.ders - 1 && dersSonra.konu === dersOnce.konu - dersOnce.kendi,
+  JSON.stringify(dersSonra));
+check("tek parça çöp kaydı yazıldı",
+  dersSonra.cop === dersOnce.cop + 1 && dersSonra.tip === "course");
+check("silme sonrası uyarı katmanı kapandı", dersSonra.acik === 0);
+check("konu haritası silinen derste takılı kalmıyor", await p2.evaluate(() => {
+  const w = [...WINS.values()].find(x => x.appId === "topics");
+  return !w.body.textContent.includes("undefined");
+}));
+/* geri alınca her şey dönmeli */
+await p2.evaluate(() => { const e = DB.trash.filter(x => x.type === "course").pop();
+  restoreTrash(e.id); save(); refreshAll(); });
+await p2.waitForTimeout(300);
+check("çöpten geri alınca ders ve içeriği döndü", await p2.evaluate(() => DB.courses.length) === dersOnce.ders
+  && await p2.evaluate(() => DB.topics.length) === dersOnce.konu
+  && await p2.evaluate(() => DB.notes.length) === dersOnce.not);
+
+/* ---------- paket talimatı ---------- */
+await p2.evaluate(() => { const w = [...WINS.values()].find(x => x.appId === "settings") || openApp("settings");
+  APPS.settings.render(w); });
+await p2.waitForTimeout(250);
+await p2.evaluate(() => [...WINS.values()].find(x => x.appId === "settings")
+  .body.querySelector('[data-a="packdoc"]').click());
+await p2.waitForTimeout(250);
+check("paket talimatı gösteriliyor ve seçilebiliyor", await p2.evaluate(() => {
+  const t = document.querySelector("[data-tal]");
+  return !!t && t.value.includes('"studyosPaket": 1') && t.value.includes("BURAYA KONUYU YAZ");
+}));
+await p2.evaluate(() => [...document.querySelectorAll(".ovl button")]
+  .find(b => b.textContent.trim() === "Kapat").click());
+await p2.waitForTimeout(150);
+
 check("veri güvenliği bölümünde konsol hatası yok", errs2.length === 0, errs2.slice(0, 3).join(" | "));
 
 await b.close();

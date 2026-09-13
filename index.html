@@ -313,6 +313,13 @@ textarea.inp{resize:none;line-height:1.6}
 #modalbox{width:min(420px,92vw);background:var(--surface-solid);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px}
 #modalbox .fl{margin-bottom:10px}
 #modalbox label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+/* çoklu seçim alanı (ör. sınavın dersleri) */
+#modalbox .multi{display:flex;flex-wrap:wrap;gap:7px 14px;align-items:center;
+  max-height:190px;overflow:auto;padding:8px;border:1px solid var(--border-2);border-radius:10px}
+#modalbox .multi label{display:flex;align-items:center;gap:6px;margin:0;font-size:13px;
+  color:var(--text);cursor:pointer}
+#modalbox .multi input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
+#modalbox .multi .msep{flex-basis:100%;height:0}
 /* Pencere geçişi (Alt+Tab) */
 #switcher{position:fixed;inset:0;z-index:9500;display:none;place-items:center;background:rgba(0,0,0,.4)}
 #switcher.on{display:grid}
@@ -428,7 +435,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.9", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="4.0", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -686,14 +693,34 @@ function dialog(title,fields){
     $("#modalfields").innerHTML=fields.map(f=>{
       if(f.type==="select") return `<div class="fl"><label>${esc(f.label)}</label>
         <select class="inp" data-f="${f.k}">${f.options.map(o=>`<option value="${esc(o.v)}" ${o.v==f.value?"selected":""}>${esc(o.l)}</option>`).join("")}</select></div>`;
+      /* çoklu seçim: değer bir dizi döner */
+      if(f.type==="multi"){ const sec=new Set(f.value||[]);
+        return `<div class="fl"><label>${esc(f.label)}</label>
+        <div class="multi" data-f="${f.k}" data-multi="1">
+          ${f.options.map(o=>`<label><input type="checkbox" value="${esc(o.v)}" ${sec.has(o.v)?"checked":""}>${esc(o.l)}</label>`).join("")}
+          ${f.options.length>1?`<span class="msep"></span><button type="button" class="btn sm" data-mall="${f.k}">Tümünü seç</button>
+            <button type="button" class="btn sm" data-mnone="${f.k}">Temizle</button>`:""}
+        </div></div>`; }
       return `<div class="fl"><label>${esc(f.label)}</label>
         <input class="inp" data-f="${f.k}" type="${f.type||"text"}" value="${esc(f.value??"")}" ${f.min!=null?`min="${f.min}"`:""} ${f.max!=null?`max="${f.max}"`:""} placeholder="${esc(f.ph||"")}"></div>`;
     }).join("");
+    /* Alana dokununca içindeki değer seçili gelsin: tablette "1" duran süre
+       kutusuna 3 yazınca 13 oluyordu (bkz. takvim blok süresi hatası). */
+    $$("#modalfields input.inp").forEach(i=>{
+      const sec=()=>{ try{ i.select(); }catch(e){} };
+      i.onfocus=()=>{ sec(); setTimeout(sec,0); };
+      /* sayı kutusunda her dokunuş değeri seçsin — kısa değerler hep baştan yazılır */
+      if(i.type==="number") i.onclick=()=>setTimeout(sec,0); });
+    $$("#modalfields [data-mall]").forEach(b=>b.onclick=()=>
+      $$("input",b.closest(".multi")).forEach(c=>c.checked=true));
+    $$("#modalfields [data-mnone]").forEach(b=>b.onclick=()=>
+      $$("input",b.closest(".multi")).forEach(c=>c.checked=false));
     box.classList.add("on");
     const first=$("#modalfields .inp"); setTimeout(()=>first?.focus(),40);
     const done=v=>{ box.classList.remove("on"); $("#modalok").onclick=null; $("#modalcancel").onclick=null;
       box.onclick=null; $("#modalfields").onkeydown=null; res(v); };
-    const ok=()=>{ const out={}; $$("#modalfields [data-f]").forEach(i=>out[i.dataset.f]=i.value); done(out); };
+    const ok=()=>{ const out={}; $$("#modalfields [data-f]").forEach(i=>
+      out[i.dataset.f]= i.dataset.multi ? $$("input:checked",i).map(c=>c.value) : i.value); done(out); };
     $("#modalok").onclick=ok;
     $("#modalcancel").onclick=()=>done(null);
     box.onclick=e=>{ if(e.target===box) done(null); };
@@ -775,6 +802,11 @@ function trashRefs(e){
     if(e.data?.imgB) out.push(e.data.imgB); }                     /* kartın iki yüzü de olabilir */
   else if(e.type==="deck") (e.data?.cards||[]).forEach(c=>{
     if(c.img) out.push(c.img); if(c.imgB) out.push(c.imgB); });
+  else if(e.type==="course"){                       /* ders kaydı her şeyi taşır */
+    (e.data?.notes||[]).forEach(nota);
+    [...(e.data?.cards||[]),...(e.data?.terms||[])].forEach(c=>{
+      if(c.img) out.push(c.img); if(c.imgB) out.push(c.imgB); });
+  }
   return out;
 }
 /* 30 günü geçenleri ve 300 KB'ı aşan fazlalığı kalıcı siler — çöp,
@@ -793,12 +825,54 @@ function restoreTrash(id){
   const e=DB.trash.splice(i,1)[0], d=e.data;
   if(e.type==="deck"){ DB.decks.push(d.deck); DB.cards.push(...(d.cards||[])); }
   else if(e.type==="topic"){ DB.topics.push(...(d.topics||[])); }
+  else if(e.type==="course"){
+    if(d.course) DB.courses.push(d.course);
+    COP_DERS_DIZI.forEach(k=>{ if(d[k]?.length) DB[k].push(...d[k]); });
+    /* çok dersli sınavlardan yalnızca bu ders çıkarılmıştı — geri koy */
+    if(d.course) (d.examEk||[]).forEach(xid=>{ const x=DB.exams.find(y=>y.id===xid); if(!x) return;
+      x.courseIds=[...new Set([...(x.courseIds||[x.courseId]).filter(Boolean),d.course.id])];
+      x.courseId=x.courseIds[0]; });
+  }
   else DB[COP_DIZI[e.type]].push(d);
   return e;
 }
 function dropTrash(id){
   const i=(DB.trash||[]).findIndex(e=>e.id===id); if(i<0) return;
   trashRefs(DB.trash[i]).forEach(dropMedia); DB.trash.splice(i,1);
+}
+
+/* --------- ders silme ---------
+   Derse bağlı ne varsa TEK bir çöp kaydına gider; geri alınca ders,
+   konuları, notları, desteleri ve kartları ilişkileri bozulmadan döner.
+   Birden çok dersi kapsayan sınav silinmez, yalnızca bu dersi bırakır. */
+const COP_DERS_DIZI=["topics","notes","decks","cards","tasks","quizzes","events","exams","sessions","terms"];
+function courseContents(id){
+  const decks=DB.decks.filter(d=>d.courseId===id), dids=new Set(decks.map(d=>d.id));
+  const sadeceBu=e=>examCourses(e).length===1&&examCourses(e)[0]===id;
+  return { course:course(id),
+    topics:(DB.topics||[]).filter(x=>x.courseId===id),
+    notes:(DB.notes||[]).filter(x=>x.courseId===id),
+    decks, cards:(DB.cards||[]).filter(c=>dids.has(c.deckId)),
+    tasks:(DB.tasks||[]).filter(x=>x.courseId===id),
+    quizzes:(DB.quizzes||[]).filter(x=>x.courseId===id),
+    events:(DB.events||[]).filter(x=>x.courseId===id),
+    exams:(DB.exams||[]).filter(sadeceBu),
+    sessions:(DB.sessions||[]).filter(x=>x.courseId===id),
+    terms:(DB.terms||[]).filter(x=>x.courseId===id),
+    examEk:(DB.exams||[]).filter(e=>!sadeceBu(e)&&examCourses(e).includes(id)).map(e=>e.id) };
+}
+function deleteCourse(id){
+  const c=course(id); if(!c) return null;
+  const d=courseContents(id);
+  toTrash("course",c.name,d);
+  const kaldir=(k)=>{ const ids=new Set(d[k].map(x=>x.id)); DB[k]=DB[k].filter(x=>!ids.has(x.id)); };
+  COP_DERS_DIZI.forEach(kaldir);
+  /* çok dersli sınavlarda yalnızca bu dersi düşür */
+  d.examEk.forEach(xid=>{ const x=DB.exams.find(y=>y.id===xid); if(!x) return;
+    x.courseIds=examCourses(x).filter(cid=>cid!==id); x.courseId=x.courseIds[0]; });
+  DB.courses=DB.courses.filter(x=>x.id!==id);
+  if(DB.settings.lastCourse===id) DB.settings.lastCourse=DB.courses[0]?.id||"";
+  return d;
 }
 
 /* localStorage bozuksa: üstüne yazmadan kullanıcıya sor */
@@ -2036,6 +2110,16 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
 /* ---------------- Takvim (gerçek tarihli) + Sınavlar ---------------- */
 function mondayOf(d){ const x=new Date(d+"T12:00:00"); const wd=(x.getDay()+6)%7; return addDays(d,-wd); }
 function examList(){ return DB.exams.slice().filter(e=>e.date>=addDays(today(),-1)).sort((a,b)=>a.date.localeCompare(b.date)); }
+/* Bir sınav birden çok dersi kapsayabilir (TUS, YKS gibi). Eski kayıtlarda
+   yalnızca tek `courseId` vardı — göç gerekmesin diye okuma tek yerden geçer. */
+function examCourses(e){
+  const ids=(e?.courseIds?.length?e.courseIds:[e?.courseId]).filter(Boolean);
+  return [...new Set(ids)].filter(id=>course(id));
+}
+/* Blok süresi artık yazılmıyor, seçiliyor: tablette dolu sayı kutusuna
+   dokunup yazınca rakam eskisinin yanına ekleniyordu (1 + "3" = 13). */
+function hourOpts(max){ const n=Math.max(1,Math.min(8,max));
+  return [...Array(n)].map((_,i)=>({v:String(i+1),l:(i+1)+" saat"})); }
 APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true,
   render(w){
     const s=w.state; s.week=s.week||mondayOf(today());
@@ -2062,9 +2146,10 @@ APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true
       <div class="sidebar" style="width:210px">
         <div class="h2">🎓 Sınav geri sayımı</div>
         <div style="margin-top:8px">${examList().map(e=>{const n=dayDiff(today(),e.date);
-          return `<div class="exam"><span class="dotc" style="background:${ccolor(e.courseId)}"></span>
-            <div class="grow" style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</div>
-            <div class="sub">${esc(e.date)}</div></div>
+          const ds=examCourses(e);
+          return `<div class="exam"><span class="dotc" style="background:${ccolor(ds[0])}"></span>
+            <div class="grow" style="min-width:0;cursor:pointer" data-ee="${e.id}" title="Düzenle"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</div>
+            <div class="sub">${esc(e.date)} · ${ds.length>1?ds.length+" ders":esc(cname(ds[0]))}</div></div>
             <span class="cd" style="color:${n<=3?"var(--bad)":n<=7?"var(--warn)":"var(--text)"}">${n<=0?"bugün":n+"g"}</span>
             <span data-xe="${e.id}" style="cursor:pointer;opacity:.6">✕</span></div>`;}).join("")
           ||`<div class="sub">Yaklaşan sınav yok</div>`}</div>
@@ -2092,13 +2177,22 @@ APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true
     A("today").onclick=()=>{s.week=mondayOf(today());this.render(w);};
     A("clr").onclick=()=>{ if(confirm("Bu haftanın blokları ve tekrar edenler silinsin mi?")){
       const ids=new Set(weekEvents.map(e=>e.id)); DB.events=DB.events.filter(e=>!ids.has(e.id)); saveAnd("calendar"); }};
-    A("addexam").onclick=async()=>{
-      const v=await dialog("Sınav ekle",[
-        {k:"name",label:"Sınav adı",value:"Deneme sınavı"},
-        {k:"date",label:"Tarih",type:"date",value:addDays(today(),7)},
-        {k:"course",label:"Ders",type:"select",value:DB.courses[0]?.id,options:DB.courses.map(c=>({v:c.id,l:c.name}))}]);
-      if(!v||!v.date)return; DB.exams.push({id:uid(),name:v.name||"Sınav",date:v.date,courseId:v.course});
+    const examForm=async x=>{
+      if(!DB.courses.length){ toast("Önce bir ders ekle (Konu Haritası)"); return; }
+      const v=await dialog(x?"Sınavı düzenle":"Sınav ekle",[
+        {k:"name",label:"Sınav adı",value:x?x.name:"Deneme sınavı"},
+        {k:"date",label:"Tarih",type:"date",value:x?x.date:addDays(today(),7)},
+        {k:"courses",label:"Hangi dersleri kapsıyor? (birden çok seçilebilir)",type:"multi",
+          value:x?examCourses(x):[DB.courses[0].id],
+          options:DB.courses.map(c=>({v:c.id,l:c.name}))}]);
+      if(!v||!v.date) return;
+      const ids=(v.courses||[]).filter(id=>course(id));
+      if(!ids.length){ toast("En az bir ders seçmelisin"); return; }
+      if(x){ x.name=v.name||"Sınav"; x.date=v.date; x.courseIds=ids; x.courseId=ids[0]; }
+      else DB.exams.push({id:uid(),name:v.name||"Sınav",date:v.date,courseIds:ids,courseId:ids[0]});
       saveAnd("calendar"); paintWidgets(); };
+    A("addexam").onclick=()=>examForm(null);
+    $$("[data-ee]",w.body).forEach(b=>b.onclick=()=>examForm(DB.exams.find(e=>e.id===b.dataset.ee)));
     $$("[data-xe]",w.body).forEach(b=>b.onclick=()=>{ const x=DB.exams.find(e=>e.id===b.dataset.xe);
       if(x) toTrash("exam",`${x.name} · ${x.date}`,x);
       DB.exams=DB.exams.filter(e=>e.id!==b.dataset.xe); saveAnd("calendar"); paintWidgets(); });
@@ -2108,10 +2202,10 @@ APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true
       const v=await dialog(`${trDay[i]} ${pad(h)}:00 — blok ekle`,[
         {k:"title",label:"Başlık",value:"Çalışma"},
         {k:"course",label:"Ders",type:"select",value:DB.courses[0]?.id,options:DB.courses.map(c=>({v:c.id,l:c.name}))},
-        {k:"len",label:"Süre (saat)",type:"number",value:1,min:1,max:6},
+        {k:"len",label:"Süre",type:"select",value:"1",options:hourOpts(24-h)},
         {k:"rep",label:"Tekrar",type:"select",value:"week",options:[{v:"week",l:"Her hafta"},{v:"once",l:"Sadece bu hafta"}]}]);
       if(!v)return;
-      const len=Math.max(1,Math.min(6,+v.len||1));
+      const len=Math.max(1,Math.min(24-h,+v.len||1));
       DB.events.push({id:uid(), ...(v.rep==="once"?{date:days[i]}:{day:i}),
         start:h, end:Math.min(24,h+len), courseId:v.course, title:v.title||"Çalışma"});
       saveAnd("calendar"); });
@@ -2122,8 +2216,9 @@ APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true
       const v=await dialog("Bloğu düzenle",[
         {k:"title",label:"Başlık",value:ev.title},
         {k:"course",label:"Ders",type:"select",value:ev.courseId,options:DB.courses.map(c=>({v:c.id,l:c.name}))},
-        {k:"start",label:"Başlangıç saati",type:"number",value:ev.start,min:0,max:23},
-        {k:"len",label:"Süre (saat)",type:"number",value:ev.end-ev.start,min:1,max:6}]);
+        {k:"start",label:"Başlangıç saati",type:"select",value:String(ev.start),
+          options:[...Array(24)].map((_,x)=>({v:String(x),l:pad(x)+":00"}))},
+        {k:"len",label:"Süre",type:"select",value:String(ev.end-ev.start),options:hourOpts(8)}]);
       if(!v)return;
       ev.title=v.title; ev.courseId=v.course; ev.start=Math.max(0,Math.min(23,+v.start));
       ev.end=Math.min(24,ev.start+Math.max(1,+v.len||1)); saveAnd("calendar"); });
@@ -2133,35 +2228,76 @@ APPS.calendar={ name:"Takvim", icon:"📅", w:900, h:600, desk:true, single:true
 const STLABEL={new:"Başlanmadı",learning:"Öğreniyorum",known:"Biliyorum"};
 APPS.topics={ name:"Konu Haritası", icon:"🧠", w:680, h:560, desk:true, single:true,
   render(w){
-    const s=w.state; if(!s.course||!course(s.course)) s.course=DB.courses[0]?.id;
-    const list=DB.topics.filter(t=>t.courseId===s.course);
-    const prog=c=>{const ts=DB.topics.filter(t=>t.courseId===c); if(!ts.length)return 0;
+    const s=w.state, TUM="*";
+    if(s.course!==TUM&&(!s.course||!course(s.course))) s.course=DB.courses[0]?.id;
+    const hepsi=s.course===TUM;
+    const prog=ts=>{ if(!ts.length)return 0;
       return Math.round(ts.reduce((a,t)=>a+(t.status==="known"?1:t.status==="learning"?.5:0),0)/ts.length*100);};
-    const draw=(parent,depth)=>list.filter(t=>t.parentId===parent).map(t=>`
+    const progC=c=>prog(DB.topics.filter(t=>t.courseId===c));
+    const draw=(list,parent,depth)=>list.filter(t=>t.parentId===parent).map(t=>`
       <div class="tree-node" style="margin-left:${depth*20}px">
         <span class="st ${t.status}" data-s="${t.id}" title="${STLABEL[t.status]}"></span>
         <span class="grow" style="${t.status==="known"?"opacity:.65":""}">${esc(t.name)}</span>
         <span class="tag">${STLABEL[t.status]}</span>
         <button class="btn sm" data-add="${t.id}" title="Alt konu">+</button>
         <button class="btn sm danger" data-x="${t.id}">✕</button>
-      </div>${draw(t.id,depth+1)}`).join("");
+      </div>${draw(list,t.id,depth+1)}`).join("");
+    /* "Tüm dersler" görünümü: sınavı bütün dersleri kapsayanlar (TUS, YKS…)
+       ağacın tamamını tek ekranda görsün diye */
+    const grup=c=>{ const list=DB.topics.filter(t=>t.courseId===c.id);
+      return `<div class="row" style="margin:14px 0 4px">
+          <span class="dotc" style="background:${c.color}"></span><b class="grow">${esc(c.name)}</b>
+          <span class="sub">%${progC(c.id)}</span>
+          <button class="btn sm" data-root="${c.id}">+ Ana konu</button></div>
+        ${draw(list,null,0)||`<div class="sub" style="margin-left:6px">Bu derste konu yok.</div>`}`;};
+    const govde=hepsi
+      ? (DB.courses.map(grup).join("")||`<div class="empty">Hiç ders yok.<br><b>+ Ders</b> ile başla.</div>`)
+      : (draw(DB.topics.filter(t=>t.courseId===s.course),null,0)
+         ||`<div class="empty">Bu derste konu yok.<br><b>+ Ana konu</b> ile ağacı kur.</div>`);
+    const yuzde=hepsi?prog(DB.topics):progC(s.course);
     w.body.innerHTML=`<div class="app" style="flex-direction:row">
-      <div class="sidebar">${DB.courses.map(c=>`<div class="item ${c.id===s.course?"sel":""}" data-c="${c.id}">
+      <div class="sidebar">
+        <div class="item ${hepsi?"sel":""}" data-c="${TUM}"><span class="grow"><b>Tüm dersler</b></span>
+          <span class="sub">%${prog(DB.topics)}</span></div>
+        <div class="sep"></div>
+        ${DB.courses.map(c=>`<div class="item ${c.id===s.course?"sel":""}" data-c="${c.id}">
           <span class="dotc" style="background:${c.color}"></span><span class="grow">${esc(c.name)}</span>
-          <span class="sub">%${prog(c.id)}</span></div>`).join("")}
+          <span class="sub">%${progC(c.id)}</span>
+          <span data-delc="${c.id}" title="Dersi sil" style="cursor:pointer;opacity:.55;padding:0 2px">✕</span></div>`).join("")}
         <div class="sep"></div><button class="btn sm" style="width:100%" data-a="newcourse">+ Ders</button></div>
       <div class="app grow">
-        <div class="toolbar"><b class="grow">${esc(cname(s.course))}</b>
-          <button class="btn pri sm" data-a="root">+ Ana konu</button></div>
+        <div class="toolbar"><b class="grow">${hepsi?`Tüm dersler · ${DB.courses.length} ders`:esc(cname(s.course))}</b>
+          ${hepsi?"":`<button class="btn pri sm" data-a="root">+ Ana konu</button>`}</div>
         <div class="pad" style="padding-bottom:0">
-          <div class="row sub"><span class="grow">İlerleme</span><b>%${prog(s.course)}</b></div>
-          <div class="meter" style="margin-top:6px"><i style="width:${prog(s.course)}%;background:${ccolor(s.course)}"></i></div>
+          <div class="row sub"><span class="grow">İlerleme</span><b>%${yuzde}</b></div>
+          <div class="meter" style="margin-top:6px"><i style="width:${yuzde}%;background:${hepsi?"var(--accent)":ccolor(s.course)}"></i></div>
         </div>
-        <div class="grow scroll pad">${draw(null,0)||`<div class="empty">Bu derste konu yok.<br><b>+ Ana konu</b> ile ağacı kur.</div>`}</div>
+        <div class="grow scroll pad">${govde}</div>
         <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
           <span class="sub">Renkli kareye tıkla: başlanmadı → öğreniyorum → biliyorum</span></div>
       </div></div>`;
-    $$("[data-c]",w.body).forEach(b=>b.onclick=()=>{s.course=b.dataset.c;this.render(w);});
+    $$("[data-c]",w.body).forEach(b=>b.onclick=e=>{ if(e.target.dataset.delc) return;
+      s.course=b.dataset.c;this.render(w);});
+    $$("[data-delc]",w.body).forEach(b=>b.onclick=e=>{ e.stopPropagation();
+      const id=b.dataset.delc, c=course(id); if(!c) return;
+      const d=courseContents(id);
+      const say=[[d.topics.length,"konu"],[d.notes.length,"not"],[d.decks.length,"deste"],
+        [d.cards.length,"kart"],[d.tasks.length,"görev"],[d.quizzes.length,"test"],
+        [d.events.length,"takvim bloğu"],[d.exams.length,"sınav"],
+        [d.sessions.length,"çalışma kaydı"],[d.terms.length,"sözlük terimi"]]
+        .filter(x=>x[0]).map(x=>x[0]+" "+x[1]);
+      bigNotice(`🗑 "${esc(c.name)}" dersini sil`,
+        (say.length?`Bu derse bağlı <b>${say.join(", ")}</b> da birlikte gidecek.`
+                   :`Bu derse bağlı başka kayıt yok.`)+
+        (d.examEk.length?`<br>${d.examEk.length} çok dersli sınav silinmez, yalnızca bu dersi bırakır.`:"")+
+        `<br><br>Hepsi <b>tek parça hâlinde çöpe</b> gider:
+         Ayarlar → Veri → <b>🗑 Çöp kutusu</b>'ndan 30 gün içinde geri alabilirsin.`,
+        [{label:"Vazgeç",run:close=>close()},
+         {label:"Sil",danger:true,run:close=>{ deleteCourse(id);
+           if(s.course===id) s.course=DB.courses[0]?.id||TUM;
+           close(); save(); refreshAll(); toast(`"${c.name}" çöpe taşındı`); }}]);});
+    $$("[data-root]",w.body).forEach(b=>b.onclick=()=>{const n=prompt("Konu adı:");if(!n)return;
+      DB.topics.push({id:uid(),courseId:b.dataset.root,parentId:null,name:n,status:"new"});saveAnd("topics","stats");});
     $$("[data-s]",w.body).forEach(b=>b.onclick=()=>{const t=DB.topics.find(x=>x.id===b.dataset.s);
       t.status={new:"learning",learning:"known",known:"new"}[t.status];saveAnd("topics","stats");});
     $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{const id=b.dataset.x;
@@ -2173,8 +2309,10 @@ APPS.topics={ name:"Konu Haritası", icon:"🧠", w:680, h:560, desk:true, singl
       DB.topics=DB.topics.filter(t=>!idler.has(t.id));
       saveAnd("topics","stats");});
     $$("[data-add]",w.body).forEach(b=>b.onclick=()=>{const n=prompt("Alt konu adı:");if(!n)return;
-      DB.topics.push({id:uid(),courseId:s.course,parentId:b.dataset.add,name:n,status:"new"});saveAnd("topics","stats");});
-    $('[data-a="root"]',w.body).onclick=()=>{const n=prompt("Konu adı:");if(!n)return;
+      const ust=DB.topics.find(t=>t.id===b.dataset.add);      /* ders üst konudan gelir */
+      DB.topics.push({id:uid(),courseId:ust?.courseId||s.course,parentId:b.dataset.add,name:n,status:"new"});
+      saveAnd("topics","stats");});
+    if($('[data-a="root"]',w.body)) $('[data-a="root"]',w.body).onclick=()=>{const n=prompt("Konu adı:");if(!n)return;
       DB.topics.push({id:uid(),courseId:s.course,parentId:null,name:n,status:"new"});saveAnd("topics","stats");};
     $('[data-a="newcourse"]',w.body).onclick=()=>{const n=prompt("Ders adı:");if(!n)return;
       const c={id:uid(),name:n,color:COLORS[DB.courses.length%COLORS.length]};DB.courses.push(c);s.course=c.id;saveAnd("topics","stats","tasks","notes");};
@@ -2282,7 +2420,7 @@ function weakTopics(minAdet=3,limit=5){
     .map(([id,a])=>({id,ad:DB.topics.find(t=>t.id===id)?.name||"—",
       courseId:DB.topics.find(t=>t.id===id)?.courseId,
       dogru:a.d,yanlis:a.y,toplam:a.d+a.y,oran:a.y/Math.max(1,a.d+a.y)}))
-    .filter(x=>x.toplam>=minAdet&&x.yanlis>0)
+    .filter(x=>x.courseId&&x.toplam>=minAdet&&x.yanlis>0)   /* silinmiş konuyu listeleme */
     .sort((a,b)=>b.oran-a.oran||b.toplam-a.toplam)
     .slice(0,limit);
 }
@@ -2292,6 +2430,45 @@ function weakTopics(minAdet=3,limit=5){
    deste/test/terim setlerini mevcut veriye dokunmadan almak için.
    Anahtarlar Türkçe: dosya elle de düzenlenebilsin. */
 const PAKET_SURUM=1;
+/* Başka bir yapay zekâya verilecek talimat. PAKET.md'deki "Talimat" bölümünün
+   aynısı — ikisini birlikte güncelle. Tablette sekme değiştirmeden
+   kopyalanabilsin diye uygulamanın içinde duruyor. */
+const PAKET_TALIMAT=`StudyOS paketi hazırla.
+
+Çıktı: SADECE tek bir JSON nesnesi. Açıklama, başlık, markdown kod bloğu ekleme.
+
+Biçim:
+{
+  "studyosPaket": 1,
+  "ad": "<paketin adı>",
+  "ders": "<ders adı, ör. Biyoloji>",
+  "konular": ["<konu adı>"],
+  "desteler": [
+    { "ad": "<deste adı>",
+      "kartlar": [ { "on": "<ön yüz: soru/kavram>", "arka": "<arka yüz: cevap>" } ] }
+  ],
+  "testler": [
+    { "ad": "<test adı>",
+      "sorular": [
+        { "s": "<soru>", "secenekler": ["<a>","<b>","<c>","<d>"], "dogru": 1,
+          "aciklama": "<doğru cevabın kısa gerekçesi>", "konu": "<konular listesinden biri>" }
+      ] }
+  ],
+  "terimler": [ { "terim": "<terim>", "tanim": "<1-2 cümle>", "esanlam": ["<eşanlam>"] } ]
+}
+
+Kurallar:
+- "dogru" sıfırdan başlayan şık sırasıdır (ilk şık için 0).
+- "konu" yazacaksan "konular" listesinde harfi harfine aynı geçmeli.
+- Her kartın ön yüzü TEK bir şey sorsun; arka yüz 1-3 cümle.
+- Aynı ön yüz iki kez geçmesin.
+- İstemediğin bölümü boş dizi bırak (ör. "testler": []).
+- Görsel, HTML, LaTeX yok — düz metin. Satır sonu gerekiyorsa \\n kullan.
+- Türkçe yaz.
+- Emin olmadığın bilgiyi yazma; uydurma tanım ezberlenirse zararlı olur.
+
+Konu: <BURAYA KONUYU YAZ>
+İstediğim: <ör. 30 kart + 15 çoktan seçmeli soru>`;
 const paketGecerli=p=>!!p&&p.studyosPaket===PAKET_SURUM&&
   (Array.isArray(p.desteler)||Array.isArray(p.testler)||Array.isArray(p.terimler));
 function paketOzet(p){
@@ -2408,11 +2585,13 @@ function dailyPlan(){
     if(!v||w>v.w) aday.set(k.id,{topicId:k.id,courseId:k.courseId,ad:k.name,w,neden}); };
   const sinavliDers=new Set();
   for(const e of examList()){
-    sinavliDers.add(e.courseId);
     const gun=Math.max(0,dayDiff(t,e.date));
-    for(const k of DB.topics.filter(k=>k.courseId===e.courseId&&k.status!=="known"))
-      koy(k, (1/Math.max(1,gun))*(k.status==="new"?1.2:1),
-        gun===0?`${e.name} · bugün!`:`${e.name} · ${gun} gün kaldı`);   /* sınav adı zaten "sınav" içerebilir */
+    for(const cid of examCourses(e)){            /* bir sınav birkaç dersi kapsayabilir */
+      sinavliDers.add(cid);
+      for(const k of DB.topics.filter(k=>k.courseId===cid&&k.status!=="known"))
+        koy(k, (1/Math.max(1,gun))*(k.status==="new"?1.2:1),
+          gun===0?`${e.name} · bugün!`:`${e.name} · ${gun} gün kaldı`);   /* sınav adı zaten "sınav" içerebilir */
+    }
   }
   for(const k of DB.topics){
     if(k.status!=="learning"||sinavliDers.has(k.courseId)||sonHafta.has(k.id)) continue;
@@ -3165,8 +3344,10 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
         </div>
         <div class="row" style="margin-top:8px;flex-wrap:wrap">
           <button class="btn" data-a="pack">📦 Paket ekle</button>
+          <button class="btn" data-a="packdoc">📋 Paket talimatı</button>
           <span class="sub grow" style="font-size:11.5px">Deste/test/terim paketini
-            <b>mevcut verinin üstüne</b> ekler. "Yedek yükle" ise her şeyi değiştirir.</span>
+            <b>mevcut verinin üstüne</b> ekler. "Yedek yükle" ise her şeyi değiştirir.
+            Talimatı başka bir yapay zekâya verip paket hazırlatabilirsin.</span>
         </div>
         <div class="row" style="margin-top:8px;flex-wrap:wrap">
           <button class="btn" data-a="snaps">🕘 Anlık görüntüler</button>
@@ -3269,6 +3450,22 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
     A("exp").onclick=exportJSON;
     A("imp").onclick=importJSON;
     A("pack").onclick=importPack;
+    A("packdoc").onclick=()=>{
+      const o=bigNotice("📋 Paket talimatı",
+        `Bu metni başka bir yapay zekâya ver; en alttaki iki satıra konuyu ve istediğin
+         kart/soru sayısını yaz. Dönen JSON'u bir dosyaya kaydedip <b>📦 Paket ekle</b> ile al.
+         <br><span class="sub">Ders içeriğinde model hata yapabilir — kartları bir gözden geçir.
+         En güvenlisi kendi notunu verip ondan kart çıkarttırmak.</span>
+         <textarea class="inp" data-tal readonly style="margin-top:10px;height:200px;
+           font-family:ui-monospace,SFMono-Regular,monospace;font-size:11.5px">${esc(PAKET_TALIMAT)}</textarea>`,
+        [{label:"📋 Kopyala",pri:true,run(){
+            const t=$("[data-tal]",o); t.focus(); t.select(); t.setSelectionRange(0,999999);
+            const bitir=k=>toast(k?"Panoya kopyalandı":"Kopyalanamadı — metni elle seç ve kopyala");
+            const eski=()=>{ try{ bitir(document.execCommand("copy")); }catch(e){ bitir(0); } };
+            if(navigator.clipboard?.writeText) navigator.clipboard.writeText(PAKET_TALIMAT).then(()=>bitir(1),eski);
+            else eski(); }},
+         {label:"Kapat",run:close=>close()}]);
+    };
     if(A("undoimp")) A("undoimp").onclick=()=>{ undoImport(); this.render(w); };
     A("snaps").onclick=()=>snapScreen();
     A("trash").onclick=()=>trashScreen(()=>this.render(w));

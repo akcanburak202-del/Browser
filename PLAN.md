@@ -344,6 +344,36 @@ renklerini taşıyor (beyaza yakın metin, `rgba(255,255,255,.15)` zemin).
 Duman testi iki temada da `✕ Kapat`, `↶` ve `Temizle` düğmelerinin metin parlaklığını ve
 zemin saydamlığını ölçüyor; bu kusur bir daha sessizce dönemez.
 
+## Kullanım turu (sürüm 4.0)
+
+Dört bildirim, dördü de gerçek:
+
+**1. Takvimde blok girilen süreyle açılmıyordu.** Kök neden diyalogdaydı, takvimde değil:
+`type="number"` kutusu "1" doluyken tablette üzerine dokunup 3 yazınca değer **13** oluyor,
+`Math.min(6,13)` de 6 saatlik blok açıyordu. Tekrar tıklayıp düzeltince alan seçili
+geldiğinden doğru çalışıyordu — kullanıcının anlattığı davranış tam olarak buydu.
+Playwright'ta `click` + `type` ile birebir üretildi.
+Çözüm iki katmanlı: `dialog()` alana odaklanınca içeriği seçiyor (sayı kutusunda her
+dokunuşta), ve saat/süre alanları artık **açılır liste** (`hourOpts()`), yani yazılmıyor.
+
+**2. Konu haritasında ders silinemiyor.** `+ Ders` vardı, karşılığı yoktu.
+`deleteCourse()` derse bağlı ne varsa (konu, not, deste+kartlar, görev, test, takvim bloğu,
+sınav, çalışma kaydı, sözlük terimi) **tek bir çöp kaydına** koyar; geri alınca ilişkiler
+bozulmadan döner. Silmeden önce ne gideceği sayılarla yazılır. Birden çok dersi kapsayan
+sınav silinmez, yalnızca o dersi bırakır (geri alınca yeniden kapsar).
+
+**3. Sınav tek ders seçtiriyordu.** TUS/YKS gibi sınavlar bütün dersleri kapsıyor.
+`dialog()`'a `type:"multi"` alanı eklendi; sınav artık `courseIds` taşıyor ve günlük plan
+sınavın **her dersinin** konularını çağırıyor. Eski tek dersli kayıtlar `examCourses()`
+sayesinde olduğu gibi çalışıyor, göç gerekmedi.
+Konu haritasına da **"Tüm dersler"** görünümü eklendi — çok dersli bir sınava çalışırken
+ağacın tamamı tek ekranda.
+
+**4. Paket talimatı.** `PAKET.md` yazıldı: biçimin tamamı + başka bir yapay zekâya
+olduğu gibi verilebilecek talimat. Aynı metin uygulamada da var
+(Ayarlar → Veri → **📋 Paket talimatı** panoya kopyalar), böylece tablette sekme
+değiştirmeden kullanılabiliyor. Birim test ikisinin ayrışmadığını sınıyor.
+
 ## Reddedilen / ertelenen
 
 - **Kaynağı 4 dosyaya bölüp build betiğiyle birleştirmek.** "Klonla, `index.html`'i aç, çalışır"

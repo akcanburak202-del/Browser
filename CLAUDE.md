@@ -35,6 +35,7 @@ Yeni oturumda önce bunu oku, sonra `README.md`'ye ve `git log`'a bak.
 | `tests/smoke.mjs` | `node tests/smoke.mjs` — Playwright duman testi (arayüz + açılış yolları) |
 | `tests/unit.mjs` | `node tests/unit.mjs` — tarayıcısız mantık testi; kendini 4 zaman diliminde çalıştırır |
 | `PLAN.md` | İnceleme sonrası parti parti yol haritası, hangi partinin bittiği işaretli |
+| `PAKET.md` | Paket biçimi + başka bir yapay zekâya verilecek talimat. **`PAKET_TALIMAT` ile birebir aynı kalmalı** (birim test sınıyor) |
 
 ## index.html mimarisi
 
@@ -140,6 +141,26 @@ Script blokları sırayla:
   sayısını yazar; o çubuk olmadan düğme bozuk görünüyor (kullanıcı hata sandı).
 - **Serbest tekrar (cram) SM-2'ye dokunmaz.** `w.state.cram` açıkken `grade()` ne `sm2()` çağırır
   ne kota harcar; yeni bir tekrar kipi eklersen aynı ayrımı koru.
+- **Diyalogda kısa sayı isteme — açılır liste kullan.** Tablette dolu bir sayı kutusuna
+  dokunup yazınca rakam eskisinin **yanına** ekleniyor: süre 1 iken 3 yazılınca 13 oluyordu
+  ve takvim bloğu yanlış süreyle açılıyordu. `dialog()` artık alana odaklanınca içeriği
+  seçiyor (sayı kutusunda her dokunuşta), ama asıl çözüm saat/süre gibi alanları
+  `type:"select"` yapmak — takvimde `hourOpts()` bunu üretir.
+- **`dialog()` çoklu seçim alanı: `type:"multi"`.** Değer olarak **dizi** alır ve dizi döner
+  (diğer alanlar dize döner — karıştırma). Onay kutuları `#modalbox .multi` altında, tema
+  renklerini kendi kuralları taşır (genel `#modalbox label` kuralı onları ezerdi).
+- **Bir sınav birden çok dersi kapsayabilir** (TUS, YKS). Tek okuma kapısı `examCourses(e)`:
+  yeni `courseIds` varsa onu, yoksa eski `courseId`'yi verir ve silinmiş dersleri ayıklar.
+  Yazarken **ikisini birden** doldur (`courseIds` + `courseId=courseIds[0]`), eski kayıtlara
+  göç gerekmesin. Sınav okuyan yeni kod yazarken `e.courseId` deme, `examCourses(e)` de.
+- **Ders silme `deleteCourse(id)` ile ve TEK çöp kaydına.** `courseContents(id)` derse bağlı
+  ne varsa toplar (`COP_DERS_DIZI` dizileri + kartlar deste üzerinden); geri alınca ilişkiler
+  bozulmadan döner. Çok dersli sınav **silinmez**, yalnızca o dersi bırakır — geri alma için
+  `examEk` içinde sınav kimlikleri tutulur. Yeni bir koleksiyona `courseId` eklersen
+  `COP_DERS_DIZI`'ye de ekle; birim test dizilerin DB'de var olduğunu sınıyor.
+- **Konu haritasında `s.course === "*"` "Tüm dersler" görünümüdür.** Ders ayırt etmeden
+  hepsini gösterir; o kipte `+ Ana konu` üst çubuktan kalkar, her ders grubunun kendi
+  düğmesi olur (`data-root`). Alt konu eklerken ders **üst konudan** alınır, `s.course`'tan değil.
 - **Günlük plan türetilmiştir, veriye yazılmaz.** `dailyPlan()` (3. bloğun sonunda, blok 1-3'te
   durduğu için birim testten erişilebilir) her çağrıda yeniden hesaplar; saklanan tek şey
   `settings.planDone={date,ids}` ve tarih değişince kendiliğinden sıfırlanır.
@@ -163,6 +184,8 @@ Kart görselleri yüz başına ayrı: `img` **ön yüz**, `imgB` **arka yüz** (
 (`trashRefs`), yoksa çöpten kalıcı silmede görsel öksüz kalır.
 Quiz soruları `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,yanlış]}` dökümünden
 İstatistik'teki "zayıf konular" hesaplanır (`weakTopics()`).
+Sınavlar: `{id,name,date,courseIds:[...],courseId}` — `courseId` eski kayıtlarla uyum için
+ilk dersi tekrarlar; okuma `examCourses()` üzerinden.
 Ayarlar: `newPerDay` (varsayılan 20), `newSeen={date,n}`, `planDone={date,ids}`, `lastSnap`.
 
 **Paket biçimi** (`📦 Paket ekle` — `paketUygula()`): dışarıda hazırlanmış deste/test/terim
@@ -184,6 +207,11 @@ yeni ders açılır · aynı destede aynı ön yüz varsa kart atlanır (paketi 
 üretmez) · aynı adlı test numaralanır · eksik/bozuk kayıtlar atlanıp sayısı raporlanır ·
 öncesinde `takeSnapshot("paket")` alınır. **Bu akışta asla `DB=` ile toptan atama yapma** —
 "Yedek yükle" (`importJSON`) ile karıştırma, o her şeyi değiştirir.
+
+Biçimin tam anlatımı ve başka bir modele verilecek hazır talimat `PAKET.md`'de; aynı metin
+uygulamada `PAKET_TALIMAT` sabitinde durur (Ayarlar → Veri → **📋 Paket talimatı** panoya
+kopyalar). **İkisi ayrışmamalı** — `tests/unit.mjs` PAKET.md'deki kod bloğuyla sabiti
+karşılaştırıyor, birini değiştirirken diğerini de değiştir.
 
 Yan localStorage anahtarları (yalnızca kurtarma için, uygulama bunlardan okumaz):
 `studyos.v1.bozuk` — ayrıştırılamayan son veri · `studyos.v1.oncesi` — son içe aktarmadan

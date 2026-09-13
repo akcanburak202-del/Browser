@@ -42,6 +42,7 @@ globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueC
   isNewCard, newLimit, newQuota, newSeenToday, newWaiting, NEW_PER_DAY, shuffled,
   clozeCards, noteCardPairs, weakTopics, snapZone, YASLA_KENAR, YASLA_KUTU,
   paketGecerli, paketOzet, paketUygula, PAKET_SURUM,
+  examCourses, examList, courseContents, deleteCourse, hourOpts, COP_DERS_DIZI, PAKET_TALIMAT,
   setDB: v => { DB = v; }, getDB: () => DB };`;
 
 const bosDugum = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {} },
@@ -528,6 +529,104 @@ es("yaslama: eşiğin hemen dışı boş", T.snapZone(nokta(T.YASLA_KENAR + 1, 4
 es("yaslama: üst eşiğin altı boş", T.snapZone(nokta(500, 30 + T.YASLA_KENAR + 1), masa), null);
 es("yaslama: masaüstünün üstü de üst bölge sayılır", T.snapZone(nokta(500, 25), masa), "max");
 es("yaslama: kutular yarım genişlik", [T.YASLA_KUTU.sol.width, T.YASLA_KUTU.sag.left], ["50%", "50%"]);
+
+/* ---------- çok dersli sınav ---------- */
+T.setDB(planDB({ courses: [{ id: "k1", name: "Anatomi" }, { id: "k2", name: "Fizyoloji" }] }));
+es("sınav: eski tek dersli kayıt", T.examCourses({ courseId: "k1" }), ["k1"]);
+es("sınav: çok dersli kayıt", T.examCourses({ courseIds: ["k1", "k2"] }), ["k1", "k2"]);
+es("sınav: tekrarlar ayıklanır", T.examCourses({ courseIds: ["k1", "k1", "k2"] }), ["k1", "k2"]);
+es("sınav: silinmiş ders düşer", T.examCourses({ courseIds: ["k1", "yok"] }), ["k1"]);
+es("sınav: boş kayıt", T.examCourses({}), []);
+es("sınav: courseIds courseId'yi ezer", T.examCourses({ courseId: "k1", courseIds: ["k2"] }), ["k2"]);
+
+/* TUS gibi bir sınav bütün derslerin konularını plana sokmalı */
+T.setDB(planDB({
+  courses: [{ id: "k1", name: "Anatomi" }, { id: "k2", name: "Fizyoloji" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Kemikler", status: "new" },
+           { id: "t2", courseId: "k2", name: "Kalp", status: "learning" }],
+  exams: [{ id: "s1", name: "TUS", date: T.addDays(bugun, 10), courseIds: ["k1", "k2"] }] }));
+pl = T.dailyPlan().filter(r => r.tip === "konu");
+es("plan: çok dersli sınav iki dersi de kapsar",
+  pl.map(r => r.baslik).sort(), ["Kalp", "Kemikler"]);
+dogru("plan: gerekçede sınav adı geçer", pl.every(r => r.neden.includes("TUS")));
+
+/* ---------- takvim blok süresi ---------- */
+es("blok: süre seçenekleri gün sonunu aşmaz", T.hourOpts(3).map(o => o.v), ["1", "2", "3"]);
+es("blok: en çok 8 saat", T.hourOpts(99).length, 8);
+es("blok: en az 1 saat", T.hourOpts(0).map(o => o.v), ["1"]);
+
+/* ---------- ders silme ---------- */
+const dersDB = () => planDB({
+  courses: [{ id: "k1", name: "Anatomi", color: "#f00" }, { id: "k2", name: "Fizyoloji", color: "#0f0" }],
+  topics: [{ id: "t1", courseId: "k1", name: "Kemikler", status: "new" },
+           { id: "t2", courseId: "k2", name: "Kalp", status: "new" }],
+  notes: [{ id: "n1", courseId: "k1", title: "Not", body: "x" }],
+  decks: [{ id: "d1", courseId: "k1", name: "Deste" }],
+  cards: [{ id: "c1", deckId: "d1", front: "a", back: "b", due: bugun },
+          { id: "c2", deckId: "d9", front: "a", back: "b", due: bugun }],
+  tasks: [{ id: "g1", courseId: "k1", title: "Görev", done: false }],
+  quizzes: [{ id: "q1", courseId: "k1", name: "Test", questions: [] }],
+  events: [{ id: "e1", courseId: "k1", day: 0, start: 9, end: 10, title: "Blok" }],
+  sessions: [{ id: "o1", courseId: "k1", date: bugun, min: 25, kind: "focus" }],
+  terms: [{ id: "m1", courseId: "k1", term: "Femur", def: "kemik" }],
+  exams: [{ id: "s1", name: "Anatomi finali", date: T.addDays(bugun, 5), courseIds: ["k1"] },
+          { id: "s2", name: "TUS", date: T.addDays(bugun, 30), courseIds: ["k1", "k2"] }],
+  quizRuns: [] });
+
+T.setDB(dersDB());
+let ic = T.courseContents("k1");
+es("ders: içerik sayımı", [ic.topics.length, ic.notes.length, ic.decks.length, ic.cards.length,
+  ic.tasks.length, ic.quizzes.length, ic.events.length, ic.sessions.length, ic.terms.length],
+  [1, 1, 1, 1, 1, 1, 1, 1, 1]);
+es("ders: yalnız bu dersin sınavı silinir", ic.exams.map(e => e.id), ["s1"]);
+es("ders: çok dersli sınav kırpılır", ic.examEk, ["s2"]);
+es("ders: başka desteye ait kart alınmaz", ic.cards.map(c => c.id), ["c1"]);
+
+T.deleteCourse("k1");
+let d2 = T.getDB();
+es("ders: ders silindi", d2.courses.map(c => c.id), ["k2"]);
+es("ders: konular silindi", d2.topics.map(t => t.id), ["t2"]);
+es("ders: notlar silindi", d2.notes.length, 0);
+es("ders: deste ve kartı silindi", [d2.decks.length, d2.cards.map(c => c.id)], [0, ["c2"]]);
+es("ders: görev/test/blok/oturum/terim silindi",
+  [d2.tasks.length, d2.quizzes.length, d2.events.length, d2.sessions.length, d2.terms.length],
+  [0, 0, 0, 0, 0]);
+es("ders: tek dersli sınav gitti, çok dersli kaldı", d2.exams.map(e => e.id), ["s2"]);
+es("ders: çok dersli sınavdan yalnız bu ders düştü",
+  d2.exams.find(e => e.id === "s2").courseIds, ["k2"]);
+es("ders: tek çöp kaydı yazıldı", [d2.trash.length, d2.trash[0].type], [1, "course"]);
+dogru("ders: çöp etiketi ders adı", d2.trash[0].label === "Anatomi");
+
+T.restoreTrash(d2.trash[0].id);
+d2 = T.getDB();
+es("ders: geri alınca ders döndü", d2.courses.map(c => c.id).sort(), ["k1", "k2"]);
+es("ders: geri alınca konular döndü", d2.topics.map(t => t.id).sort(), ["t1", "t2"]);
+es("ders: geri alınca deste+kart döndü", [d2.decks.length, d2.cards.length], [1, 2]);
+es("ders: geri alınca sınav döndü", d2.exams.map(e => e.id).sort(), ["s1", "s2"]);
+es("ders: çok dersli sınav yeniden kapsıyor",
+  T.examCourses(d2.exams.find(e => e.id === "s2")).sort(), ["k1", "k2"]);
+es("ders: çöp boşaldı", d2.trash.length, 0);
+es("ders: geri alınca not/görev/terim döndü",
+  [d2.notes.length, d2.tasks.length, d2.terms.length, d2.quizzes.length,
+   d2.events.length, d2.sessions.length], [1, 1, 1, 1, 1, 1]);
+
+/* dizi listesi ile gerçek şema uyuşmalı — yeni koleksiyon eklenirse burada patlar */
+dogru("ders: silme listesindeki diziler DB'de var",
+  T.COP_DERS_DIZI.every(k => Array.isArray(T.getDB()[k])));
+
+T.setDB(dersDB());
+es("ders: olmayan ders silinmez", T.deleteCourse("yok"), null);
+
+/* ---------- paket talimatı ---------- */
+/* Uygulamadaki metin ile PAKET.md'deki talimat ayrışmasın */
+{
+  const md = fs.readFileSync(path.join(KOK, "PAKET.md"), "utf8");
+  const blok = (md.split("## Talimat (kopyalanacak bölüm)")[1] || "").split("```")[1] || "";
+  es("paket talimatı PAKET.md ile aynı", blok.trim(), T.PAKET_TALIMAT.trim());
+  dogru("paket talimatı biçim anahtarlarını içerir",
+    ["studyosPaket", "desteler", "testler", "terimler", "secenekler", "dogru"]
+      .every(k => T.PAKET_TALIMAT.includes(k)));
+}
 
 /* ---------- markdown ---------- */
 dogru("md kalın", T.md("**kalın**").includes("<b>kalın</b>"));
