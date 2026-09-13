@@ -529,6 +529,92 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- görselin üzerine çizim ve yazı (sürüm 3.6) ---------- */
+const uzRef = await p2.evaluate(async () => {
+  const c = document.createElement("canvas"); c.width = 600; c.height = 380;
+  const x = c.getContext("2d"); x.fillStyle = "#1baf7a"; x.fillRect(0, 0, 600, 380);
+  const r = await putMedia(c.toDataURL("image/png"));
+  DB.notes = [{ id: "nu", courseId: DB.courses[0]?.id, title: "Şema",
+    body: "![ş](" + r + ")\n", created: today(), updated: today() }];
+  saveNow();
+  const w = openApp("notes"); w.state.id = "nu"; w.state.prev = true; APPS.notes.render(w);
+  return r;
+});
+await p2.waitForTimeout(500);
+await p2.evaluate(() => document.querySelector(".md-prev img[data-media]").click());
+await p2.waitForTimeout(400);
+await p2.evaluate(() => document.querySelector('[data-a="ciz"]').click());
+await p2.waitForTimeout(700);
+const tuvalBilgi = await p2.evaluate(() => {
+  const cv = document.querySelector("canvas"); if (!cv) return null;
+  const d = cv.getContext("2d").getImageData(300, 200, 1, 1).data;
+  return { en: cv.width, boy: cv.height, yesil: Math.abs(d[0] - 27) < 30 && Math.abs(d[1] - 175) < 30 };
+});
+check("üzerine çizimde tuval görselin kendi ölçüsünde açılıyor",
+  tuvalBilgi && tuvalBilgi.en === 600 && tuvalBilgi.boy === 380);
+check("görsel tuvalin arka planı olarak çiziliyor", tuvalBilgi && tuvalBilgi.yesil === true);
+
+const kutu = await p2.evaluate(() => {
+  const r = document.querySelector("canvas").getBoundingClientRect();
+  return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+});
+await p2.evaluate(() => document.querySelectorAll("[data-c]")[1].click());   /* kırmızı */
+await p2.mouse.move(kutu.x + kutu.w * 0.2, kutu.y + kutu.h * 0.6);
+await p2.mouse.down();
+for (let i = 0; i <= 24; i++) await p2.mouse.move(kutu.x + kutu.w * (0.2 + i / 45), kutu.y + kutu.h * 0.6);
+await p2.mouse.up();
+await p2.waitForTimeout(250);
+const sayRenk = () => p2.evaluate(() => {
+  const cv = document.querySelector("canvas");
+  const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+  let kirmizi = 0, beyaz = 0, yesil = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (Math.abs(d[i] - 227) < 40 && Math.abs(d[i + 1] - 73) < 40 && Math.abs(d[i + 2] - 72) < 40) kirmizi++;
+    else if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) beyaz++;
+    else if (Math.abs(d[i] - 27) < 30 && Math.abs(d[i + 1] - 175) < 30) yesil++;
+  }
+  return { kirmizi, beyaz, yesil };
+});
+const ciziliyken = await sayRenk();
+check("görselin üzerine çizilebiliyor", ciziliyken.kirmizi > 300, "kırmızı " + ciziliyken.kirmizi);
+
+/* silgi arka plandaki görseli ORTAYA ÇIKARMALI, beyaza boyamamalı */
+await p2.evaluate(() => document.querySelector('[data-a="silgi"]').click());
+await p2.mouse.move(kutu.x + kutu.w * 0.2, kutu.y + kutu.h * 0.6);
+await p2.mouse.down();
+for (let i = 0; i <= 24; i++) await p2.mouse.move(kutu.x + kutu.w * (0.2 + i / 45), kutu.y + kutu.h * 0.6);
+await p2.mouse.up();
+await p2.waitForTimeout(300);
+const silindi = await sayRenk();
+check("silgi çizimi siliyor", silindi.kirmizi < ciziliyken.kirmizi / 2,
+  ciziliyken.kirmizi + " → " + silindi.kirmizi);
+check("silgi beyaza boyamıyor, görseli ortaya çıkarıyor",
+  silindi.beyaz < 200 && silindi.yesil > ciziliyken.yesil, "beyaz " + silindi.beyaz);
+
+/* kaydedince aynı id'ye yazılıyor, ölçü korunuyor */
+await p2.evaluate(() => { document.querySelectorAll("[data-c]")[1].click();   /* kalem geri */ });
+await p2.mouse.move(kutu.x + kutu.w * 0.3, kutu.y + kutu.h * 0.3);
+await p2.mouse.down(); await p2.mouse.move(kutu.x + kutu.w * 0.7, kutu.y + kutu.h * 0.35); await p2.mouse.up();
+await p2.waitForTimeout(200);
+await p2.evaluate(() => document.querySelector('[data-a="ekle"]').click());
+await p2.waitForTimeout(900);
+const uzKayit = await p2.evaluate(async ref => {
+  const blob = await idbGet(ref.slice(4));
+  const u = URL.createObjectURL(blob), im = new Image(); im.src = u;
+  await new Promise(r => { im.onload = r; });
+  URL.revokeObjectURL(u);
+  return { en: im.naturalWidth, boy: im.naturalHeight,
+    refAyni: DB.notes[0].body.includes(ref), kapandi: !document.querySelector("canvas") };
+}, uzRef);
+check("üzerine çizim aynı görsele kaydediliyor, ölçü korunuyor",
+  uzKayit.en === 600 && uzKayit.boy === 380 && uzKayit.refAyni === true);
+check("kaydedince çizim tahtası kapanıyor", uzKayit.kapandi === true);
+/* Notlar tekil bir uygulama DEĞİL: pencere açık kalırsa sonraki bölüm
+   document.querySelector ile ESKİ pencerenin görselini bulur.
+   Yalnızca not pencereleri kapatılır — başka bölümler kendi pencerelerine güveniyor. */
+await p2.evaluate(() => [...WINS.values()].filter(w => w.appId === "notes").forEach(closeWin));
+await p2.waitForTimeout(300);
+
 /* ---------- nottaki görsel büyütülüp döndürülebiliyor (sürüm 3.5) ---------- */
 const gorselRef = await p2.evaluate(async () => {
   const c = document.createElement("canvas"); c.width = 400; c.height = 200;

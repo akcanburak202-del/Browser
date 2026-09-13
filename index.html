@@ -425,7 +425,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.5", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.6", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -903,16 +903,22 @@ window.addEventListener("storage",e=>{
    Kağıt gibi davranır: beyaz zemin, koyu mürekkep — böylece iki temada da okunur
    ve PNG olarak nota gömülünce dışarıda da doğru görünür.
    Kalemle çizilirse çizgi kalınlığı basınca göre değişir. */
-function drawPad(){
-  return new Promise(res=>{
+function drawPad(opts={}){
+  return new Promise(async res=>{
     const RENK=["#16181d","#e34948","#2a78d6","#1baf7a"];
     /* Odaktaki yazı alanını bırak: cihazın kalem-el-yazısı katmanı odaklı bir
        metin alanı varken devreye girip kalemi kapabiliyor. */
     try{ document.activeElement?.blur?.(); }catch(_){}
 
-    /* Kapat ve Nota ekle ÜST çubukta: Android'de adres çubuğu görünürken
-       position:fixed bir katmanın altı görünen alanın dışında kalabiliyor ve
-       alttaki düğmeler kayboluyor. Üst çubuk her zaman görünür. */
+    /* Arka plan görseli varsa tuval ONUN ölçüsünde olur — çözünürlük kaybolmasın.
+       Ekrana sığdırmayı CSS yapar, pos() oranı uygular. */
+    let bg=null, bgUrl="";
+    if(opts.bgBlob){
+      bgUrl=URL.createObjectURL(opts.bgBlob);
+      bg=await new Promise(r=>{ const i=new Image(); i.onload=()=>r(i); i.onerror=()=>r(null); i.src=bgUrl; });
+    }
+    const kaydetMetni=opts.kaydetMetni||(bg?"✓ Kaydet":"✓ Nota ekle");
+
     const o=el("div","ovl onDark",`
       <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;flex:0 0 auto;
         width:100%;max-width:1400px">
@@ -921,17 +927,18 @@ function drawPad(){
         ${RENK.map((c,i)=>`<button class="btn sm" data-c="${i}" title="Renk"
           style="width:36px;height:30px;background:${c}"></button>`).join("")}
         <button class="btn sm" data-a="silgi" title="Silgi">🧽</button>
+        <button class="btn sm" data-a="yazi" title="Yazı ekle — sonra tuvale dokun">T</button>
         <button class="btn sm" data-a="geri" title="Geri al">↶</button>
         <button class="btn sm danger" data-a="temizle">Temizle</button>
         <span class="grow"></span>
-        <button class="btn pri" data-a="ekle">✓ Nota ekle</button>
+        <button class="btn pri" data-a="ekle">${kaydetMetni}</button>
       </div>
       <div data-a="tuval" style="flex:1 1 auto;min-height:0;width:100%;display:flex;
         align-items:center;justify-content:center">
         <canvas style="background:#fff;border-radius:12px;touch-action:none;
           max-width:100%;max-height:100%;box-shadow:0 20px 50px rgba(0,0,0,.5)"></canvas>
       </div>
-      <div class="sub" style="flex:0 0 auto;font-size:11.5px;text-align:center">
+      <div class="sub" data-a="ipuc" style="flex:0 0 auto;font-size:11.5px;text-align:center">
         Kalemle ya da parmakla çiz. Kalem yazıya çevriliyorsa cihazın kalem el yazısı ayarını kapat.
       </div>`);
     o.style.cssText="position:fixed;inset:0;height:100dvh;z-index:9998;background:rgba(0,0,0,.86);"+
@@ -944,44 +951,71 @@ function drawPad(){
     etkisiz.forEach(x=>{ try{ x.inert=true; }catch(_){} });
 
     const cv=$("canvas",o), ctx=cv.getContext("2d");
-    /* Mantıksal tuval boyu açılışta sabitlenir; ekran döner ya da boyut değişirse
-       CSS ölçekler. Böylece koordinatlar ve çizilenler bozulmaz. */
     const gh=(window.visualViewport&&window.visualViewport.height)||innerHeight;
-    const W=Math.round(Math.max(320,Math.min(1400,innerWidth-40)));
-    const H=Math.round(Math.max(240,Math.min(1200,gh-150)));
-    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const W=bg?bg.naturalWidth :Math.round(Math.max(320,Math.min(1400,innerWidth-40)));
+    const H=bg?bg.naturalHeight:Math.round(Math.max(240,Math.min(1200,gh-150)));
+    const dpr=bg?1:Math.min(2,window.devicePixelRatio||1);   /* görselde kendi pikselleri yeter */
     cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
     cv.style.width=W+"px"; cv.style.height=H+"px";
-    ctx.scale(dpr,dpr); ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.scale(dpr,dpr);
+    /* fırça kalınlığı tuval boyuyla ölçeklenir: 1100 px'lik bir fotoğrafta 2 px çizgi görünmez */
+    const olcek=Math.max(.8,Math.min(2.5,Math.max(W,H)/900));
+    const YAZI_BOY=Math.max(20,Math.round(Math.min(W,H)/16));
 
-    let renk=RENK[0], silgi=false, ciz=null;
+    /* Çizgiler ayrı bir saydam katmanda durur. Böylece silgi arka plandaki
+       görseli ORTAYA ÇIKARIR (beyaza boyamak yerine) ve geri al kolayca çalışır. */
+    const lay=el("canvas"); lay.width=cv.width; lay.height=cv.height;
+    const lx=lay.getContext("2d"); lx.scale(dpr,dpr); lx.lineCap="round"; lx.lineJoin="round";
+
+    let renk=RENK[0], arac="kalem", ciz=null, raf=0;
     const strokes=[];
     const orta=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
-    /* Noktaları orta noktalardan geçen bir eğriyle bağla — düz parçaların
-       köşeli görüntüsü gidiyor, çizgi akıcı oluyor. */
+    const kalinlik=(st,b)=>(st.silgi?18:2.2)*olcek*(0.45+1.55*b.pr);
+    const hazirla=st=>{ lx.globalCompositeOperation=st.silgi?"destination-out":"source-over";
+      lx.strokeStyle=st.silgi?"#000":st.renk; };
+    /* Noktaları orta noktalardan geçen bir eğriyle bağla — çizgi akıcı olur. */
     const seg=(st,i)=>{
       const p=st.p, a=p[i-1], b=p[i];
-      ctx.strokeStyle=st.silgi?"#fff":st.renk;
-      ctx.lineWidth=(st.silgi?18:2.2)*(0.45+1.55*b.pr);
-      ctx.beginPath();
+      hazirla(st); lx.lineWidth=kalinlik(st,b);
+      lx.beginPath();
       if(i>=2){ const m1=orta(p[i-2],a), m2=orta(a,b);
-        ctx.moveTo(m1.x,m1.y); ctx.quadraticCurveTo(a.x,a.y,m2.x,m2.y); }
-      else { ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); }
-      ctx.stroke();
+        lx.moveTo(m1.x,m1.y); lx.quadraticCurveTo(a.x,a.y,m2.x,m2.y); }
+      else { lx.moveTo(a.x,a.y); lx.lineTo(b.x,b.y); }
+      lx.stroke();
     };
     /* eğri orta noktalarda bittiği için son parçayı ayrıca kapat */
-    const kuyruk=st=>{ const p=st.p; if(p.length<3) return;
+    const kuyruk=st=>{ const p=st.p; if(!p||p.length<3) return;
       const a=p[p.length-2], b=p[p.length-1];
-      ctx.strokeStyle=st.silgi?"#fff":st.renk;
-      ctx.lineWidth=(st.silgi?18:2.2)*(0.45+1.55*b.pr);
-      ctx.beginPath(); ctx.moveTo(orta(a,b).x,orta(a,b).y); ctx.lineTo(b.x,b.y); ctx.stroke(); };
-    const paint=()=>{ ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H);
-      for(const st of strokes){ for(let i=1;i<st.p.length;i++) seg(st,i); kuyruk(st); } };
+      hazirla(st); lx.lineWidth=kalinlik(st,b);
+      lx.beginPath(); lx.moveTo(orta(a,b).x,orta(a,b).y); lx.lineTo(b.x,b.y); lx.stroke(); };
+    const cizYazi=st=>{
+      lx.globalCompositeOperation="source-over";
+      lx.fillStyle=st.renk; lx.textBaseline="top";
+      lx.font=`600 ${st.boy}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
+      String(st.txt).split("\n").forEach((satir,i)=>lx.fillText(satir,st.x,st.y+i*st.boy*1.25));
+    };
+    /* katmanı arka planla birleştirip ekrana bas */
+    const birlestir=()=>{
+      ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+      ctx.restore();
+      if(bg) ctx.drawImage(bg,0,0,W,H); else { ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H); }
+      ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(lay,0,0); ctx.restore();
+    };
+    const istek=()=>{ if(!raf) raf=requestAnimationFrame(()=>{ raf=0; birlestir(); }); };
+    const paint=()=>{
+      lx.save(); lx.setTransform(1,0,0,1,0,0); lx.clearRect(0,0,lay.width,lay.height); lx.restore();
+      for(const st of strokes){
+        if(st.tip==="yazi"){ cizYazi(st); continue; }
+        for(let i=1;i<st.p.length;i++) seg(st,i);
+        kuyruk(st);
+      }
+      birlestir();
+    };
     paint();
 
     /* Android Chrome arka plana atılan sekmenin tuval içeriğini atabiliyor —
        cihazın kalem el yazısı katmanı sayfayı arka plana aldığında da olur.
-       Çizgiler bellekte durduğu için geri dönüldüğünde hepsini yeniden çiziyoruz. */
+       Çizgiler bellekte durduğu için geri dönüldüğünde hepsi yeniden çizilir. */
     const tazele=()=>{ try{ paint(); }catch(_){} };
     document.addEventListener("visibilitychange",tazele);
     window.addEventListener("pageshow",tazele);
@@ -996,29 +1030,48 @@ function drawPad(){
       return { x:(e.clientX-r.left)*sx, y:(e.clientY-r.top)*sy,
         /* basınç yalnızca kalemde anlamlı; dokunuş ve fare sabit kalınlık verir */
         pr: (e.pointerType==="pen"&&e.pressure>0) ? e.pressure : 0.5 }; };
-    cv.addEventListener("pointerdown",e=>{ e.preventDefault();
+    cv.addEventListener("pointerdown",e=>{
+      e.preventDefault();
+      const q=pos(e);
+      if(arac==="yazi"){
+        const txt=prompt("Görsele eklenecek yazı:");
+        if(txt&&txt.trim()){
+          strokes.push({tip:"yazi",txt:txt.trim(),x:q.x,y:q.y,renk,boy:YAZI_BOY});
+          paint();
+        }
+        aracSec("kalem");     /* tek seferlik: yazı bırakınca kaleme dön */
+        return;
+      }
       try{ cv.setPointerCapture(e.pointerId); }catch(_){}
-      const q=pos(e); ciz={renk,silgi,p:[q,{...q}]};   /* aynı nokta iki kez: tek dokunuş nokta bırakır */
-      strokes.push(ciz); seg(ciz,1); });
+      ciz={renk,silgi:arac==="silgi",p:[q,{...q}]};   /* aynı nokta iki kez: tek dokunuş nokta bırakır */
+      strokes.push(ciz); seg(ciz,1); istek(); });
     cv.addEventListener("pointermove",e=>{ if(!ciz) return; e.preventDefault();
       /* iki kare arasında yakalanan ara noktaları da al — kalemde belirgin fark yapıyor */
       const hepsi=e.getCoalescedEvents?e.getCoalescedEvents():null;
-      for(const ev of (hepsi&&hepsi.length?hepsi:[e])){ ciz.p.push(pos(ev)); seg(ciz,ciz.p.length-1); } });
+      for(const ev of (hepsi&&hepsi.length?hepsi:[e])){ ciz.p.push(pos(ev)); seg(ciz,ciz.p.length-1); }
+      istek(); });
     /* pointercancel: cihaz kalemi kapmış olabilir — o ana kadarki çizgi korunur */
-    const bitir=()=>{ if(ciz) kuyruk(ciz); ciz=null; };
+    const bitir=()=>{ if(ciz){ kuyruk(ciz); birlestir(); } ciz=null; };
     cv.addEventListener("pointerup",bitir);
     cv.addEventListener("pointercancel",bitir);
 
     const A=a=>$(`[data-a="${a}"]`,o);
-    const renkSec=i=>{ renk=RENK[i]; silgi=false;
-      $$("[data-c]",o).forEach((b,j)=>b.style.outline=j===i?"2px solid var(--accent)":"none");
-      A("silgi").classList.remove("pri"); };
-    $$("[data-c]",o).forEach((b,i)=>b.onclick=()=>renkSec(i));
-    renkSec(0);
-    A("silgi").onclick=()=>{ silgi=!silgi; A("silgi").classList.toggle("pri",silgi);
-      if(silgi) $$("[data-c]",o).forEach(b=>b.style.outline="none"); else renkSec(RENK.indexOf(renk)); };
+    function aracSec(yeni,renkIdx){
+      arac=yeni;
+      if(renkIdx!=null) renk=RENK[renkIdx];
+      $$("[data-c]",o).forEach((b,j)=>b.style.outline=(arac==="silgi"||j!==RENK.indexOf(renk))?"none":"2px solid var(--accent)");
+      A("silgi").classList.toggle("pri",arac==="silgi");
+      A("yazi").classList.toggle("pri",arac==="yazi");
+      A("ipuc").textContent = arac==="yazi"
+        ? "Yazıyı bırakmak istediğin yere dokun."
+        : "Kalemle ya da parmakla çiz. Kalem yazıya çevriliyorsa cihazın kalem el yazısı ayarını kapat.";
+    }
+    $$("[data-c]",o).forEach((b,i)=>b.onclick=()=>aracSec("kalem",i));
+    aracSec("kalem",0);
+    A("silgi").onclick=()=>aracSec(arac==="silgi"?"kalem":"silgi");
+    A("yazi").onclick=()=>aracSec(arac==="yazi"?"kalem":"yazi");
     A("geri").onclick=()=>{ strokes.pop(); paint(); };
-    A("temizle").onclick=()=>{ if(strokes.length&&!confirm("Tüm çizim silinsin mi?")) return;
+    A("temizle").onclick=()=>{ if(strokes.length&&!confirm(bg?"Eklediğin çizim ve yazılar silinsin mi? (Görselin kendisi kalır)":"Tüm çizim silinsin mi?")) return;
       strokes.length=0; paint(); };
 
     /* --- kapanış: ✕ Kapat, Escape, cihazın geri tuşu. Karartıya dokunmak KAPATMAZ;
@@ -1037,12 +1090,13 @@ function drawPad(){
       window.removeEventListener("focus",tazele);
       window.removeEventListener("resize",tazele);
       etkisiz.forEach(x=>{ try{ x.inert=false; }catch(_){} });
+      if(bgUrl) URL.revokeObjectURL(bgUrl);
       o.remove();
       if(gecmis){ gecmis=false; try{ history.back(); }catch(_){} }
       res(v);
     };
     function vazgec(geriTusundan){
-      if(strokes.length&&!confirm("Çizim kaydedilmeden kapatılsın mı?")){
+      if(strokes.length&&!confirm("Kaydedilmeden kapatılsın mı?")){
         /* geri tuşuyla gelindiyse yığındaki kaydı geri koy, bir sonraki geri de çalışsın */
         if(geriTusundan){ try{ history.pushState({studyosDraw:1},""); gecmis=true; }catch(_){} }
         return;
@@ -1050,7 +1104,7 @@ function drawPad(){
       kapat(null);
     }
     A("kapat").onclick=()=>vazgec(false);
-    A("ekle").onclick=()=>{ if(!strokes.length){ toast("Çizim boş"); return; }
+    A("ekle").onclick=()=>{ if(!strokes.length){ toast(bg?"Değişiklik yok":"Çizim boş"); return; }
       cv.toBlob(b=>kapat(b),"image/png"); };
   });
 }
@@ -1069,6 +1123,7 @@ async function imageViewer(ref){
       width:100%;max-width:1000px">
       <button class="btn" data-a="kapat">✕ Kapat</button>
       <span class="grow"></span>
+      <button class="btn sm" data-a="ciz" title="Görselin üzerine çiz ya da yazı ekle">✏️ Üzerine çiz</button>
       <button class="btn sm" data-a="sol">↺ 90° sola</button>
       <button class="btn sm" data-a="sag">↻ 90° sağa</button>
       <button class="btn pri" data-a="kaydet" disabled>✓ Kaydet</button>
@@ -1106,6 +1161,20 @@ async function imageViewer(ref){
     if(aci%360!==0&&!confirm("Döndürme kaydedilmeden kapatılsın mı?")) return;
     kapat();
   }
+  A("ciz").onclick=async()=>{
+    if(aci%360!==0&&!confirm("Kaydedilmemiş döndürme kaybolacak. Çizime geçilsin mi?")) return;
+    const id=ref.startsWith("idb:")?ref.slice(4):null;
+    const blob=id?await idbGet(id):null;
+    if(!blob){ toast("⚠️ Görsel bulunamadı"); return; }
+    kapat();
+    const yeni=await drawPad({bgBlob:blob});
+    if(!yeni) return;
+    await idbPut(id,yeni);
+    /* önbellekteki eski objectURL bırakılmazsa çizimsiz hali çizilmeye devam eder */
+    const eskiUrl=MEDIA_URL.get(id); if(eskiUrl) URL.revokeObjectURL(eskiUrl);
+    MEDIA_URL.delete(id);
+    idbUsage(); refreshAll(); toast("✏️ Çizim görsele işlendi");
+  };
   A("kapat").onclick=vazgec;
   A("kaydet").onclick=async()=>{
     A("kaydet").disabled=true;

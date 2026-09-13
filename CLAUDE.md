@@ -103,6 +103,13 @@ Script blokları sırayla:
   tamamında değil: şablondaki satır sonları ve girintiler de boşluk olarak çizilip yüzü
   gereksiz uzatıyordu. Yüzde metin yoksa metin kutusunu hiç çizme; yalnız görselli yüz
   `img-only` sınıfı alıp asgari yüksekliği bırakır ve görsel büyür.
+- **`drawPad({bgBlob})` var olan bir görselin üzerine çizer.** Tuval o görselin **kendi**
+  ölçüsünde açılır (çözünürlük kaybolmasın), ekrana sığdırmayı CSS yapar.
+  Çizgiler ayrı bir **saydam katmanda** (`lay`) durur ve her karede arka planla birleştirilir;
+  bu sayede silgi `destination-out` ile arka plandaki görseli **ortaya çıkarır**, beyaza boyamaz.
+  Yazı aracı da bir "çizgi" kaydıdır (`{tip:"yazi"}`), böylece geri al ve yeniden çizim çalışır.
+  Kaydedince blob **aynı id'ye** yazılır — eski çizimi düzenlemek ve görselin üzerine çizmek
+  aynı yoldan yürür. `MEDIA_URL` önbelleğini temizlemeyi unutma.
 - **Görsel döndürme blob'u yerinde değiştirir** (`rotateMedia`): IndexedDB'de **aynı id** altına
   yazılır, böylece not metnindeki `idb:` referansına, karta ya da sözlüğe dokunmak gerekmez.
   Yazdıktan sonra `MEDIA_URL` önbelleğindeki eski objectURL **mutlaka** bırakılıp silinmeli,
