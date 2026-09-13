@@ -109,6 +109,9 @@ Script blokları sırayla:
   **yeniden** almak gerekir — yoksa balon konumlandıktan sonra büyüyüp aşağı taşar;
   (2) çapa kaydırılan bir panelin içindeyse ekran dışına taşmış olabilir, bu yüzden hem
   boşluklar görünür alana kırpılır hem de sonuç ekran içine sabitlenir.
+  Görsel varsa balon ölçüsü kesinleşene kadar `visibility:hidden` tutulur (400 ms emniyet
+  zaman aşımıyla), yoksa yanlış konum bir an görünüp zıplıyor. Geciken "göster" çağrıları
+  `_termTok` ile geçersizleşir — eski balonu açmasınlar.
 - **`drawPad({bgBlob})` var olan bir görselin üzerine çizer.** Tuval o görselin **kendi**
   ölçüsünde açılır (çözünürlük kaybolmasın), ekrana sığdırmayı CSS yapar.
   Çizgiler ayrı bir **saydam katmanda** (`lay`) durur ve her karede arka planla birleştirilir;

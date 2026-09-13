@@ -568,6 +568,51 @@ for (const [ad, gw, gh] of [["kısa", 900, 420], ["orta", 900, 700], ["uzun", 90
   }
   await p2.evaluate(() => hideTerm());
 }
+/* balon, ölçüsü kesinleşene kadar görünmemeli: yanlış konum bir an görünüp zıplamasın */
+await p2.setViewportSize({ width: 900, height: 700 });
+await p2.evaluate(() => [...WINS.values()].filter(w => w.appId === "notes").forEach(closeWin));
+const titreme = await p2.evaluate(async () => {
+  const c = document.createElement("canvas"); c.width = 500; c.height = 340;
+  c.getContext("2d").fillRect(0, 0, 500, 340);
+  const ref = await putMedia(c.toDataURL("image/png"));
+  DB.terms = [{ id: "tt", term: "Mitokondri", alt: [], img: ref, noteId: "",
+    def: "Tanım. ".repeat(20), courseId: DB.courses[0]?.id }];
+  DB.notes = [{ id: "nt", courseId: DB.courses[0]?.id, title: "H",
+    body: Array(8).fill("dolgu").join("\n\n") + "\n\nMitokondri burada.",
+    created: today(), updated: today() }];
+  saveNow(); buildTerms();
+  const w = openApp("notes"); w.state.id = "nt"; w.state.prev = true; APPS.notes.render(w);
+  await new Promise(r => setTimeout(r, 400));
+  const sp = [...w.body.querySelectorAll(".gterm")].pop();
+  const pop = document.querySelector("#termpop");
+  showTerm(sp);
+  const hemen = getComputedStyle(pop).visibility;
+  const kareler = [];
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => requestAnimationFrame(r));
+    kareler.push({ g: getComputedStyle(pop).visibility === "visible",
+      alt: Math.round(pop.getBoundingClientRect().bottom) });
+  }
+  await new Promise(r => setTimeout(r, 500));
+  const sonAlt = Math.round(pop.getBoundingClientRect().bottom);
+  const gorunur = kareler.filter(k => k.g);
+  return { hemen, sonGorunur: getComputedStyle(pop).visibility, sonAlt,
+    yanlisKonumdaGorundu: gorunur.some(k => Math.abs(k.alt - sonAlt) > 2) };
+});
+check("görselli balon ölçüsü kesinleşene kadar görünmüyor", titreme.hemen === "hidden");
+check("balon hiçbir karede yanlış konumda görünmüyor", titreme.yanlisKonumdaGorundu === false);
+check("ölçü kesinleşince balon açılıyor", titreme.sonGorunur === "visible");
+const gorselsiz = await p2.evaluate(async () => {
+  hideTerm();
+  DB.terms[0].img = null; buildTerms();
+  const w = [...WINS.values()].find(x => x.appId === "notes"); APPS.notes.render(w);
+  await new Promise(r => setTimeout(r, 300));
+  showTerm([...w.body.querySelectorAll(".gterm")].pop());
+  return getComputedStyle(document.querySelector("#termpop")).visibility;
+});
+check("görselsiz balon anında açılıyor (gecikme yok)", gorselsiz === "visible");
+await p2.evaluate(() => hideTerm());
+
 /* sözlük balonundaki görsel tam ekran incelenebiliyor */
 await p2.setViewportSize({ width: 1100, height: 800 });
 await p2.evaluate(() => [...WINS.values()].filter(w => w.appId === "notes").forEach(closeWin));

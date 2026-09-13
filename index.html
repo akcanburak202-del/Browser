@@ -428,7 +428,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.7", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.8", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -2913,7 +2913,9 @@ function konumlaTerm(sp){
   pop.style.top=Math.round(top)+"px";
   pop.scrollTop=0;
 }
-function hideTerm(){ $("#termpop").classList.remove("on"); }
+let _termTok=0;                             /* geciken "göster" çağrıları eski balonu açmasın */
+function hideTerm(){ _termTok++;
+  const p=$("#termpop"); p.classList.remove("on"); p.style.visibility=""; }
 function showTerm(sp){
   const t=(DB.terms||[]).find(x=>x.id===sp.dataset.term); if(!t) return;
   const pop=$("#termpop");
@@ -2934,11 +2936,24 @@ function showTerm(sp){
       <button class="btn sm" data-p="card">🗂 Kart yap</button>
       <button class="btn sm" data-p="edit">✏️ Düzenle</button></div>`;
   pop.classList.add("on");
+  const imgler=$$("img",pop);
+  /* hydrateMedia src'yi ASENKRON atıyor: balon önce görselsiz ölçüsüyle yerleşip
+     görsel gelince büyüyor. Ölçü kesinleşene kadar GİZLİ tut, yoksa yanlış konum
+     bir an görünüp zıplıyor. */
+  if(imgler.length) pop.style.visibility="hidden";
   hydrateMedia(pop);
   konumlaTerm(sp);
-  /* hydrateMedia src'yi ASENKRON atıyor: görsel yüklenince balon büyüyor.
-     Ölçüyü o zaman yeniden al, yoksa balonun alt yarısı ekran dışında kalır. */
-  $$("img",pop).forEach(im=>im.addEventListener("load",()=>konumlaTerm(sp),{once:true}));
+  if(imgler.length){
+    const tok=++_termTok;
+    let acildi=false;
+    const goster=()=>{
+      if(acildi||tok!==_termTok) return;      /* balon bu arada kapandıysa/değiştiyse dokunma */
+      acildi=true; konumlaTerm(sp); pop.style.visibility="";
+    };
+    imgler.forEach(im=>{ im.addEventListener("load",goster,{once:true});
+                         im.addEventListener("error",goster,{once:true}); });
+    setTimeout(goster,400);                   /* görsel gelmezse balon yine de açılsın */
+  }
   /* görsele dokununca tam ekran incele/döndür/üzerine çiz */
   $$("img[data-media]",pop).forEach(im=>im.onclick=e=>{
     e.stopPropagation(); const ref=im.dataset.media; hideTerm(); imageViewer(ref); });
