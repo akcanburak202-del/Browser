@@ -428,7 +428,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.8", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.9", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -731,7 +731,7 @@ function downloadText(txt,name,mime){
    ============================================================ */
 const SNAP_GUNLUK=7, SNAP_ETIKET=3;
 const SNAP_AD={gunluk:"günlük",import:"içe aktarmadan önce",reset:"sıfırlamadan önce",
-  restore:"geri almadan önce",elle:"elle alındı"};
+  restore:"geri almadan önce",elle:"elle alındı",paket:"paket eklemeden önce"};
 const snapPut=(k,v)=>idbOp("readwrite",st=>st.put(v,k),"snaps");
 const snapAll=()=>idbOp("readonly",st=>st.getAll(),"snaps").then(a=>(a||[]).sort((x,y)=>y.ts-x.ts));
 const snapDel=k=>idbOp("readwrite",st=>st.delete(k),"snaps");
@@ -2287,6 +2287,85 @@ function weakTopics(minAdet=3,limit=5){
     .slice(0,limit);
 }
 
+/* ---------------- Paket içe aktarma ----------------
+   "Yedek yükle" her şeyi DEĞİŞTİRİR; paket yalnızca EKLER. Dışarıda hazırlanmış
+   deste/test/terim setlerini mevcut veriye dokunmadan almak için.
+   Anahtarlar Türkçe: dosya elle de düzenlenebilsin. */
+const PAKET_SURUM=1;
+const paketGecerli=p=>!!p&&p.studyosPaket===PAKET_SURUM&&
+  (Array.isArray(p.desteler)||Array.isArray(p.testler)||Array.isArray(p.terimler));
+function paketOzet(p){
+  const d=p.desteler||[], t=p.testler||[], tr=p.terimler||[];
+  return { deste:d.length, kart:d.reduce((a,x)=>a+(x.kartlar||[]).length,0),
+    test:t.length, soru:t.reduce((a,x)=>a+(x.sorular||[]).length,0),
+    terim:tr.length, konu:(p.konular||[]).length, ders:String(p.ders||"").trim() };
+}
+/* Hiçbir şeyi silmez. Kimlikler yeniden üretilir (çakışma olmaz), ders adı
+   eşleşirse ona bağlanır, eşleşmezse yeni ders açılır. */
+function paketUygula(p){
+  const t=today(), ek={deste:0,kart:0,test:0,soru:0,terim:0,konu:0,atlanan:0};
+  const kucuk=x=>String(x||"").trim().toLowerCase();
+
+  const dersAd=String(p.ders||"").trim();
+  let ders=dersAd?DB.courses.find(c=>kucuk(c.name)===kucuk(dersAd)):null;
+  if(dersAd&&!ders){ ders={id:uid(),name:dersAd,color:COLORS[DB.courses.length%COLORS.length]};
+    DB.courses.push(ders); }
+  const dersId=ders?ders.id:(DB.courses[0]?.id||null);
+
+  const konuId={};
+  for(const ad of (p.konular||[])){
+    const isim=String(ad||"").trim(); if(!isim) continue;
+    let k=DB.topics.find(x=>x.courseId===dersId&&kucuk(x.name)===kucuk(isim));
+    if(!k){ k={id:uid(),courseId:dersId,parentId:null,name:isim,status:"new"};
+      DB.topics.push(k); ek.konu++; }
+    konuId[kucuk(isim)]=k.id;
+  }
+
+  for(const d of (p.desteler||[])){
+    const ad=String(d.ad||"").trim()||"Paket destesi";
+    let dk=DB.decks.find(x=>x.courseId===dersId&&kucuk(x.name)===kucuk(ad));
+    if(!dk){ dk={id:uid(),name:ad,courseId:dersId}; DB.decks.push(dk); ek.deste++; }
+    for(const k of (d.kartlar||[])){
+      const on=String(k.on??"").trim(), arka=String(k.arka??"").trim();
+      if(!on||!arka){ ek.atlanan++; continue; }
+      /* aynı destede aynı ön yüz varsa atla: paketi iki kez almak kopya üretmesin */
+      if(DB.cards.some(c=>c.deckId===dk.id&&c.front===on)){ ek.atlanan++; continue; }
+      DB.cards.push({id:uid(),deckId:dk.id,front:on,back:arka,img:null,imgB:null,
+        ef:2.5,int:0,reps:0,lapses:0,due:t});
+      ek.kart++;
+    }
+  }
+
+  for(const q of (p.testler||[])){
+    let ad=String(q.ad||"").trim()||"Paket testi";
+    if(DB.quizzes.some(x=>x.name===ad)){ let i=2;
+      while(DB.quizzes.some(x=>x.name===ad+" ("+i+")")) i++; ad=ad+" ("+i+")"; }
+    const sorular=[];
+    for(const so of (q.sorular||[])){
+      const metin=String(so.s??so.soru??"").trim();
+      const sec=(so.secenekler||[]).map(x=>String(x??"").trim());
+      const dogru=Number(so.dogru);
+      if(!metin||sec.length<2||sec.some(x=>!x)||!(dogru>=0&&dogru<sec.length)){ ek.atlanan++; continue; }
+      const kn=kucuk(so.konu);
+      sorular.push({q:metin,ch:sec,a:dogru,ex:String(so.aciklama||"").trim(),
+        topicId:(kn&&konuId[kn])||null});
+    }
+    if(!sorular.length){ ek.atlanan++; continue; }
+    DB.quizzes.push({id:uid(),name:ad,courseId:dersId,questions:sorular});
+    ek.test++; ek.soru+=sorular.length;
+  }
+
+  for(const tr of (p.terimler||[])){
+    const ad=String(tr.terim||"").trim(), tanim=String(tr.tanim||"").trim();
+    if(!ad||!tanim){ ek.atlanan++; continue; }
+    if((DB.terms||[]).some(x=>kucuk(x.term)===kucuk(ad))){ ek.atlanan++; continue; }
+    DB.terms.push({id:uid(),term:ad,def:tanim,courseId:dersId,noteId:"",img:null,
+      alt:(tr.esanlam||[]).map(x=>String(x||"").trim()).filter(Boolean)});
+    ek.terim++;
+  }
+  return ek;
+}
+
 /* ---------------- Günlük plan — "Bugün ne çalışayım" ----------------
    Kural tabanlı ve açıklanabilir: her satır neden orada olduğunu yazar.
    Türetilmiştir, veriye yazılmaz — yalnızca "bugün yapıldı" işaretleri saklanır
@@ -3085,6 +3164,11 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
           <button class="btn danger" data-a="reset">Her şeyi sıfırla</button>
         </div>
         <div class="row" style="margin-top:8px;flex-wrap:wrap">
+          <button class="btn" data-a="pack">📦 Paket ekle</button>
+          <span class="sub grow" style="font-size:11.5px">Deste/test/terim paketini
+            <b>mevcut verinin üstüne</b> ekler. "Yedek yükle" ise her şeyi değiştirir.</span>
+        </div>
+        <div class="row" style="margin-top:8px;flex-wrap:wrap">
           <button class="btn" data-a="snaps">🕘 Anlık görüntüler</button>
           <button class="btn" data-a="trash">🗑 Çöp kutusu${(DB.trash||[]).length?` (${DB.trash.length})`:""}</button>
         </div>
@@ -3184,6 +3268,7 @@ APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,
       }catch(e){ toast("Bu tarayıcı desteklemiyor"); } };
     A("exp").onclick=exportJSON;
     A("imp").onclick=importJSON;
+    A("pack").onclick=importPack;
     if(A("undoimp")) A("undoimp").onclick=()=>{ undoImport(); this.render(w); };
     A("snaps").onclick=()=>snapScreen();
     A("trash").onclick=()=>trashScreen(()=>this.render(w));
@@ -3245,6 +3330,31 @@ function importJSON(){
     r.readAsText(f); };
   i.click();
 }
+/* Paket: mevcut verinin ÜSTÜNE ekler, hiçbir şeyi silmez. */
+function importPack(){
+  const i=el("input"); i.type="file"; i.accept="application/json,.json";
+  i.onchange=()=>{ const f=i.files[0]; if(!f)return; const r=new FileReader();
+    r.onload=async()=>{
+      let p; try{ p=JSON.parse(r.result); }catch(e){ toast("⚠️ Dosya okunamadı"); return; }
+      if(!paketGecerli(p)){ toast("⚠️ Bu bir StudyOS paketi değil"); return; }
+      const o=paketOzet(p);
+      const satir=[o.deste&&`${o.deste} deste`, o.kart&&`${o.kart} kart`,
+        o.test&&`${o.test} test`, o.soru&&`${o.soru} soru`,
+        o.terim&&`${o.terim} terim`, o.konu&&`${o.konu} konu`].filter(Boolean).join(" · ");
+      if(!satir){ toast("⚠️ Pakette içerik yok"); return; }
+      if(!confirm(`"${p.ad||"Paket"}" eklenecek:\n\n${satir}\n`+
+        (o.ders?`Ders: ${o.ders}\n`:"")+
+        `\nMevcut verilerin SİLİNMEZ — bunlar üstüne eklenir.\n\nDevam edilsin mi?`)) return;
+      await takeSnapshot("paket");
+      const ek=paketUygula(p);
+      saveNow(); buildTerms(); refreshAll();
+      toast(`📦 ${ek.deste} deste · ${ek.kart} kart · ${ek.test} test · ${ek.terim} terim eklendi`+
+        (ek.atlanan?` · ${ek.atlanan} kayıt atlandı (eksik ya da zaten var)`:""));
+    };
+    r.readAsText(f); };
+  i.click();
+}
+
 /* içe aktarmadan önceki hale dönüş — tersi de geri alınabilir */
 function undoImport(){
   let raw=null; try{ raw=localStorage.getItem(PREV_KEY); }catch(e){}

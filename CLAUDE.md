@@ -165,6 +165,26 @@ Quiz soruları `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,
 İstatistik'teki "zayıf konular" hesaplanır (`weakTopics()`).
 Ayarlar: `newPerDay` (varsayılan 20), `newSeen={date,n}`, `planDone={date,ids}`, `lastSnap`.
 
+**Paket biçimi** (`📦 Paket ekle` — `paketUygula()`): dışarıda hazırlanmış deste/test/terim
+setini mevcut verinin **üstüne ekler**, hiçbir şeyi silmez. Anahtarlar Türkçe, dosya elle
+düzenlenebilsin diye:
+
+```json
+{ "studyosPaket": 1, "ad": "Biyoloji — Hücre", "ders": "Biyoloji",
+  "konular": ["Hücre"],
+  "desteler": [{ "ad": "Organeller", "kartlar": [{ "on": "Mitokondri", "arka": "Enerji merkezi" }] }],
+  "testler":  [{ "ad": "Hücre testi", "sorular": [
+      { "s": "Soru?", "secenekler": ["a","b","c","d"], "dogru": 1,
+        "aciklama": "isteğe bağlı", "konu": "Hücre" }] }],
+  "terimler": [{ "terim": "Organel", "tanim": "…", "esanlam": ["…"] }] }
+```
+
+Kurallar: kimlikler yeniden üretilir (çakışma olmaz) · ders adı eşleşirse ona bağlanır, yoksa
+yeni ders açılır · aynı destede aynı ön yüz varsa kart atlanır (paketi iki kez almak kopya
+üretmez) · aynı adlı test numaralanır · eksik/bozuk kayıtlar atlanıp sayısı raporlanır ·
+öncesinde `takeSnapshot("paket")` alınır. **Bu akışta asla `DB=` ile toptan atama yapma** —
+"Yedek yükle" (`importJSON`) ile karıştırma, o her şeyi değiştirir.
+
 Yan localStorage anahtarları (yalnızca kurtarma için, uygulama bunlardan okumaz):
 `studyos.v1.bozuk` — ayrıştırılamayan son veri · `studyos.v1.oncesi` — son içe aktarmadan
 önceki hal (Ayarlar → Veri'den geri dönülebilir).

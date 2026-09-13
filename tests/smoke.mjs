@@ -529,6 +529,45 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- paket ekleme mevcut veriye dokunmuyor (sürüm 3.9) ---------- */
+const paketMetni = JSON.stringify({
+  studyosPaket: 1, ad: "Deneme paketi", ders: "Biyoloji", konular: ["Hücre"],
+  desteler: [{ ad: "Organeller", kartlar: [
+    { on: "Mitokondri", arka: "Enerji merkezi" }, { on: "Ribozom", arka: "Protein sentezi" }] }],
+  testler: [{ ad: "Hücre testi", sorular: [
+    { s: "Enerji merkezi?", secenekler: ["Mitokondri", "Ribozom"], dogru: 0, konu: "Hücre" }] }],
+  terimler: [{ terim: "Organel", tanim: "Hücre içi yapı" }] });
+const pOnce = await p2.evaluate(() => {
+  DB.notes = [{ id: "pk", courseId: null, title: "Korunacak not", body: "x",
+    created: today(), updated: today() }];
+  DB.sessions = [{ id: "s1", courseId: null, date: today(), min: 25, kind: "focus" }];
+  saveNow();
+  return { not: DB.notes.length, kart: DB.cards.length, oturum: DB.sessions.length,
+    deste: DB.decks.length, test: DB.quizzes.length };
+});
+p2.once("filechooser", fc => fc.setFiles({ name: "paket.json", mimeType: "application/json",
+  buffer: Buffer.from(paketMetni) }));
+await p2.evaluate(() => importPack());
+await p2.waitForTimeout(1500);
+const pSonra = await p2.evaluate(async () => ({
+  not: DB.notes.length, notBasligi: DB.notes[0]?.title, oturum: DB.sessions.length,
+  kartArtti: DB.cards.length, deste: DB.decks.length, test: DB.quizzes.length,
+  yeniKartlar: DB.cards.slice(-2).map(c => c.front),
+  soruKonuBagli: !!DB.quizzes.at(-1)?.questions[0]?.topicId,
+  terimVar: DB.terms.some(t => t.term === "Organel"),
+  anlikGoruntu: (await snapAll()).some(x => x.reason === "paket"),
+  yazildi: JSON.parse(localStorage.getItem("studyos.v1")).cards.length }));
+check("paket eklenince mevcut not ve oturumlar duruyor",
+  pSonra.not === pOnce.not && pSonra.notBasligi === "Korunacak not" && pSonra.oturum === pOnce.oturum);
+check("paketteki kartlar ekleniyor",
+  pSonra.kartArtti === pOnce.kart + 2 && pSonra.yeniKartlar.join() === "Mitokondri,Ribozom");
+check("paketteki deste ve test ekleniyor",
+  pSonra.deste === pOnce.deste + 1 && pSonra.test === pOnce.test + 1);
+check("paketteki soru konuya bağlanıyor", pSonra.soruKonuBagli === true);
+check("paketteki terim ekleniyor", pSonra.terimVar === true);
+check("paket öncesi anlık görüntü alınıyor", pSonra.anlikGoruntu === true);
+check("paket localStorage'a yazılıyor", pSonra.yazildi === pSonra.kartArtti);
+
 /* ---------- sözlük balonu ekrana sığıyor, görseli büyütülebiliyor (sürüm 3.7) ---------- */
 const balonKur = () => p2.evaluate(async () => {
   const c = document.createElement("canvas"); c.width = 500; c.height = 340;

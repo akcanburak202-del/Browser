@@ -41,6 +41,7 @@ globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueC
   dailyPlan, planDone, planToggle, PLAN_BLOK, PLAN_SATIR, PLAN_IHMAL,
   isNewCard, newLimit, newQuota, newSeenToday, newWaiting, NEW_PER_DAY, shuffled,
   clozeCards, noteCardPairs, weakTopics, snapZone, YASLA_KENAR, YASLA_KUTU,
+  paketGecerli, paketOzet, paketUygula, PAKET_SURUM,
   setDB: v => { DB = v; }, getDB: () => DB };`;
 
 const bosDugum = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {} },
@@ -316,6 +317,87 @@ es("zayıf konu: hiç yanlışı olmayan listeye girmez",
 es("zayıf konu: sınır uygulanıyor", T.weakTopics(1, 1).length, 1);
 T.setDB({ ...kartDB([]), quizRuns: [{ id: "r1", correct: 3, total: 4 }] });
 es("zayıf konu: konu işaretlenmemişse boş", T.weakTopics(), []);
+
+/* ---------- paket içe aktarma ---------- */
+const bosVeri = () => ({ settings: {}, trash: [], notes: [], decks: [], cards: [], tasks: [],
+  sessions: [], topics: [], courses: [], exams: [], quizzes: [], quizRuns: [], terms: [] });
+const paket = (x = {}) => ({ studyosPaket: T.PAKET_SURUM, ad: "Test paketi", ders: "Biyoloji",
+  konular: ["Hücre"],
+  desteler: [{ ad: "Organeller", kartlar: [
+    { on: "Mitokondri", arka: "Enerji merkezi" }, { on: "Ribozom", arka: "Protein sentezi" }] }],
+  testler: [{ ad: "Hücre testi", sorular: [
+    { s: "Enerji merkezi?", secenekler: ["Mitokondri", "Ribozom", "Lizozom", "Koful"], dogru: 0,
+      aciklama: "ATP burada üretilir", konu: "Hücre" }] }],
+  terimler: [{ terim: "Mitokondri", tanim: "Enerji üreten organel", esanlam: ["mitokondriler"] }],
+  ...x });
+
+es("paket: geçerlilik", [T.paketGecerli(paket()), T.paketGecerli({}), T.paketGecerli(null),
+  T.paketGecerli({ studyosPaket: 99, desteler: [] })], [true, false, false, false]);
+es("paket: özet sayıları", (({ deste, kart, test, soru, terim, konu, ders }) =>
+  ({ deste, kart, test, soru, terim, konu, ders }))(T.paketOzet(paket())),
+  { deste: 1, kart: 2, test: 1, soru: 1, terim: 1, konu: 1, ders: "Biyoloji" });
+
+/* boş veriye uygulama */
+let pdb = bosVeri(); T.setDB(pdb);
+let ek = T.paketUygula(paket());
+es("paket: eklenenler", [ek.deste, ek.kart, ek.test, ek.soru, ek.terim, ek.konu],
+  [1, 2, 1, 1, 1, 1]);
+es("paket: ders açıldı", T.getDB().courses.map(c => c.name), ["Biyoloji"]);
+es("paket: kartlar destede", T.getDB().cards.map(c => c.front), ["Mitokondri", "Ribozom"]);
+es("paket: kart bugün vadeli ve taze", [T.getDB().cards[0].due, T.getDB().cards[0].reps,
+  T.getDB().cards[0].ef], [bugun, 0, 2.5]);
+es("paket: soru konuya bağlandı",
+  T.getDB().quizzes[0].questions[0].topicId, T.getDB().topics[0].id);
+es("paket: terim eklendi", [T.getDB().terms[0].term, T.getDB().terms[0].alt],
+  ["Mitokondri", ["mitokondriler"]]);
+
+/* MEVCUT VERİ KORUNMALI */
+pdb = bosVeri();
+pdb.courses = [{ id: "k0", name: "Matematik", color: "#000" }];
+pdb.notes = [{ id: "n0", title: "Eski not" }];
+pdb.cards = [{ id: "c0", deckId: "d0", front: "eski kart" }];
+pdb.decks = [{ id: "d0", name: "Eski deste", courseId: "k0" }];
+T.setDB(pdb);
+T.paketUygula(paket());
+es("paket: eski not duruyor", T.getDB().notes.map(n => n.id), ["n0"]);
+es("paket: eski kart duruyor", T.getDB().cards[0].id, "c0");
+es("paket: eski deste duruyor", T.getDB().decks[0].id, "d0");
+es("paket: yeni ders eklendi, eski silinmedi",
+  T.getDB().courses.map(c => c.name), ["Matematik", "Biyoloji"]);
+
+/* aynı adlı ders varsa ona bağlanır, ikinci kez açılmaz */
+pdb = bosVeri(); pdb.courses = [{ id: "kb", name: "biyoloji", color: "#000" }];
+T.setDB(pdb); T.paketUygula(paket());
+es("paket: aynı adlı ders tekrar açılmıyor (büyük/küçük harf)",
+  T.getDB().courses.length, 1);
+es("paket: deste mevcut derse bağlandı", T.getDB().decks[0].courseId, "kb");
+
+/* iki kez almak kopya üretmemeli */
+pdb = bosVeri(); T.setDB(pdb);
+T.paketUygula(paket());
+const ek2 = T.paketUygula(paket());
+es("paket: ikinci alımda kart kopyalanmıyor", T.getDB().cards.length, 2);
+es("paket: ikinci alımda deste ve terim kopyalanmıyor",
+  [T.getDB().decks.length, T.getDB().terms.length], [1, 1]);
+dogru("paket: ikinci alımda atlananlar sayılıyor", ek2.atlanan >= 3);
+es("paket: aynı adlı test çakışmasın diye numaralanıyor",
+  T.getDB().quizzes.map(q => q.name), ["Hücre testi", "Hücre testi (2)"]);
+
+/* bozuk kayıtlar atlanır, sağlamlar alınır */
+pdb = bosVeri(); T.setDB(pdb);
+ek = T.paketUygula(paket({
+  desteler: [{ ad: "Karışık", kartlar: [
+    { on: "Sağlam", arka: "Tanım" }, { on: "", arka: "arka yok ön" }, { on: "Ön var", arka: "" }] }],
+  testler: [{ ad: "Bozuk test", sorular: [
+    { s: "Geçerli?", secenekler: ["a", "b"], dogru: 1 },
+    { s: "Şık yok", secenekler: [], dogru: 0 },
+    { s: "Doğru şık aralık dışı", secenekler: ["a", "b"], dogru: 5 },
+    { s: "Boş şık", secenekler: ["a", ""], dogru: 0 }] }],
+  terimler: [{ terim: "Tanımsız", tanim: "" }] }));
+es("paket: eksik kartlar atlanıyor", T.getDB().cards.map(c => c.front), ["Sağlam"]);
+es("paket: bozuk sorular atlanıyor", T.getDB().quizzes[0].questions.length, 1);
+es("paket: tanımsız terim atlanıyor", T.getDB().terms.length, 0);
+dogru("paket: atlananlar raporlanıyor", ek.atlanan === 6);
 
 /* ---------- günlük plan ---------- */
 const planDB = (x = {}) => ({ settings: { goal: 120 }, trash: [], notes: [], decks: [],
