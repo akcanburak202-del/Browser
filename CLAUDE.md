@@ -99,6 +99,11 @@ Script blokları sırayla:
   bilinemeyen bir kart ikinci kez yeni sayılmaz. `dueCards()` günlük yeni kart kotasını **global**
   harcar ve `DB.cards` sırası sabit olduğu için deste deste çağrılsa da aynı kartları seçer —
   bu yüzden rozetlerin toplamı genel toplamı aşmaz. Ham sayı gerekiyorsa `newWaiting()`.
+- **Tur kuyruğu `shuffled()` ile karışır** (Çalış, 🔥 Hepsi ve widget'taki tur). Hep aynı sırayla
+  görülünce cevap içerikten değil sıradan hatırlanıyor. Yeni bir tur başlatma yolu eklersen karıştır.
+- **Tur bitince "Çalış" pasifleşir ve bu doğrudur** — kartların vadesi ileri atılmıştır. Deste
+  başlığının altındaki çubuk sebebini, en yakın tekrar tarihini ve günlük sınırda bekleyen kart
+  sayısını yazar; o çubuk olmadan düğme bozuk görünüyor (kullanıcı hata sandı).
 - **Serbest tekrar (cram) SM-2'ye dokunmaz.** `w.state.cram` açıkken `grade()` ne `sm2()` çağırır
   ne kota harcar; yeni bir tekrar kipi eklersen aynı ayrımı koru.
 - **Günlük plan türetilmiştir, veriye yazılmaz.** `dailyPlan()` (3. bloğun sonunda, blok 1-3'te

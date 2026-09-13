@@ -407,7 +407,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.1", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.2", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1473,6 +1473,13 @@ function dueCards(deckId){
   }
   return deckId?out.filter(c=>c.deckId===deckId):out;
 }
+/* Fisher-Yates. Tur kuyruğu her başlayışta karışır: hep aynı sırayla görünce
+   cevap içerikten değil sıradan hatırlanmaya başlıyor. */
+function shuffled(arr){
+  const a=arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
 function sm2(card,q){
   if(q<3){ card.reps=0; card.int=1; card.lapses=(card.lapses||0)+1; }
   else{ card.reps=(card.reps||0)+1;
@@ -1510,6 +1517,22 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
             ${cards.length?"":"disabled"}>🔥 Hepsi</button>
           <button class="btn danger sm" data-a="deldeck">Deste sil</button>
         </div>
+        ${(()=>{
+          /* Tur bitince her kartın vadesi ileri atılır ve "Çalış" haklı olarak pasifleşir.
+             Sebebini yazmazsak düğme bozuk görünüyor — yaşandı. */
+          if(!cards.length||dueCards(s.deck).length) return "";
+          const ileri=cards.filter(c=>c.due&&c.due>today()).map(c=>c.due).sort();
+          const sonraki=ileri[0];
+          const bekleyen=newWaiting(s.deck);
+          return `<div class="row" style="padding:7px 12px;gap:10px;flex-wrap:wrap;
+              background:var(--surface-2);border-bottom:1px solid var(--border-2);font-size:12.5px">
+            <span>✓ <b>Bu destede bugünlük tekrar bitti.</b></span>
+            ${sonraki?`<span class="sub">En yakın tekrar ${esc(sonraki)} — ${dayDiff(today(),sonraki)} gün sonra
+              (${ileri.filter(d=>d===sonraki).length} kart)</span>`:""}
+            ${bekleyen?`<span class="sub">· ${bekleyen} yeni kart günlük sınır dolduğu için bekliyor</span>`:""}
+            <span class="grow"></span>
+            <span class="sub">Yine de çalışmak istersen <b>🔥 Hepsi</b> — program değişmez</span>
+          </div>`; })()}
         <div class="toolbar">
           <input class="inp grow" data-a="f" placeholder="Ön yüz (soru)">
           <button class="btn sm" data-a="picF"
@@ -1559,9 +1582,10 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
       s.pendF=null; s.pendB=null;
       A("f").value="";A("b").value="";saveAnd("cards");$('[data-a="f"]',w.body).focus();};
     A("add").onclick=add; A("b").onkeydown=e=>{if(e.key==="Enter")add();};
-    A("study").onclick=()=>{s.mode="study";s.cram=false;s.queue=dueCards(s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
+    A("study").onclick=()=>{s.mode="study";s.cram=false;
+      s.queue=shuffled(dueCards(s.deck).map(c=>c.id));s.show=false;s.done=0;this.render(w);};
     A("cram").onclick=()=>{s.mode="study";s.cram=true;
-      s.queue=DB.cards.filter(c=>c.deckId===s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
+      s.queue=shuffled(DB.cards.filter(c=>c.deckId===s.deck).map(c=>c.id));s.show=false;s.done=0;this.render(w);};
   },
   study(w){
     const s=w.state; const c=DB.cards.find(x=>x.id===s.queue[0]);
@@ -3119,7 +3143,7 @@ const hms=s=>`${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%6
 function startCardReview(){
   const w=openApp("cards");
   w.state.deck=DB.decks.find(d=>dueCards(d.id).length)?.id||w.state.deck;
-  w.state.mode="study"; w.state.queue=dueCards(w.state.deck).map(c=>c.id);
+  w.state.mode="study"; w.state.queue=shuffled(dueCards(w.state.deck).map(c=>c.id));
   w.state.show=false; w.state.done=0;
   APPS.cards.render(w);
 }

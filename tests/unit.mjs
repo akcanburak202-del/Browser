@@ -39,7 +39,7 @@ const kaynak = bloklar.slice(0, 3).join("\n") + `
 globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueCards, minutesByDay,
   toTrash, trimTrash, restoreTrash, dropTrash, trashRefs, COP_GUN, COP_BAYT,
   dailyPlan, planDone, planToggle, PLAN_BLOK, PLAN_SATIR, PLAN_IHMAL,
-  isNewCard, newLimit, newQuota, newSeenToday, newWaiting, NEW_PER_DAY,
+  isNewCard, newLimit, newQuota, newSeenToday, newWaiting, NEW_PER_DAY, shuffled,
   clozeCards, noteCardPairs, weakTopics, snapZone, YASLA_KENAR, YASLA_KUTU,
   setDB: v => { DB = v; }, getDB: () => DB };`;
 
@@ -262,6 +262,17 @@ T.setDB(kartDB([
 es("sınır: kota global, deste toplamı genel toplamı aşmaz",
   T.dueCards("dA").length + T.dueCards("dB").length, T.dueCards().length);
 es("sınır: kota ilk gelen desteye harcanır", T.dueCards("dA").length, 6);
+
+/* ---------- kuyruk karıştırma ---------- */
+const dizi = [...Array(12)].map((_, i) => "k" + i);
+const kar = T.shuffled(dizi);
+es("karıştırma: kaynağı değiştirmiyor", dizi, [...Array(12)].map((_, i) => "k" + i));
+es("karıştırma: aynı elemanlar, aynı sayıda", kar.slice().sort(), dizi.slice().sort());
+es("karıştırma: boş dizi", T.shuffled([]), []);
+es("karıştırma: tek eleman", T.shuffled(["a"]), ["a"]);
+/* 40 denemede hiç farklı sıra çıkmazsa karıştırma çalışmıyordur (12! olasılık) */
+dogru("karıştırma gerçekten sırayı değiştiriyor",
+  [...Array(40)].some(() => T.shuffled(dizi).join() !== dizi.join()));
 
 /* ---------- boşluk doldurma ---------- */
 es("cloze: tek boşluk",

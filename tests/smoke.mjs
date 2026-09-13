@@ -529,6 +529,33 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- tur bitince sebebi yazılıyor (sürüm 3.2) ---------- */
+const bitti = await p2.evaluate(() => {
+  DB.decks = [{ id: "db", name: "Bitti", courseId: DB.courses[0]?.id }];
+  DB.cards = [...Array(5)].map((_, i) => ({ id: "b" + i, deckId: "db", front: "ö" + i, back: "a" + i,
+    ef: 2.5, int: 0, reps: 0, lapses: 0, due: today() }));
+  DB.settings.newPerDay = 3; DB.settings.newSeen = null; saveNow();
+  const w = openApp("cards"); w.state.deck = "db"; w.state.mode = null; APPS.cards.render(w);
+  const once = { vadeli: dueCards("db").length, pasif: w.body.querySelector('[data-a="study"]').disabled };
+  w.body.querySelector('[data-a="study"]').click();
+  for (let i = 0; i < 3; i++) { w.body.querySelector('[data-a="flip"]').click();
+    w.body.querySelector('[data-g="4"]').click(); }
+  w.body.querySelector('[data-a="back"]').click();
+  const metin = w.body.textContent;
+  return { once, sonra: { vadeli: dueCards("db").length,
+    pasif: w.body.querySelector('[data-a="study"]').disabled,
+    aciklama: metin.includes("bugünlük tekrar bitti"),
+    enYakin: metin.includes(addDays(today(), 1)),
+    sinir: metin.includes("günlük sınır dolduğu için bekliyor"),
+    cram: !w.body.querySelector('[data-a="cram"]').disabled } };
+});
+check("başta çalışılabiliyor", bitti.once.vadeli === 3 && bitti.once.pasif === false);
+check("tur bitince vadesi gelen kart kalmıyor", bitti.sonra.vadeli === 0 && bitti.sonra.pasif === true);
+check("düğme neden pasif olduğunu söylüyor", bitti.sonra.aciklama === true);
+check("en yakın tekrar tarihi yazıyor", bitti.sonra.enYakin === true);
+check("günlük sınırda bekleyen kartlar söyleniyor", bitti.sonra.sinir === true);
+check("serbest tekrar hâlâ açık", bitti.sonra.cram === true);
+
 /* ---------- kart görselleri ön/arka ayrı (sürüm 3.1) ---------- */
 const kartG = await p2.evaluate(async () => {
   const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
