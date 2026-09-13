@@ -255,6 +255,17 @@ textarea.inp{resize:none;line-height:1.6}
 .term .pr{color:#7ee0a8}
 .term .er{color:#ff8f8f}.term .ok{color:#8fd6ff}.term .dim{color:#7d8896}
 /* Odak modu */
+/* Koyu bir karartının DOĞRUDAN üstünde duran denetimler. Tema renkleri burada
+   işe yaramaz: açık temada --text neredeyse siyah, .btn zemini rgba(0,0,0,.075);
+   ikisi de karartıda kaybolur (çizim tahtasının "Kapat" düğmesi görünmüyordu).
+   Bu yüzden kendi renklerini taşırlar. Bir kutunun İÇİNDEKİ denetimlere verme —
+   orada tema renkleri doğru (bkz. bigNotice). */
+.onDark{color:#f2f2ee}
+.onDark .btn{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.32);color:#f2f2ee}
+.onDark .btn:hover{background:rgba(255,255,255,.26);border-color:rgba(255,255,255,.5)}
+.onDark .btn.danger{color:#ff9b93}
+.onDark .btn.pri{background:var(--accent);border-color:transparent;color:#fff}
+.onDark .sub{color:rgba(242,242,238,.75)}
 #focusOverlay{position:fixed;inset:0;z-index:9400;background:rgba(8,10,14,.94);display:none;place-items:center;color:#f2f2ee;text-align:center}
 #focusOverlay.on{display:grid}
 #focusOverlay .ft{font:200 96px/1 var(--font);font-variant-numeric:tabular-nums}
@@ -378,7 +389,7 @@ textarea.inp{resize:none;line-height:1.6}
 <div id="switcher"><div class="sw"></div></div>
 <div id="wlac"></div>
 <div id="termpop"></div>
-<div id="focusOverlay">
+<div id="focusOverlay" class="onDark">
   <div>
     <div class="sub" id="foLabel" style="letter-spacing:3px;text-transform:uppercase">odak</div>
     <div class="ft" id="foTime">25:00</div>
@@ -396,7 +407,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="2.9", VERSION_DATE="2026-09-12";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.0", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -882,7 +893,7 @@ function drawPad(){
     /* Kapat ve Nota ekle ÜST çubukta: Android'de adres çubuğu görünürken
        position:fixed bir katmanın altı görünen alanın dışında kalabiliyor ve
        alttaki düğmeler kayboluyor. Üst çubuk her zaman görünür. */
-    const o=el("div","ovl",`
+    const o=el("div","ovl onDark",`
       <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;flex:0 0 auto;
         width:100%;max-width:1400px">
         <button class="btn" data-a="kapat">✕ Kapat</button>

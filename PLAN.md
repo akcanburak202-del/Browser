@@ -323,6 +323,27 @@ alt satırında bu yazıyor.
 - **Karartıya dokunmak artık kapatmıyor** — çizerken avuç değince kapanmasın ve kapanış yeri
   belirsiz kalmasın diye. Kapanış yolları: ✕ Kapat, Escape, cihazın geri tuşu.
 
+## Üçüncü cihaz turu (sürüm 3.0)
+
+Kullanıcı fotoğraf gönderdi: çizgiler eskisinden akıcı ✅, ama üst çubukta "✕ Kapat"
+görünmüyor — **oraya dokununca çizimden çıkıyor**, yani düğme orada ve çalışıyor.
+
+**Kök neden: tema renkleri karartının üstünde kayboluyor.** Çizim tahtası kendi
+`rgba(0,0,0,.86)` karartısının doğrudan üstünde duruyor ama düğmeleri tema
+belirteçlerini kullanıyordu. **Açık temada** `--text:#14130f` (neredeyse siyah) ve
+`.btn` zemini `rgba(0,0,0,.075)` — ikisi de siyah üstünde görünmez.
+Görünen üç şeyin hepsinin kendi rengi vardı: renk kareleri (satır içi `background`),
+"Temizle" (`--bad`, kırmızı), "Nota ekle" (`.pri`, mavi zemin + beyaz).
+Fotoğraftaki tabloyla bire bir uyuşuyor.
+
+**Çözüm:** `.onDark` sınıfı — koyu karartının doğrudan üstündeki denetimler kendi
+renklerini taşıyor (beyaza yakın metin, `rgba(255,255,255,.15)` zemin).
+`drawPad` ve `#focusOverlay` (orada da düğme zeminleri kayboluyordu) bu sınıfı aldı.
+`bigNotice` almadı: onun düğmeleri açık zeminli bir kutunun içinde, tema renkleri orada doğru.
+
+Duman testi iki temada da `✕ Kapat`, `↶` ve `Temizle` düğmelerinin metin parlaklığını ve
+zemin saydamlığını ölçüyor; bu kusur bir daha sessizce dönemez.
+
 ## Reddedilen / ertelenen
 
 - **Kaynağı 4 dosyaya bölüp build betiğiyle birleştirmek.** "Klonla, `index.html`'i aç, çalışır"

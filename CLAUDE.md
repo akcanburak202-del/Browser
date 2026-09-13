@@ -89,6 +89,12 @@ Script blokları sırayla:
   görünür alanda kaldığını sınıyor.
 - **Karartıya dokunmak kapatmaz.** Çizerken avuç değince kapanmasın ve kapanış yeri belirsiz
   kalmasın diye kaldırıldı; kapanış yolları yalnızca ✕ Kapat, Escape ve cihazın geri tuşu.
+- **Koyu karartının doğrudan üstündeki denetimlere `class="onDark"` ver** (`drawPad`,
+  `#focusOverlay`). Tema renkleri orada işe yaramaz: **açık temada** `--text` neredeyse siyah
+  ve `.btn` zemini `rgba(0,0,0,.075)`, ikisi de karartıda kaybolur — çizim tahtasının
+  "✕ Kapat" düğmesi cihazda görünmüyordu (basılabiliyordu ama görünmüyordu).
+  Bir kutunun **içindeki** denetimlere verme; orada tema renkleri doğru (`bigNotice`).
+  Duman testi iki temada da okunurluğu ölçüyor.
 - **Kartlarda "yeni" demek `!c.seen` demek.** `sm2()` her değerlendirmede `seen` yazar, bu yüzden
   bilinemeyen bir kart ikinci kez yeni sayılmaz. `dueCards()` günlük yeni kart kotasını **global**
   harcar ve `DB.cards` sırası sabit olduğu için deste deste çağrılsa da aynı kartları seçer —

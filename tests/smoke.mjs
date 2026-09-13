@@ -529,6 +529,35 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* Çizim tahtası kendi karartısının üstünde: tema renkleri (açık temada koyu metin)
+   burada kaybolur. Her iki temada da denetimler okunur kalmalı. */
+for (const tema of ["light", "dark"]) {
+  await p2.evaluate(t => { DB.settings.theme = t; applySettings(); }, tema);
+  await p2.evaluate(() => {
+    const w = [...WINS.values()].find(x => x.appId === "notes");
+    w.body.querySelector('[data-a="draw"]').click();
+  });
+  await p2.waitForTimeout(250);
+  const okunur = await p2.evaluate(() => {
+    const parla = c => { const [r, g, b] = c.match(/[\d.]+/g).map(Number);
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255; };
+    const alfa = c => { const m = c.match(/[\d.]+/g); return m && m.length > 3 ? +m[3] : 1; };
+    const out = {};
+    for (const a of ["kapat", "geri", "temizle"]) {
+      const cs = getComputedStyle(document.querySelector(`[data-a="${a}"]`));
+      out[a] = { metin: parla(cs.color), zeminAlfa: alfa(cs.backgroundColor) };
+    }
+    return out;
+  });
+  const hepsi = Object.values(okunur);
+  check(`çizim tahtası denetimleri ${tema} temada okunur`,
+    hepsi.every(x => x.metin > 0.55 && x.zeminAlfa >= 0.1),
+    JSON.stringify(okunur));
+  await p2.evaluate(() => document.querySelector('[data-a="kapat"]').click());
+  await p2.waitForTimeout(200);
+}
+await p2.evaluate(() => { DB.settings.theme = "dark"; applySettings(); });
+
 /* kritik düğmeler her ekran oranında görünür alanda kalmalı */
 for (const [ad, gw, gh] of [["dikey", 800, 1280], ["yatay", 1280, 800], ["alçak", 1024, 620]]) {
   await p2.setViewportSize({ width: gw, height: gh });
