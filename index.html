@@ -273,6 +273,9 @@ textarea.inp{resize:none;line-height:1.6}
 .onDark .btn.danger{color:#ff9b93}
 .onDark .btn.pri{background:var(--accent);border-color:transparent;color:#fff}
 .onDark .sub{color:rgba(242,242,238,.75)}
+.onDark .inp{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#f2f2ee}
+/* açılır listenin şıkları işletim sistemi tarafından çizilir: tema renkleri kalsın */
+.onDark .inp option{background:var(--surface-solid);color:var(--text)}
 #focusOverlay{position:fixed;inset:0;z-index:9400;background:rgba(8,10,14,.94);display:none;place-items:center;color:#f2f2ee;text-align:center}
 #focusOverlay.on{display:grid}
 #focusOverlay .ft{font:200 96px/1 var(--font);font-variant-numeric:tabular-nums}
@@ -401,6 +404,10 @@ textarea.inp{resize:none;line-height:1.6}
     <div class="sub" id="foLabel" style="letter-spacing:3px;text-transform:uppercase">odak</div>
     <div class="ft" id="foTime">25:00</div>
     <div id="foTask" style="opacity:.7;margin-top:6px"></div>
+    <div class="row" id="foPick" style="justify-content:center;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <select class="inp" id="foCourse" style="width:170px"></select>
+      <select class="inp" id="foTopic" style="width:220px"></select>
+    </div>
     <div style="margin-top:26px;display:flex;gap:10px;justify-content:center">
       <button class="btn" id="foToggle">Duraklat</button>
       <button class="btn" id="foNoise">🔊 Gürültü</button>
@@ -414,7 +421,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.3", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.4", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1640,8 +1647,9 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
 
 /* ---------------- Pomodoro ---------------- */
 const Pomo={
-  left:0, total:0, running:false, mode:"focus", courseId:null, label:"", tick:null,
-  start(courseId,label){ this.courseId=courseId||DB.courses[0]?.id; this.label=label||"";
+  left:0, total:0, running:false, mode:"focus", courseId:null, topicId:null, label:"", tick:null,
+  start(courseId,label,topicId){ this.courseId=courseId||DB.courses[0]?.id;
+    this.label=label||""; this.topicId=topicId||null;
     this.mode="focus"; this.total=DB.settings.pomo*60; this.left=this.total; this.run(); },
   startBreak(){ this.mode="break"; this.total=DB.settings.brk*60; this.left=this.total; this.run(); },
   run(){ this.running=true; clearInterval(this.tick);
@@ -1650,7 +1658,10 @@ const Pomo={
   reset(){ this.pause(); this.left=this.total=(this.mode==="focus"?DB.settings.pomo:DB.settings.brk)*60; this.paint(); },
   finish(){ clearInterval(this.tick); this.running=false;
     if(this.mode==="focus"){ const min=Math.round(this.total/60);
-      DB.sessions.push({id:uid(),courseId:this.courseId,date:today(),min,kind:"focus",label:this.label});
+      /* konu da yazılır: yoksa pomodoro süresi "Konulara göre" istatistiğine ve günlük
+         plandaki "bu konuya dokunuldu mu" hesabına hiç girmiyordu */
+      DB.sessions.push({id:uid(),courseId:this.courseId,topicId:this.topicId||null,
+        date:today(),min,kind:"focus",label:this.label||topicName(this.topicId)});
       save(); toast(`✅ ${min} dakika kaydedildi — mola zamanı`); beep(); this.startBreak(); }
     else { toast("☕ Mola bitti, hadi devam!"); beep(); this.mode="focus"; this.left=this.total=DB.settings.pomo*60; }
     updateMenubar(); rerender("stats"); },
@@ -1669,11 +1680,13 @@ APPS.pomodoro={ name:"Pomodoro", icon:"⏱", w:420, h:520, desk:true, single:tru
     const todayMin=DB.sessions.filter(s=>s.date===today()).reduce((a,b)=>a+b.min,0);
     w.body.innerHTML=`<div class="app">
       <div class="toolbar"><b class="grow">${Pomo.mode==="focus"?"🎯 Odak":"☕ Mola"}</b>
-        <select class="inp" data-a="c" style="width:140px">${DB.courses.map(c=>`<option value="${c.id}" ${Pomo.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
+        <select class="inp" data-a="c" style="width:130px">${DB.courses.map(c=>`<option value="${c.id}" ${Pomo.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+        <select class="inp" data-a="t" style="width:150px"><option value="">— konu seçme —</option>
+          ${topicOptions(Pomo.courseId).map(t=>`<option value="${t.id}" ${Pomo.topicId===t.id?"selected":""}>${esc(t.label)}</option>`).join("")}</select></div>
       <div class="grow" style="display:grid;place-items:center;gap:18px;padding:18px">
         <div class="ring" style="--p:${(p*100).toFixed(1)}">
           <div style="text-align:center"><div class="timer">${mmss(Pomo.left||DB.settings.pomo*60)}</div>
-          <div class="sub">${esc(Pomo.label||"serbest çalışma")}</div></div>
+          <div class="sub">${esc(Pomo.label||topicName(Pomo.topicId)||"serbest çalışma")}</div></div>
         </div>
         <div class="row">
           <button class="btn pri" data-a="tog">${Pomo.running?"⏸ Duraklat":"▶ Başlat"}</button>
@@ -1694,8 +1707,11 @@ APPS.pomodoro={ name:"Pomodoro", icon:"⏱", w:420, h:520, desk:true, single:tru
     const A=a=>$(`[data-a="${a}"]`,w.body);
     A("tog").onclick=()=>{ if(Pomo.running)Pomo.pause(); else { if(!Pomo.left){Pomo.total=DB.settings.pomo*60;Pomo.left=Pomo.total;} Pomo.courseId=A("c").value; Pomo.run(); } };
     A("rst").onclick=()=>Pomo.reset();
-    A("focus").onclick=()=>{ if(!Pomo.running){Pomo.courseId=A("c").value;Pomo.start(Pomo.courseId,Pomo.label);} enterFocus(); };
-    A("c").onchange=e=>Pomo.courseId=e.target.value;
+    A("focus").onclick=()=>{ if(!Pomo.running){Pomo.courseId=A("c").value;Pomo.start(Pomo.courseId,Pomo.label,Pomo.topicId);} enterFocus(); };
+    A("c").onchange=e=>{ Pomo.courseId=e.target.value; Pomo.topicId=null; Pomo.label="";
+      DB.settings.lastCourse=Pomo.courseId; save(); this.render(w); };
+    A("t").onchange=e=>{ Pomo.topicId=e.target.value||null; Pomo.label="";
+      DB.settings.lastTopic=Pomo.topicId; save(); this.render(w); };
     A("len").onchange=e=>{DB.settings.pomo=Math.max(1,+e.target.value||25);save();if(!Pomo.running){Pomo.total=Pomo.left=DB.settings.pomo*60;}this.render(w);};
     A("brk").onchange=e=>{DB.settings.brk=Math.max(1,+e.target.value||5);save();};
   }};
@@ -3034,13 +3050,31 @@ function toggleNoise(){
     noiseNode=src; $("#foNoise").textContent="🔊 Gürültü açık";
   }catch(e){ toast("Ses başlatılamadı"); }
 }
-function enterFocus(){ $("#focusOverlay").classList.add("on"); paintFocus(); }
+/* Seçenekler yalnızca odak açılırken ve ders değişince kurulur; paintFocus saniyede
+   bir çalıştığı için orada yeniden kurulsa açılır liste kapanır ve seçim kaçar. */
+function fillFocusPickers(){
+  const cs=$("#foCourse"), ts=$("#foTopic");
+  if(!cs||!ts) return;
+  if(!Pomo.courseId||!course(Pomo.courseId))
+    Pomo.courseId=(DB.settings.lastCourse&&course(DB.settings.lastCourse)?DB.settings.lastCourse:DB.courses[0]?.id)||null;
+  cs.innerHTML=DB.courses.length
+    ? DB.courses.map(c=>`<option value="${c.id}" ${c.id===Pomo.courseId?"selected":""}>${esc(c.name)}</option>`).join("")
+    : `<option value="">— ders yok —</option>`;
+  const tops=Pomo.courseId?topicOptions(Pomo.courseId):[];
+  if(Pomo.topicId&&!tops.some(t=>t.id===Pomo.topicId)) Pomo.topicId=null;
+  ts.innerHTML=`<option value="">— konu seçme —</option>`+
+    tops.map(t=>`<option value="${t.id}" ${t.id===Pomo.topicId?"selected":""}>${esc(t.label)}</option>`).join("");
+  ts.disabled=!tops.length;
+}
+function enterFocus(){ $("#focusOverlay").classList.add("on"); fillFocusPickers(); paintFocus(); }
 function exitFocus(){ $("#focusOverlay").classList.remove("on"); if(noiseNode)toggleNoise(); }
 function paintFocus(){
   if(!$("#focusOverlay").classList.contains("on"))return;
   $("#foTime").textContent=mmss(Pomo.left||DB.settings.pomo*60);
   $("#foLabel").textContent=Pomo.mode==="focus"?"odak":"mola";
-  $("#foTask").textContent=Pomo.label||cname(Pomo.courseId);
+  /* görev adı varsa o, yoksa seçili konu, o da yoksa ders */
+  $("#foTask").textContent=Pomo.label||topicName(Pomo.topicId)||cname(Pomo.courseId);
+  $("#foPick").style.display=Pomo.mode==="focus"?"":"none";   /* molada seçici gizli */
   $("#foToggle").textContent=Pomo.running?"Duraklat":"Devam";
 }
 
@@ -3105,9 +3139,15 @@ $("#mbTheme").onclick=toggleTheme;
 $("#mbDue").onclick=()=>openApp("cards");
 $("#mbToday").onclick=()=>openApp("stats");
 $("#mbStreak").onclick=()=>openApp("stats");
+$("#foCourse").onchange=e=>{ Pomo.courseId=e.target.value||null; Pomo.topicId=null; Pomo.label="";
+  DB.settings.lastCourse=Pomo.courseId; DB.settings.lastTopic=null; save();
+  fillFocusPickers(); paintFocus(); };
+$("#foTopic").onchange=e=>{ Pomo.topicId=e.target.value||null; Pomo.label="";
+  DB.settings.lastTopic=Pomo.topicId; save(); paintFocus(); };
 $("#foExit").onclick=exitFocus;
 $("#foNoise").onclick=toggleNoise;
-$("#foToggle").onclick=()=>{ if(Pomo.running)Pomo.pause(); else { if(!Pomo.left)Pomo.start(Pomo.courseId,Pomo.label); else Pomo.run(); } paintFocus(); };
+$("#foToggle").onclick=()=>{ if(Pomo.running)Pomo.pause();
+  else { if(!Pomo.left)Pomo.start(Pomo.courseId,Pomo.label,Pomo.topicId); else Pomo.run(); } paintFocus(); };
 
 /* ============================================================
    ÇALIŞMA KRONOMETRESİ — widget'tan ders + konu seçip başlatılır

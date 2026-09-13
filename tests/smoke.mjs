@@ -529,6 +529,41 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- odak modunda ders/konu seçilebiliyor (sürüm 3.4) ---------- */
+const odak = await p2.evaluate(() => {
+  DB.courses = [{ id: "mat", name: "Matematik", color: "#2a78d6" },
+                { id: "bio", name: "Biyoloji", color: "#1baf7a" }];
+  DB.topics = [{ id: "t1", courseId: "mat", parentId: null, name: "Türev", status: "learning" },
+               { id: "t3", courseId: "bio", parentId: null, name: "Hücre", status: "learning" }];
+  DB.sessions = []; Pomo.courseId = null; Pomo.topicId = null; Pomo.label = ""; saveNow();
+  enterFocus();
+  const say = sel => document.querySelectorAll(sel).length;
+  const ilk = { ders: say("#foCourse option"), konu: say("#foTopic option"),
+    etiket: document.querySelector("#foTask").textContent };
+  const cs = document.querySelector("#foCourse");
+  cs.value = "bio"; cs.dispatchEvent(new Event("change"));
+  const sonra = { konu: say("#foTopic option"), etiket: document.querySelector("#foTask").textContent,
+    topicId: Pomo.topicId };
+  const ts = document.querySelector("#foTopic");
+  ts.value = "t3"; ts.dispatchEvent(new Event("change"));
+  const secili = document.querySelector("#foTask").textContent;
+  /* oturumu bitir: konu kaydediliyor mu */
+  Pomo.start(Pomo.courseId, "", Pomo.topicId); Pomo.total = 60; Pomo.left = 1; Pomo.finish();
+  const o = DB.sessions[DB.sessions.length - 1];
+  const molada = document.querySelector("#foPick").style.display;
+  exitFocus();
+  return { ilk, sonra, secili, oturum: { c: o.courseId, t: o.topicId, k: o.kind }, molada };
+});
+check("odak modunda ders seçici dolu", odak.ilk.ders === 2);
+check("odak modunda konu seçici dolu (+ 'konu seçme' satırı)", odak.ilk.konu === 2);
+check("ders seçilmemişse etiket dersi gösteriyor", odak.ilk.etiket === "Matematik");
+check("ders değişince konular yenileniyor ve konu sıfırlanıyor",
+  odak.sonra.konu === 2 && odak.sonra.etiket === "Biyoloji" && odak.sonra.topicId === null);
+check("konu seçilince etiket konuyu gösteriyor", odak.secili === "Hücre");
+check("pomodoro oturumu konuyu kaydediyor",
+  odak.oturum.c === "bio" && odak.oturum.t === "t3" && odak.oturum.k === "focus");
+check("molada seçiciler gizleniyor", odak.molada === "none");
+
 /* ---------- yalnız görselli yüz kartı şişirmiyor (sürüm 3.3) ---------- */
 const olcu = await p2.evaluate(async () => {
   const cv = document.createElement("canvas"); cv.width = 400; cv.height = 240;

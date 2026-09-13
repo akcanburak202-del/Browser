@@ -103,6 +103,12 @@ Script blokları sırayla:
   tamamında değil: şablondaki satır sonları ve girintiler de boşluk olarak çizilip yüzü
   gereksiz uzatıyordu. Yüzde metin yoksa metin kutusunu hiç çizme; yalnız görselli yüz
   `img-only` sınıfı alıp asgari yüksekliği bırakır ve görsel büyür.
+- **Odak katmanındaki seçenekler `fillFocusPickers()` ile kurulur, `paintFocus()` ile DEĞİL.**
+  `paintFocus` saniyede bir çalışıyor; seçenekleri orada yeniden kurarsan açılır liste kapanır ve
+  seçim kaçar. Odak katmanı artık ders ve konu seçtirir — eskiden yalnızca gösteriyordu ve
+  açılışta atanan ilk derste takılı kalıyordu.
+- **`.onDark` form denetimlerini de kapsar** (`.onDark .inp`); açılır listenin şıkları tema
+  renklerini korur, yoksa odak katmanındaki seçiciler açık temada okunmuyordu.
 - **Tur kuyruğu `shuffled()` ile karışır** (Çalış, 🔥 Hepsi ve widget'taki tur). Hep aynı sırayla
   görülünce cevap içerikten değil sıradan hatırlanıyor. Yeni bir tur başlatma yolu eklersen karıştır.
 - **Tur bitince "Çalış" pasifleşir ve bu doğrudur** — kartların vadesi ileri atılmıştır. Deste
@@ -125,6 +131,8 @@ journal, terms, trash, settings`. Görseller/dosyalar **IndexedDB**'de (`media`)
 günlük anlık görüntüler `snaps` deposunda (IndexedDB sürümü 3). Yedek JSON'u medyayı base64 olarak içerir (`_media`).
 
 `sessions` kayıtları: `{courseId, topicId?, date, min, kind:"focus"|"study", label?}`.
+**Pomodoro oturumları da `topicId` yazar** (3.4'ten beri); yoksa o süre "Konulara göre"
+istatistiğine ve günlük plandaki "bu konuya dokunuldu mu" hesabına hiç girmiyordu.
 Kartlarda `seen` (son değerlendirme günü) yeni kart sayımının tek kaynağı.
 Kart görselleri yüz başına ayrı: `img` **ön yüz**, `imgB` **arka yüz** (eski kartlarda yalnızca
 `img` var, o da ön yüz sayılır — göç gerekmedi). Kartın medyasını tararken **ikisini de** al

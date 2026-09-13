@@ -1,5 +1,5 @@
 /* StudyOS — çevrimdışı önbellek + paylaşım hedefi */
-const C="studyos-v18", SHARE="studyos-share";
+const C="studyos-v19", SHARE="studyos-share";
 const FILES=["./","./index.html","./manifest.json","./icon.svg","./icon-192.png","./icon-512.png","./icon-maskable.png"];
 
 self.addEventListener("install",e=>{ e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())); });
