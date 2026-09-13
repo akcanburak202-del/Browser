@@ -529,6 +529,62 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- sözlük balonu ekrana sığıyor, görseli büyütülebiliyor (sürüm 3.7) ---------- */
+const balonKur = () => p2.evaluate(async () => {
+  const c = document.createElement("canvas"); c.width = 500; c.height = 340;
+  c.getContext("2d").fillRect(0, 0, 500, 340);
+  const ref = await putMedia(c.toDataURL("image/png"));
+  DB.terms = [{ id: "tb", term: "Mitokondri", alt: [], img: ref, noteId: "",
+    def: "Uzun bir tanım. ".repeat(30), courseId: DB.courses[0]?.id }];
+  DB.notes = [{ id: "nb", courseId: DB.courses[0]?.id, title: "H",
+    body: Array(10).fill("dolgu").join("\n\n") + "\n\nMitokondri burada.",
+    created: today(), updated: today() }];
+  saveNow(); buildTerms();
+  const w = openApp("notes"); w.state.id = "nb"; w.state.prev = true; APPS.notes.render(w);
+  await new Promise(r => setTimeout(r, 400));
+  const sp = [...w.body.querySelectorAll(".gterm")].pop();
+  if (!sp) return false;
+  showTerm(sp);
+  await new Promise(r => setTimeout(r, 700));    /* balondaki görselin yüklenmesini bekle */
+  return true;
+});
+const balonOlc = () => p2.evaluate(() => {
+  const pop = document.querySelector("#termpop"), r = pop.getBoundingClientRect();
+  return { tasti: r.bottom > innerHeight + 1 || r.top < -1 || r.right > innerWidth + 1 || r.left < -1,
+    kaydirilabilir: pop.scrollHeight > pop.clientHeight + 1,
+    yukseklik: Math.round(r.height), ekran: innerHeight,
+    gorselVar: !!pop.querySelector("img[data-media]") };
+});
+for (const [ad, gw, gh] of [["kısa", 900, 420], ["orta", 900, 700], ["uzun", 900, 1000]]) {
+  await p2.setViewportSize({ width: gw, height: gh });
+  await p2.evaluate(() => [...WINS.values()].filter(w => w.appId === "notes").forEach(closeWin));
+  const kuruldu = await balonKur();
+  const m = kuruldu ? await balonOlc() : null;
+  check(`sözlük balonu ekran dışına taşmıyor (${ad} ${gw}×${gh})`, !!m && m.tasti === false,
+    m ? `yükseklik ${m.yukseklik} / ekran ${m.ekran}` : "kurulamadı");
+  if (ad === "kısa") {
+    check("sığmayan balon kendi içinde kaydırılabiliyor", !!m && m.kaydirilabilir === true);
+    check("balonda görsel var", !!m && m.gorselVar === true);
+  }
+  await p2.evaluate(() => hideTerm());
+}
+/* sözlük balonundaki görsel tam ekran incelenebiliyor */
+await p2.setViewportSize({ width: 1100, height: 800 });
+await p2.evaluate(() => [...WINS.values()].filter(w => w.appId === "notes").forEach(closeWin));
+await balonKur();
+await p2.evaluate(() => document.querySelector("#termpop img[data-media]").click());
+await p2.waitForTimeout(600);
+const sozBuyutec = await p2.evaluate(() => ({
+  acik: !!document.querySelector(".rotimg"),
+  balonKapandi: !document.querySelector("#termpop").classList.contains("on"),
+  duzenleVar: !!document.querySelector('[data-a="ciz"]') }));
+check("sözlük görseline dokununca büyüteç açılıyor", sozBuyutec.acik === true);
+check("büyüteç açılınca balon kapanıyor", sozBuyutec.balonKapandi === true);
+check("sözlük görseli de düzenlenebiliyor", sozBuyutec.duzenleVar === true);
+await p2.evaluate(() => document.querySelector('[data-a="kapat"]').click());
+await p2.waitForTimeout(300);
+await p2.evaluate(() => [...WINS.values()].filter(w => w.appId === "notes").forEach(closeWin));
+
 /* ---------- görselin üzerine çizim ve yazı (sürüm 3.6) ---------- */
 const uzRef = await p2.evaluate(async () => {
   const c = document.createElement("canvas"); c.width = 600; c.height = 380;

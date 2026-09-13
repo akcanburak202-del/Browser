@@ -103,6 +103,12 @@ Script blokları sırayla:
   tamamında değil: şablondaki satır sonları ve girintiler de boşluk olarak çizilip yüzü
   gereksiz uzatıyordu. Yüzde metin yoksa metin kutusunu hiç çizme; yalnız görselli yüz
   `img-only` sınıfı alıp asgari yüksekliği bırakır ve görsel büyür.
+- **Sözlük balonu `konumlaTerm(sp)` ile yerleşir.** Aşağı sığıyorsa aşağı, sığmıyorsa yukarı;
+  ikisine de sığmazsa geniş tarafa yaslanıp `max-height` ile kendi içinde kaydırılır.
+  İki tuzak: (1) `hydrateMedia` `src`'yi **asenkron** atar, yani ölçüyü görsel yüklenince
+  **yeniden** almak gerekir — yoksa balon konumlandıktan sonra büyüyüp aşağı taşar;
+  (2) çapa kaydırılan bir panelin içindeyse ekran dışına taşmış olabilir, bu yüzden hem
+  boşluklar görünür alana kırpılır hem de sonuç ekran içine sabitlenir.
 - **`drawPad({bgBlob})` var olan bir görselin üzerine çizer.** Tuval o görselin **kendi**
   ölçüsünde açılır (çözünürlük kaybolmasın), ekrana sığdırmayı CSS yapar.
   Çizgiler ayrı bir **saydam katmanda** (`lay`) durur ve her karede arka planla birleştirilir;
@@ -115,8 +121,9 @@ Script blokları sırayla:
   Yazdıktan sonra `MEDIA_URL` önbelleğindeki eski objectURL **mutlaka** bırakılıp silinmeli,
   yoksa döndürülmemiş hali çizilmeye devam eder. Döndürme ekranda `transform` ile önizlenir ve
   yalnızca "Kaydet"te tek seferde kodlanır — her dokunuşta yeniden kodlamak JPEG'i bozar.
-  Büyüteç yalnızca **not önizlemesindeki** görsellere bağlanır; kart yüzündeki görsele
-  dokunmak kartı çevirmeli.
+  Büyüteç not önizlemesindeki **ve sözlük balonundaki/düzenleyicisindeki** görsellere bağlanır
+  (`.md-prev img[data-media], .popimg img[data-media]`); kart yüzündeki görsele dokunmak
+  kartı çevirmeli. `idb:` olmayan eski referanslarda düzenleme düğmeleri gizlenir.
 - **Odak katmanındaki seçenekler `fillFocusPickers()` ile kurulur, `paintFocus()` ile DEĞİL.**
   `paintFocus` saniyede bir çalışıyor; seçenekleri orada yeniden kurarsan açılır liste kapanır ve
   seçim kaçar. Odak katmanı artık ders ve konu seçtirir — eskiden yalnızca gösteriyordu ve

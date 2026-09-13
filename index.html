@@ -350,8 +350,11 @@ textarea.inp{resize:none;line-height:1.6}
 .gterm:hover{background:color-mix(in srgb,var(--s3) 22%,transparent)}
 .popimg{margin-top:9px;border-radius:10px;overflow:hidden;background:var(--surface-2)}
 .popimg img{display:block;max-width:100%;width:auto;max-height:170px;margin:0 auto;object-fit:contain}
+.popimg img[data-media]{cursor:zoom-in}
+/* Balon ekrana sığmazsa kendi içinde kaydırılır; eskiden yarısı ekranın altında kalıyordu. */
 #termpop{position:fixed;z-index:9540;background:var(--surface-solid);border:1px solid var(--border);border-radius:13px;
-  box-shadow:var(--shadow);padding:12px 14px;display:none;font-size:13px}
+  box-shadow:var(--shadow);padding:12px 14px;display:none;font-size:13px;
+  overflow:auto;overscroll-behavior:contain}
 #termpop.on{display:block}
 /* bağlantı haritası */
 .vwrap{position:absolute;inset:0;display:grid;place-items:center;padding:10px;background:var(--surface-2)}
@@ -425,7 +428,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.6", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.7", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1118,15 +1121,17 @@ async function imageViewer(ref){
   const url=await mediaURL(ref);
   if(!url){ toast("⚠️ Görsel bulunamadı"); return; }
   let aci=0;
+  /* düzenleme yalnızca IndexedDB'deki görsellerde anlamlı (eski data: referansları değil) */
+  const duzenlenir=ref.startsWith("idb:");
   const o=el("div","ovl onDark",`
     <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;flex:0 0 auto;
       width:100%;max-width:1000px">
       <button class="btn" data-a="kapat">✕ Kapat</button>
       <span class="grow"></span>
-      <button class="btn sm" data-a="ciz" title="Görselin üzerine çiz ya da yazı ekle">✏️ Üzerine çiz</button>
+      ${duzenlenir?`<button class="btn sm" data-a="ciz" title="Görselin üzerine çiz ya da yazı ekle">✏️ Üzerine çiz</button>
       <button class="btn sm" data-a="sol">↺ 90° sola</button>
       <button class="btn sm" data-a="sag">↻ 90° sağa</button>
-      <button class="btn pri" data-a="kaydet" disabled>✓ Kaydet</button>
+      <button class="btn pri" data-a="kaydet" disabled>✓ Kaydet</button>`:""}
     </div>
     <div style="flex:1 1 auto;min-height:0;width:100%;display:flex;
       align-items:center;justify-content:center">
@@ -1141,8 +1146,8 @@ async function imageViewer(ref){
 
   const im=$("img",o), A=a=>$(`[data-a="${a}"]`,o);
   const ciz=()=>{ im.style.transform=`rotate(${aci}deg)`; A("kaydet").disabled=(aci%360===0); };
-  A("sol").onclick=()=>{ aci-=90; ciz(); };
-  A("sag").onclick=()=>{ aci+=90; ciz(); };
+  if(duzenlenir){ A("sol").onclick=()=>{ aci-=90; ciz(); };
+                  A("sag").onclick=()=>{ aci+=90; ciz(); }; }
 
   let gecmis=false;
   try{ history.pushState({studyosImg:1},""); gecmis=true; }catch(_){}
@@ -1161,6 +1166,8 @@ async function imageViewer(ref){
     if(aci%360!==0&&!confirm("Döndürme kaydedilmeden kapatılsın mı?")) return;
     kapat();
   }
+  A("kapat").onclick=vazgec;
+  if(duzenlenir){
   A("ciz").onclick=async()=>{
     if(aci%360!==0&&!confirm("Kaydedilmemiş döndürme kaybolacak. Çizime geçilsin mi?")) return;
     const id=ref.startsWith("idb:")?ref.slice(4):null;
@@ -1175,7 +1182,6 @@ async function imageViewer(ref){
     MEDIA_URL.delete(id);
     idbUsage(); refreshAll(); toast("✏️ Çizim görsele işlendi");
   };
-  A("kapat").onclick=vazgec;
   A("kaydet").onclick=async()=>{
     A("kaydet").disabled=true;
     const ok=await rotateMedia(ref,((aci%360)+360)%360);
@@ -1183,6 +1189,7 @@ async function imageViewer(ref){
     if(ok){ toast("🔄 Görsel döndürüldü"); refreshAll(); }
     else toast("⚠️ Görsel döndürülemedi");
   };
+  }
 }
 /* Görseli IndexedDB'de AYNI id altında döndürülmüş haliyle değiştirir; referans
    değişmediği için not metnine, karta ya da sözlüğe dokunmak gerekmiyor. */
@@ -2506,8 +2513,9 @@ function linkBadge(u){
 /* çizimden sonra: iç linkleri bağla, terimleri işaretle */
 function decorate(root){
   $$("[data-wl]",root).forEach(a=>{ a.onclick=e=>{ e.preventDefault(); wlOpen(a.dataset.wl); }; });
-  /* yalnızca not önizlemesindeki görseller: kart yüzündeki görsele dokunmak kartı çevirir */
-  $$(".md-prev img[data-media]",root).forEach(im=>{
+  /* not önizlemesi ve sözlük görselleri büyütülebilir;
+     kart yüzündeki görsele dokunmak kartı çevirmeye devam eder */
+  $$(".md-prev img[data-media], .popimg img[data-media]",root).forEach(im=>{
     im.onclick=e=>{ e.stopPropagation(); imageViewer(im.dataset.media); }; });
   if(typeof decorateTerms==="function") decorateTerms(root);
 }
@@ -2875,6 +2883,36 @@ function decorateTerms(root){
     }
   });
 }
+/* Balonu tetikleyen terimin yanına yerleştirir. Aşağı sığıyorsa aşağı, sığmıyorsa
+   yukarı; ikisine de sığmıyorsa geniş olan tarafa yaslayıp yüksekliği sınırlar
+   (balon kendi içinde kaydırılır). */
+function konumlaTerm(sp){
+  const pop=$("#termpop");
+  if(!pop||!pop.classList.contains("on")||!sp||!sp.isConnected) return;
+  const KEN=10;                               /* ekran kenarı payı */
+  const r=sp.getBoundingClientRect();
+  const pw=Math.min(340,innerWidth-2*KEN);
+  pop.style.width=pw+"px";
+  pop.style.left=Math.max(KEN,Math.min(r.left,innerWidth-pw-KEN))+"px";
+  pop.style.maxHeight="none";                 /* gerçek yüksekliği ölçebilmek için */
+  const ph=pop.offsetHeight;
+  /* Çapa, kaydırılan bir panelin içindeyse ekran dışına taşmış olabilir:
+     boşlukları görünür alana kırp, yoksa balon da dışarı çıkar. */
+  const capaAlt=Math.min(innerHeight,Math.max(0,r.bottom));
+  const capaUst=Math.min(innerHeight,Math.max(0,r.top));
+  const alt=Math.max(0,innerHeight-KEN-capaAlt-8), ust=Math.max(0,capaUst-KEN-8);
+  let h,top;
+  if(ph<=alt){        h=ph;                top=r.bottom+8; }
+  else if(ph<=ust){   h=ph;                top=r.top-ph-8; }
+  else if(alt>=ust){  h=Math.max(140,alt); top=r.bottom+8; }
+  else {              h=Math.max(140,ust); top=r.top-h-8; }
+  /* son söz: balon her hâlükârda ekranın içinde kalır */
+  h=Math.min(h,innerHeight-2*KEN);
+  top=Math.max(KEN,Math.min(top,innerHeight-h-KEN));
+  pop.style.maxHeight=Math.round(h)+"px";
+  pop.style.top=Math.round(top)+"px";
+  pop.scrollTop=0;
+}
 function hideTerm(){ $("#termpop").classList.remove("on"); }
 function showTerm(sp){
   const t=(DB.terms||[]).find(x=>x.id===sp.dataset.term); if(!t) return;
@@ -2897,11 +2935,13 @@ function showTerm(sp){
       <button class="btn sm" data-p="edit">✏️ Düzenle</button></div>`;
   pop.classList.add("on");
   hydrateMedia(pop);
-  const r=sp.getBoundingClientRect(), pw=Math.min(340,window.innerWidth-20);
-  pop.style.width=pw+"px";
-  pop.style.left=Math.max(10,Math.min(r.left, window.innerWidth-pw-10))+"px";
-  const below=r.bottom+8, ph=pop.offsetHeight||160;
-  pop.style.top=(below+ph>window.innerHeight-10?Math.max(36,r.top-ph-8):below)+"px";
+  konumlaTerm(sp);
+  /* hydrateMedia src'yi ASENKRON atıyor: görsel yüklenince balon büyüyor.
+     Ölçüyü o zaman yeniden al, yoksa balonun alt yarısı ekran dışında kalır. */
+  $$("img",pop).forEach(im=>im.addEventListener("load",()=>konumlaTerm(sp),{once:true}));
+  /* görsele dokununca tam ekran incele/döndür/üzerine çiz */
+  $$("img[data-media]",pop).forEach(im=>im.onclick=e=>{
+    e.stopPropagation(); const ref=im.dataset.media; hideTerm(); imageViewer(ref); });
   pop.onmouseenter=()=>clearTimeout(_popT);
   pop.onmouseleave=()=>{ if(matchMedia("(hover:hover)").matches) _popT=setTimeout(hideTerm,260); };
   $$("[data-p]",pop).forEach(b=>b.onclick=()=>{
