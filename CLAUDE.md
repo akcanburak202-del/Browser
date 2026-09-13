@@ -117,6 +117,9 @@ günlük anlık görüntüler `snaps` deposunda (IndexedDB sürümü 3). Yedek J
 
 `sessions` kayıtları: `{courseId, topicId?, date, min, kind:"focus"|"study", label?}`.
 Kartlarda `seen` (son değerlendirme günü) yeni kart sayımının tek kaynağı.
+Kart görselleri yüz başına ayrı: `img` **ön yüz**, `imgB` **arka yüz** (eski kartlarda yalnızca
+`img` var, o da ön yüz sayılır — göç gerekmedi). Kartın medyasını tararken **ikisini de** al
+(`trashRefs`), yoksa çöpten kalıcı silmede görsel öksüz kalır.
 Quiz soruları `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,yanlış]}` dökümünden
 İstatistik'teki "zayıf konular" hesaplanır (`weakTopics()`).
 Ayarlar: `newPerDay` (varsayılan 20), `newSeen={date,n}`, `planDone={date,ids}`, `lastSnap`.

@@ -208,8 +208,15 @@ es("çöp: not gövdesindeki ve ekindeki görseller bulunuyor",
   T.trashRefs({ type: "note", data: { body: "a ![](idb:abc123) b", att: [{ ref: "idb:def456" }] } }),
   ["idb:abc123", "idb:def456"]);
 es("çöp: kart görseli bulunuyor", T.trashRefs({ type: "card", data: { img: "idb:kart1" } }), ["idb:kart1"]);
+es("çöp: kartın iki yüzünün görseli de bulunuyor",
+  T.trashRefs({ type: "card", data: { img: "idb:on1", imgB: "idb:arka1" } }), ["idb:on1", "idb:arka1"]);
+es("çöp: yalnızca arka yüz görseli olan kart",
+  T.trashRefs({ type: "card", data: { imgB: "idb:arka2" } }), ["idb:arka2"]);
 es("çöp: destedeki kartların görselleri bulunuyor",
   T.trashRefs({ type: "deck", data: { cards: [{ img: "idb:k1" }, {}, { img: "idb:k2" }] } }), ["idb:k1", "idb:k2"]);
+es("çöp: destedeki kartların her iki yüzü de taranıyor",
+  T.trashRefs({ type: "deck", data: { cards: [{ img: "idb:a", imgB: "idb:b" }, { imgB: "idb:c" }] } }),
+  ["idb:a", "idb:b", "idb:c"]);
 es("çöp: görevde görsel yok", T.trashRefs({ type: "task", data: { title: "x" } }), []);
 
 /* ---------- günlük yeni kart sınırı ---------- */

@@ -529,6 +529,77 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- kart görselleri ön/arka ayrı (sürüm 3.1) ---------- */
+const kartG = await p2.evaluate(async () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  DB.decks = [{ id: "dg", name: "Görsel", courseId: DB.courses[0]?.id }];
+  DB.cards = []; saveNow();
+  const w = openApp("cards"); w.state.deck = "dg"; w.state.mode = null; APPS.cards.render(w);
+  const A = a => w.body.querySelector(`[data-a="${a}"]`);
+  /* yalnızca ön yüze görsel */
+  w.state.pendF = await putMedia(PNG); APPS.cards.render(w);
+  w.body.querySelector('[data-a="f"]').value = "ön metin";
+  w.body.querySelector('[data-a="b"]').value = "arka metin";
+  w.body.querySelector('[data-a="add"]').click();
+  /* yalnızca arka yüze görsel */
+  w.state.pendB = await putMedia(PNG); APPS.cards.render(w);
+  w.body.querySelector('[data-a="f"]').value = "ön2";
+  w.body.querySelector('[data-a="b"]').value = "arka2";
+  w.body.querySelector('[data-a="add"]').click();
+  const [k1, k2] = DB.cards;
+  return { k1: { on: !!k1.img, arka: !!k1.imgB }, k2: { on: !!k2.img, arka: !!k2.imgB },
+    farkli: k1.img !== k2.imgB };
+});
+check("ön yüze eklenen görsel arka yüze bulaşmıyor", kartG.k1.on === true && kartG.k1.arka === false);
+check("arka yüze eklenen görsel ön yüze bulaşmıyor", kartG.k2.on === false && kartG.k2.arka === true);
+
+/* çalışma ekranında o anki yüzün görseli çiziliyor */
+const yuz = await p2.evaluate(() => {
+  const w = [...WINS.values()].find(x => x.appId === "cards");
+  const k = DB.cards[0];
+  w.state.mode = "study"; w.state.cram = true; w.state.queue = [k.id];
+  w.state.show = false; w.state.done = 0; APPS.cards.render(w);
+  const onYuz = w.body.querySelector("[data-media]")?.dataset.media || null;
+  w.state.show = true; APPS.cards.render(w);
+  const arkaYuz = w.body.querySelector("[data-media]")?.dataset.media || null;
+  return { onYuz, arkaYuz, beklenen: k.img };
+});
+check("soru yüzünde ön görsel var", yuz.onYuz === yuz.beklenen && !!yuz.beklenen);
+check("cevap yüzünde ön görsel YOK (arka boşsa görsel çizilmiyor)", yuz.arkaYuz === null);
+
+/* iki yüzü de görselli kart: her yüzde kendi görseli */
+const ikiYuz = await p2.evaluate(async () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const on = await putMedia(PNG), arka = await putMedia(PNG);
+  const k = { id: "ki", deckId: "dg", front: "s", back: "c", img: on, imgB: arka,
+    ef: 2.5, int: 0, reps: 0, lapses: 0, due: today() };
+  DB.cards.push(k); saveNow();
+  const w = [...WINS.values()].find(x => x.appId === "cards");
+  w.state.mode = "study"; w.state.cram = true; w.state.queue = ["ki"]; w.state.show = false;
+  APPS.cards.render(w);
+  const a = w.body.querySelector("[data-media]").dataset.media;
+  w.state.show = true; APPS.cards.render(w);
+  const b = w.body.querySelector("[data-media]").dataset.media;
+  return { a, b, on, arka };
+});
+check("iki görselli kartta soru yüzü ön görseli gösteriyor", ikiYuz.a === ikiYuz.on);
+check("iki görselli kartta cevap yüzü arka görseli gösteriyor",
+  ikiYuz.b === ikiYuz.arka && ikiYuz.a !== ikiYuz.b);
+
+/* eklenmeden bırakılan görsel pencere kapanınca IndexedDB'de öksüz kalmıyor */
+const oksuz = await p2.evaluate(async () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const w = [...WINS.values()].find(x => x.appId === "cards");
+  w.state.mode = null; APPS.cards.render(w);
+  const ref = await putMedia(PNG); w.state.pendF = ref;
+  const oncesi = (await idbKeys()).includes(ref.slice(4));
+  closeWin(w);
+  await new Promise(r => setTimeout(r, 400));
+  return { oncesi, sonrasi: (await idbKeys()).includes(ref.slice(4)) };
+});
+check("eklenmeyen görsel pencere kapanınca bırakılıyor",
+  oksuz.oncesi === true && oksuz.sonrasi === false);
+
 /* Çizim tahtası kendi karartısının üstünde: tema renkleri (açık temada koyu metin)
    burada kaybolur. Her iki temada da denetimler okunur kalmalı. */
 for (const tema of ["light", "dark"]) {

@@ -407,7 +407,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.0", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.1", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -750,8 +750,10 @@ function trashRefs(e){
     (String(x.body||"").match(/idb:[a-z0-9]+/g)||[]).forEach(r=>out.push(r));
     (x.att||[]).forEach(a=>{ if(a.ref) out.push(a.ref); }); };
   if(e.type==="note") nota(e.data);
-  else if(e.type==="card"||e.type==="term"){ if(e.data?.img) out.push(e.data.img); }
-  else if(e.type==="deck") (e.data?.cards||[]).forEach(c=>{ if(c.img) out.push(c.img); });
+  else if(e.type==="card"||e.type==="term"){ if(e.data?.img) out.push(e.data.img);
+    if(e.data?.imgB) out.push(e.data.imgB); }                     /* kartın iki yüzü de olabilir */
+  else if(e.type==="deck") (e.data?.cards||[]).forEach(c=>{
+    if(c.img) out.push(c.img); if(c.imgB) out.push(c.imgB); });
   return out;
 }
 /* 30 günü geçenleri ve 300 KB'ı aşan fazlalığı kalıcı siler — çöp,
@@ -1510,16 +1512,20 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
         </div>
         <div class="toolbar">
           <input class="inp grow" data-a="f" placeholder="Ön yüz (soru)">
+          <button class="btn sm" data-a="picF"
+            title="${s.pendF?"Ön yüz görselini kaldır":"Ön yüze görsel ekle"}">🖼 ön${s.pendF?" ✓":""}</button>
           <input class="inp grow" data-a="b" placeholder="Arka yüz (cevap)">
-          <button class="btn sm" data-a="pic" title="Karta görsel ekle">${s.pendingImg?"🖼 ✓":"🖼"}</button>
+          <button class="btn sm" data-a="picB"
+            title="${s.pendB?"Arka yüz görselini kaldır":"Arka yüze görsel ekle"}">🖼 arka${s.pendB?" ✓":""}</button>
           <button class="btn" data-a="add">+ Ekle</button>
         </div>
         <div class="grow scroll pad" data-a="list"></div>
       </div></div>`;
     $('[data-a="list"]',w.body).innerHTML=capped(cards).map(c=>`
       <div class="card" style="margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
-        ${mediaImg(c.img,"","width:44px;height:44px;object-fit:cover;border-radius:8px")}
-        <div class="grow"><div><b>${esc(c.front)}</b></div><div class="sub" style="margin-top:3px">${esc(c.back)}</div></div>
+        ${mediaImg(c.img||c.imgB,"","width:44px;height:44px;object-fit:cover;border-radius:8px")}
+        <div class="grow"><div><b>${esc(c.front)||`<span class="sub">(yalnızca görsel)</span>`}</b></div>
+          <div class="sub" style="margin-top:3px">${esc(c.back)||"(yalnızca görsel)"}</div></div>
         <span class="tag">${c.due&&c.due>today()?`⏳ ${dayDiff(today(),c.due)}g`:"🔔 hazır"}</span>
         <button class="btn sm danger" data-x="${c.id}">✕</button></div>`).join("")+capNote(cards,"kart")
       ||`<div class="empty">Bu destede kart yok.<br>Yukarıdan ön/arka yüz yazıp ekle.</div>`;
@@ -1534,11 +1540,23 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
       const dk=DB.decks.find(d=>d.id===s.deck), kt=DB.cards.filter(c=>c.deckId===s.deck);
       if(dk) toTrash("deck",`${dk.name} (${kt.length} kart)`,{deck:dk,cards:kt});
       DB.cards=DB.cards.filter(c=>c.deckId!==s.deck);DB.decks=DB.decks.filter(d=>d.id!==s.deck);s.deck=null;saveAnd("cards");};
-    A("pic").onclick=async()=>{ const file=await pickFile("image/*"); if(!file)return;
-      s.pendingImg=await putMedia(await imageScaled(file,900,.8)); toast("Görsel sonraki karta eklenecek"); this.render(w); };
-    const add=()=>{const f=A("f").value.trim(),b=A("b").value.trim(); if(!f||!b||!s.deck)return;
-      DB.cards.push({id:uid(),deckId:s.deck,front:f,back:b,img:s.pendingImg||null,ef:2.5,int:0,reps:0,lapses:0,due:today()});
-      s.pendingImg=null;
+    /* Her yüzün görseli ayrı. Düğme boşken seçtirir, doluyken kaldırır —
+       tablette uzun basma gerektirmeyen en kısa yol. */
+    const gorsel=(alan,ad)=>async()=>{
+      if(s[alan]){ dropMedia(s[alan]); s[alan]=null; toast(ad+" görseli kaldırıldı"); this.render(w); return; }
+      const file=await pickFile("image/*"); if(!file)return;
+      s[alan]=await putMedia(await imageScaled(file,900,.8));
+      toast(ad+" görseli sonraki karta eklenecek"); this.render(w); };
+    A("picF").onclick=gorsel("pendF","Ön yüz");
+    A("picB").onclick=gorsel("pendB","Arka yüz");
+    const add=()=>{
+      const f=A("f").value.trim(), b=A("b").value.trim();
+      /* görsel varsa o yüzün metni boş kalabilir — resimden tanıma kartları için */
+      if(!s.deck||(!f&&!s.pendF)||(!b&&!s.pendB)){ toast("Her iki yüzde de metin ya da görsel olmalı"); return; }
+      DB.cards.push({id:uid(),deckId:s.deck,front:f,back:b,
+        img:s.pendF||null, imgB:s.pendB||null,
+        ef:2.5,int:0,reps:0,lapses:0,due:today()});
+      s.pendF=null; s.pendB=null;
       A("f").value="";A("b").value="";saveAnd("cards");$('[data-a="f"]',w.body).focus();};
     A("add").onclick=add; A("b").onkeydown=e=>{if(e.key==="Enter")add();};
     A("study").onclick=()=>{s.mode="study";s.cram=false;s.queue=dueCards(s.deck).map(c=>c.id);s.show=false;s.done=0;this.render(w);};
@@ -1558,7 +1576,7 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
       <div class="flash grow">
         <div>
           <div class="flash-card" data-a="flip">
-            <div>${mediaImg(c.img,"cardimg")}<div class="side">${s.show?"cevap":"soru"}</div>
+            <div>${mediaImg(s.show?c.imgB:c.img,"cardimg")}<div class="side">${s.show?"cevap":"soru"}</div>
             <div style="margin-top:10px">${esc(s.show?c.back:c.front)}</div>
             ${s.show?"":'<div class="sub" style="margin-top:16px">çevirmek için tıkla / Boşluk</div>'}</div>
           </div>
@@ -1582,7 +1600,10 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
     w.keys=e=>{ if(!s.show&&(e.key===" "||e.key==="Enter")){e.preventDefault();flip();}
       else if(s.show&&["1","2","3","4"].includes(e.key)) grade([0,3,4,5][+e.key-1]); };
   },
-  onClose(w){ w.keys=null; }};
+  onClose(w){ w.keys=null;
+    /* eklenmeden bırakılan görseller IndexedDB'de öksüz kalmasın */
+    dropMedia(w.state.pendF); dropMedia(w.state.pendB);
+    w.state.pendF=w.state.pendB=null; }};
 
 /* ---------------- Pomodoro ---------------- */
 const Pomo={
