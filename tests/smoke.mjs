@@ -529,6 +529,37 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- yalnız görselli yüz kartı şişirmiyor (sürüm 3.3) ---------- */
+const olcu = await p2.evaluate(async () => {
+  const cv = document.createElement("canvas"); cv.width = 400; cv.height = 240;
+  const cx = cv.getContext("2d"); cx.fillStyle = "#1baf7a"; cx.fillRect(0, 0, 400, 240);
+  const ref = await putMedia(cv.toDataURL("image/png"));
+  DB.decks = [{ id: "dg2", name: "Ölçü", courseId: DB.courses[0]?.id }];
+  DB.cards = [{ id: "kg", deckId: "dg2", front: "soru metni", back: "", img: null, imgB: ref,
+    ef: 2.5, int: 0, reps: 0, lapses: 0, due: today() }];
+  saveNow();
+  const w = openApp("cards"); w.state.deck = "dg2";
+  w.state.mode = "study"; w.state.cram = true; w.state.queue = ["kg"]; w.state.done = 0;
+  const oku = async show => {
+    w.state.show = show; APPS.cards.render(w);
+    await new Promise(r => setTimeout(r, 400));
+    const kart = w.body.querySelector(".flash-card");
+    const img = w.body.querySelector(".cardimg");
+    return { kart: kart.getBoundingClientRect().height,
+      gorsel: img ? img.getBoundingClientRect().height : 0,
+      imgOnly: kart.classList.contains("img-only"),
+      bosMetin: !!w.body.querySelector(".ftext") };
+  };
+  return { arka: await oku(true), on: await oku(false) };
+});
+check("yalnız görselli yüz img-only sınıfını alıyor",
+  olcu.arka.imgOnly === true && olcu.arka.bosMetin === false);
+check("yalnız görselli yüzde kart görselden çok büyük değil",
+  olcu.arka.gorsel > 0 && olcu.arka.kart / olcu.arka.gorsel < 1.45,
+  `kart ${Math.round(olcu.arka.kart)} / görsel ${Math.round(olcu.arka.gorsel)}`);
+check("metinli yüz img-only sayılmıyor ve metin kutusu var",
+  olcu.on.imgOnly === false && olcu.on.bosMetin === true);
+
 /* ---------- tur bitince sebebi yazılıyor (sürüm 3.2) ---------- */
 const bitti = await p2.evaluate(() => {
   DB.decks = [{ id: "db", name: "Bitti", courseId: DB.courses[0]?.id }];

@@ -210,8 +210,15 @@ textarea.inp{resize:none;line-height:1.6}
 .flash{flex:1;display:grid;place-items:center;padding:22px;text-align:center}
 .flash-card{width:100%;max-width:520px;min-height:190px;display:grid;place-items:center;padding:26px;
   background:var(--surface-solid);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);
-  font-size:18px;line-height:1.6;cursor:pointer;white-space:pre-wrap}
+  font-size:18px;line-height:1.6;cursor:pointer}
+/* Kart metni satır sonlarını korur; kartın tamamında pre-wrap olunca şablondaki
+   girintiler de boşluk olarak çiziliyor ve yüz gereksiz uzuyordu. */
+.flash-card .ftext{margin-top:10px;white-space:pre-wrap}
 .flash-card .side{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+/* Yüzde yalnızca görsel varsa kart metin kadar yer ayırmasın: asgari yükseklik
+   ve iç boşluk küçülür, görsel kartın kendisi kadar büyür. */
+.flash-card.img-only{min-height:0;padding:14px}
+.flash-card.img-only .cardimg{max-height:min(52vh,460px);margin-bottom:6px}
 .grade{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 /* Pomodoro */
 .timer{font:600 66px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-2px}
@@ -315,7 +322,7 @@ textarea.inp{resize:none;line-height:1.6}
 .att.linked{border-color:var(--s1);color:var(--s1)}
 .att{display:inline-flex;gap:6px;align-items:center;background:var(--surface-3);border:1px solid var(--border-2);border-radius:9px;padding:4px 9px;font-size:12px;margin:3px 5px 0 0;cursor:pointer}
 .md-prev img{max-width:100%;border-radius:10px;margin:6px 0}
-.cardimg{max-width:100%;max-height:190px;border-radius:12px;margin-bottom:10px;object-fit:contain}
+.cardimg{max-width:100%;max-height:min(38vh,300px);border-radius:12px;margin-bottom:10px;object-fit:contain}
 /* iç ve dış bağlantılar */
 .wl{color:var(--accent);cursor:pointer;border-bottom:1px dashed color-mix(in srgb,var(--accent) 55%,transparent);text-decoration:none;white-space:nowrap}
 .wl:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);border-radius:4px}
@@ -407,7 +414,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.2", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.3", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1589,6 +1596,8 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
   },
   study(w){
     const s=w.state; const c=DB.cards.find(x=>x.id===s.queue[0]);
+    /* o an gösterilen yüzün görseli ve metni — ikisi de ayrı ayrı boş olabilir */
+    const gorsel=c&&(s.show?c.imgB:c.img), metin=c&&(s.show?c.back:c.front);
     if(!c){ w.body.innerHTML=`<div class="app"><div class="empty"><div style="font-size:46px">🎉</div>
       <b>Tur bitti!</b><br>${s.done} kart tekrar edildi.<br><br>
       <button class="btn pri" data-a="back">Destelere dön</button></div></div>`;
@@ -1599,9 +1608,9 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
         <span class="grow"></span><span class="sub">kalan ${s.queue.length} · bitti ${s.done}</span></div>
       <div class="flash grow">
         <div>
-          <div class="flash-card" data-a="flip">
-            <div>${mediaImg(s.show?c.imgB:c.img,"cardimg")}<div class="side">${s.show?"cevap":"soru"}</div>
-            <div style="margin-top:10px">${esc(s.show?c.back:c.front)}</div>
+          <div class="flash-card${gorsel&&!metin?" img-only":""}" data-a="flip">
+            <div>${mediaImg(gorsel,"cardimg")}<div class="side">${s.show?"cevap":"soru"}</div>
+            ${metin?`<div class="ftext">${esc(metin)}</div>`:""}
             ${s.show?"":'<div class="sub" style="margin-top:16px">çevirmek için tıkla / Boşluk</div>'}</div>
           </div>
           <div style="height:16px"></div>

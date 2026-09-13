@@ -99,6 +99,10 @@ Script blokları sırayla:
   bilinemeyen bir kart ikinci kez yeni sayılmaz. `dueCards()` günlük yeni kart kotasını **global**
   harcar ve `DB.cards` sırası sabit olduğu için deste deste çağrılsa da aynı kartları seçer —
   bu yüzden rozetlerin toplamı genel toplamı aşmaz. Ham sayı gerekiyorsa `newWaiting()`.
+- **`white-space:pre-wrap` yalnızca metin kutusunda olmalı** (`.flash-card .ftext`), kartın
+  tamamında değil: şablondaki satır sonları ve girintiler de boşluk olarak çizilip yüzü
+  gereksiz uzatıyordu. Yüzde metin yoksa metin kutusunu hiç çizme; yalnız görselli yüz
+  `img-only` sınıfı alıp asgari yüksekliği bırakır ve görsel büyür.
 - **Tur kuyruğu `shuffled()` ile karışır** (Çalış, 🔥 Hepsi ve widget'taki tur). Hep aynı sırayla
   görülünce cevap içerikten değil sıradan hatırlanıyor. Yeni bir tur başlatma yolu eklersen karıştır.
 - **Tur bitince "Çalış" pasifleşir ve bu doğrudur** — kartların vadesi ileri atılmıştır. Deste
