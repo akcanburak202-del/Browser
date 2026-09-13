@@ -276,6 +276,10 @@ textarea.inp{resize:none;line-height:1.6}
 .onDark .inp{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#f2f2ee}
 /* açılır listenin şıkları işletim sistemi tarafından çizilir: tema renkleri kalsın */
 .onDark .inp option{background:var(--surface-solid);color:var(--text)}
+/* Döndürülünce de ekrana sığsın diye iki kenar da küçük olan ölçüye göre sınırlanır. */
+.rotimg{max-width:min(84vw,84vh);max-height:min(84vw,84vh);object-fit:contain;border-radius:10px;
+  transition:transform .18s ease;box-shadow:0 20px 50px rgba(0,0,0,.55)}
+.md-prev img[data-media]{cursor:zoom-in}
 #focusOverlay{position:fixed;inset:0;z-index:9400;background:rgba(8,10,14,.94);display:none;place-items:center;color:#f2f2ee;text-align:center}
 #focusOverlay.on{display:grid}
 #focusOverlay .ft{font:200 96px/1 var(--font);font-variant-numeric:tabular-nums}
@@ -421,7 +425,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="3.4", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="3.5", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1048,6 +1052,102 @@ function drawPad(){
     A("kapat").onclick=()=>vazgec(false);
     A("ekle").onclick=()=>{ if(!strokes.length){ toast("Çizim boş"); return; }
       cv.toBlob(b=>kapat(b),"image/png"); };
+  });
+}
+
+/* --------- görsel büyüteci + döndürme ---------
+   Not önizlemesinde bir görsele dokununca açılır. Nottaki görseller bugüne kadar
+   tıklanamıyordu; düğme eklemek yerine büyütme ve döndürme buraya kondu.
+   Döndürme önce ekranda önizlenir, "Kaydet" tek seferde yazar — her dokunuşta
+   yeniden kodlamak JPEG'i adım adım bozardı. */
+async function imageViewer(ref){
+  const url=await mediaURL(ref);
+  if(!url){ toast("⚠️ Görsel bulunamadı"); return; }
+  let aci=0;
+  const o=el("div","ovl onDark",`
+    <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;flex:0 0 auto;
+      width:100%;max-width:1000px">
+      <button class="btn" data-a="kapat">✕ Kapat</button>
+      <span class="grow"></span>
+      <button class="btn sm" data-a="sol">↺ 90° sola</button>
+      <button class="btn sm" data-a="sag">↻ 90° sağa</button>
+      <button class="btn pri" data-a="kaydet" disabled>✓ Kaydet</button>
+    </div>
+    <div style="flex:1 1 auto;min-height:0;width:100%;display:flex;
+      align-items:center;justify-content:center">
+      <img class="rotimg" src="${url}" alt="">
+    </div>`);
+  o.style.cssText="position:fixed;inset:0;height:100dvh;z-index:9998;background:rgba(0,0,0,.9);"+
+    "display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px;"+
+    "touch-action:none;user-select:none;-webkit-user-select:none";
+  document.body.appendChild(o);
+  const etkisiz=[...document.body.children].filter(x=>x!==o);
+  etkisiz.forEach(x=>{ try{ x.inert=true; }catch(_){} });
+
+  const im=$("img",o), A=a=>$(`[data-a="${a}"]`,o);
+  const ciz=()=>{ im.style.transform=`rotate(${aci}deg)`; A("kaydet").disabled=(aci%360===0); };
+  A("sol").onclick=()=>{ aci-=90; ciz(); };
+  A("sag").onclick=()=>{ aci+=90; ciz(); };
+
+  let gecmis=false;
+  try{ history.pushState({studyosImg:1},""); gecmis=true; }catch(_){}
+  const onPop=()=>{ gecmis=false; kapat(); };
+  const onKey=e=>{ if(e.key==="Escape"){ e.preventDefault(); vazgec(); } };
+  window.addEventListener("popstate",onPop);
+  document.addEventListener("keydown",onKey);
+  function kapat(){
+    document.removeEventListener("keydown",onKey);
+    window.removeEventListener("popstate",onPop);
+    etkisiz.forEach(x=>{ try{ x.inert=false; }catch(_){} });
+    o.remove();
+    if(gecmis){ gecmis=false; try{ history.back(); }catch(_){} }
+  }
+  function vazgec(){
+    if(aci%360!==0&&!confirm("Döndürme kaydedilmeden kapatılsın mı?")) return;
+    kapat();
+  }
+  A("kapat").onclick=vazgec;
+  A("kaydet").onclick=async()=>{
+    A("kaydet").disabled=true;
+    const ok=await rotateMedia(ref,((aci%360)+360)%360);
+    kapat();
+    if(ok){ toast("🔄 Görsel döndürüldü"); refreshAll(); }
+    else toast("⚠️ Görsel döndürülemedi");
+  };
+}
+/* Görseli IndexedDB'de AYNI id altında döndürülmüş haliyle değiştirir; referans
+   değişmediği için not metnine, karta ya da sözlüğe dokunmak gerekmiyor. */
+function rotateMedia(ref,deg){
+  return new Promise(async res=>{
+    try{
+      if(!ref||!ref.startsWith("idb:")||!deg) return res(false);
+      const id=ref.slice(4), blob=await idbGet(id);
+      if(!blob) return res(false);
+      const src=URL.createObjectURL(blob), img=new Image();
+      img.onload=()=>{
+        const yan=deg%180!==0, c=el("canvas");
+        c.width = yan?img.naturalHeight:img.naturalWidth;
+        c.height= yan?img.naturalWidth :img.naturalHeight;
+        const x=c.getContext("2d");
+        x.translate(c.width/2,c.height/2); x.rotate(deg*Math.PI/180);
+        x.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);
+        const tur=(blob.type==="image/png"||blob.type==="image/webp")?blob.type:"image/jpeg";
+        c.toBlob(async nb=>{
+          URL.revokeObjectURL(src);
+          if(!nb) return res(false);
+          try{
+            await idbPut(id,nb);
+            /* önbellekteki eski objectURL bırakılmazsa döndürülmemiş hali çizilir */
+            const eski=MEDIA_URL.get(id); if(eski) URL.revokeObjectURL(eski);
+            MEDIA_URL.delete(id);
+            idbUsage();
+            res(true);
+          }catch(e){ res(false); }
+        },tur,.92);
+      };
+      img.onerror=()=>{ URL.revokeObjectURL(src); res(false); };
+      img.src=src;
+    }catch(e){ res(false); }
   });
 }
 
@@ -2337,6 +2437,9 @@ function linkBadge(u){
 /* çizimden sonra: iç linkleri bağla, terimleri işaretle */
 function decorate(root){
   $$("[data-wl]",root).forEach(a=>{ a.onclick=e=>{ e.preventDefault(); wlOpen(a.dataset.wl); }; });
+  /* yalnızca not önizlemesindeki görseller: kart yüzündeki görsele dokunmak kartı çevirir */
+  $$(".md-prev img[data-media]",root).forEach(im=>{
+    im.onclick=e=>{ e.stopPropagation(); imageViewer(im.dataset.media); }; });
   if(typeof decorateTerms==="function") decorateTerms(root);
 }
 

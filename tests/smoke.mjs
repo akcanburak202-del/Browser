@@ -529,6 +529,61 @@ await p2.waitForTimeout(300);
 /* sesli okuma henüz eklenmedi — yalnızca cihaz yeteneği ölçülüyor */
 await p2.evaluate(() => openApp("settings"));
 await p2.waitForTimeout(1900);
+/* ---------- nottaki görsel büyütülüp döndürülebiliyor (sürüm 3.5) ---------- */
+const gorselRef = await p2.evaluate(async () => {
+  const c = document.createElement("canvas"); c.width = 400; c.height = 200;
+  const x = c.getContext("2d"); x.fillStyle = "#2a78d6"; x.fillRect(0, 0, 400, 200);
+  x.fillStyle = "#eb6834"; x.fillRect(0, 0, 60, 200);          // sol kenar turuncu
+  const ref = await putMedia(c.toDataURL("image/png"));
+  DB.notes = [{ id: "nr", courseId: DB.courses[0]?.id, title: "Şema",
+    body: "Şema:\n\n![şema](" + ref + ")\n", created: today(), updated: today() }];
+  saveNow();
+  const w = openApp("notes"); w.state.id = "nr"; w.state.prev = true; APPS.notes.render(w);
+  return ref;
+});
+await p2.waitForTimeout(500);
+const imlec = await p2.evaluate(() => {
+  const im = document.querySelector(".md-prev img[data-media]");
+  if (!im) return null;
+  const c = getComputedStyle(im).cursor;
+  im.click();                                    /* imageViewer async: DOM'a bir sonraki tick'te girer */
+  return c;
+});
+await p2.waitForTimeout(400);
+const acilis = await p2.evaluate(() => ({
+  acik: !!document.querySelector(".rotimg"),
+  kaydetPasif: document.querySelector('[data-a="kaydet"]')?.disabled }));
+check("not önizlemesindeki görsel tıklanabilir görünüyor", imlec === "zoom-in");
+check("görsele dokununca büyüteç açılıyor", acilis.acik === true);
+check("döndürülmeden Kaydet pasif", acilis.kaydetPasif === true);
+const donus = await p2.evaluate(() => {
+  document.querySelector('[data-a="sag"]').click();
+  return { donusum: document.querySelector(".rotimg").style.transform,
+    kaydetAktif: !document.querySelector('[data-a="kaydet"]').disabled };
+});
+check("döndürme önce ekranda önizleniyor", donus.donusum === "rotate(90deg)" && donus.kaydetAktif);
+const kayit = await p2.evaluate(async ref => {
+  document.querySelector('[data-a="kaydet"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const blob = await idbGet(ref.slice(4));
+  const u = URL.createObjectURL(blob), im = new Image(); im.src = u;
+  await new Promise(r => { im.onload = r; });
+  const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
+  c.getContext("2d").drawImage(im, 0, 0);
+  const ust = c.getContext("2d").getImageData(Math.round(c.width / 2), 5, 1, 1).data;
+  URL.revokeObjectURL(u);
+  return { en: im.naturalWidth, boy: im.naturalHeight, tur: blob.type,
+    ustTuruncu: ust[0] > 200 && ust[1] > 80 && ust[1] < 140,
+    kapandi: !document.querySelector(".rotimg"),
+    refAyni: DB.notes[0].body.includes(ref) };
+}, gorselRef);
+check("kaydedince görselin boyu dönüyor (400×200 → 200×400)",
+  kayit.en === 200 && kayit.boy === 400);
+check("sol kenar yukarı geliyor (yön doğru)", kayit.ustTuruncu === true);
+check("PNG PNG olarak kalıyor", kayit.tur === "image/png");
+check("not metnindeki referans değişmiyor", kayit.refAyni === true);
+check("kaydedince büyüteç kapanıyor", kayit.kapandi === true);
+
 /* ---------- odak modunda ders/konu seçilebiliyor (sürüm 3.4) ---------- */
 const odak = await p2.evaluate(() => {
   DB.courses = [{ id: "mat", name: "Matematik", color: "#2a78d6" },

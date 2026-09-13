@@ -103,6 +103,13 @@ Script blokları sırayla:
   tamamında değil: şablondaki satır sonları ve girintiler de boşluk olarak çizilip yüzü
   gereksiz uzatıyordu. Yüzde metin yoksa metin kutusunu hiç çizme; yalnız görselli yüz
   `img-only` sınıfı alıp asgari yüksekliği bırakır ve görsel büyür.
+- **Görsel döndürme blob'u yerinde değiştirir** (`rotateMedia`): IndexedDB'de **aynı id** altına
+  yazılır, böylece not metnindeki `idb:` referansına, karta ya da sözlüğe dokunmak gerekmez.
+  Yazdıktan sonra `MEDIA_URL` önbelleğindeki eski objectURL **mutlaka** bırakılıp silinmeli,
+  yoksa döndürülmemiş hali çizilmeye devam eder. Döndürme ekranda `transform` ile önizlenir ve
+  yalnızca "Kaydet"te tek seferde kodlanır — her dokunuşta yeniden kodlamak JPEG'i bozar.
+  Büyüteç yalnızca **not önizlemesindeki** görsellere bağlanır; kart yüzündeki görsele
+  dokunmak kartı çevirmeli.
 - **Odak katmanındaki seçenekler `fillFocusPickers()` ile kurulur, `paintFocus()` ile DEĞİL.**
   `paintFocus` saniyede bir çalışıyor; seçenekleri orada yeniden kurarsan açılır liste kapanır ve
   seçim kaçar. Odak katmanı artık ders ve konu seçtirir — eskiden yalnızca gösteriyordu ve
