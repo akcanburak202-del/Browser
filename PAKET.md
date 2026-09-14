@@ -31,7 +31,7 @@ Biçim:
   "testler": [
     { "ad": "<test adı>",
       "sorular": [
-        { "s": "<soru>", "secenekler": ["<a>","<b>","<c>","<d>"], "dogru": 1,
+        { "s": "<soru>", "secenekler": ["<a>","<b>","<c>","<d>","<e>"], "dogru": 1,
           "aciklama": "<doğru cevabın kısa gerekçesi>", "konu": "<konular listesinden biri>" }
       ] }
   ],
@@ -40,6 +40,7 @@ Biçim:
 
 Kurallar:
 - "dogru" sıfırdan başlayan şık sırasıdır (ilk şık için 0).
+- Şık sayısı 2-6 arası serbesttir; TUS/YKS gibi sınavlar için 5 şık yaz. Doğru şıkkın yerini sorular arasında dağıt.
 - "konu" yazacaksan "konular" listesinde harfi harfine aynı geçmeli.
 - Her kartın ön yüzü TEK bir şey sorsun; arka yüz 1-3 cümle.
 - Aynı ön yüz iki kez geçmesin.
@@ -66,7 +67,7 @@ Konu: <BURAYA KONUYU YAZ>
 | `desteler[].kartlar[].on` / `.arka` | ✔ | Kartın iki yüzü. **İkisi de dolu olmalı**, biri boşsa kart atlanır. |
 | `testler[].ad` | ✔ | Test adı. Aynı adlı test varsa numaralanır (`… (2)`). |
 | `testler[].sorular[].s` | ✔ | Soru metni. |
-| `testler[].sorular[].secenekler` | ✔ | En az 2 şık. |
+| `testler[].sorular[].secenekler` | ✔ | 2-6 şık (TUS için 5). Aralık dışıysa soru atlanır. |
 | `testler[].sorular[].dogru` | ✔ | Doğru şıkkın sırası, 0'dan başlar. Aralık dışıysa soru atlanır. |
 | `testler[].sorular[].aciklama` | – | Cevaptan sonra gösterilir. |
 | `testler[].sorular[].konu` | – | `konular` içindeki bir ad. İstatistik → "zayıf konular" bunu kullanır. |

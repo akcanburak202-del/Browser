@@ -43,6 +43,7 @@ globalThis.__T = { ymd, today, addDays, dayDiff, mondayOf, sm2, streak, md, dueC
   clozeCards, noteCardPairs, weakTopics, snapZone, YASLA_KENAR, YASLA_KUTU,
   paketGecerli, paketOzet, paketUygula, PAKET_SURUM,
   examCourses, examList, courseContents, deleteCourse, hourOpts, COP_DERS_DIZI, PAKET_TALIMAT,
+  SIK_MIN, SIK_MAX, SIK_VARSAYILAN,
   setDB: v => { DB = v; }, getDB: () => DB };`;
 
 const bosDugum = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {} },
@@ -383,6 +384,20 @@ es("paket: ikinci alımda deste ve terim kopyalanmıyor",
 dogru("paket: ikinci alımda atlananlar sayılıyor", ek2.atlanan >= 3);
 es("paket: aynı adlı test çakışmasın diye numaralanıyor",
   T.getDB().quizzes.map(q => q.name), ["Hücre testi", "Hücre testi (2)"]);
+
+/* 5 şıklı (TUS) soru alınır; şık sayısı sınır dışıysa atlanır */
+pdb = bosVeri(); T.setDB(pdb);
+ek = T.paketUygula(paket({ desteler: [], terimler: [], testler: [{ ad: "Şık testi", sorular: [
+  { s: "Beş şık?", secenekler: ["a", "b", "c", "d", "e"], dogru: 4 },
+  { s: "Altı şık?", secenekler: ["a", "b", "c", "d", "e", "f"], dogru: 5 },
+  { s: "Yedi şık?", secenekler: ["a", "b", "c", "d", "e", "f", "g"], dogru: 0 },
+  { s: "Tek şık?", secenekler: ["a"], dogru: 0 }] }] }));
+es("paket: 5 ve 6 şıklı sorular alınıyor, 1 ve 7 şıklı atlanıyor",
+  [ek.soru, ek.atlanan, T.getDB().quizzes[0].questions.map(q => q.ch.length)], [2, 2, [5, 6]]);
+es("paket: 5 şıklı sorunun doğru şıkkı E", T.getDB().quizzes[0].questions[0].a, 4);
+es("şık sınırları: yeni soru TUS gibi 5 şıkla açılır, sınır 2-6",
+  [T.SIK_VARSAYILAN, T.SIK_MIN, T.SIK_MAX], [5, 2, 6]);
+dogru("paket talimatı 5 şıklı örnek veriyor", T.PAKET_TALIMAT.includes('"<e>"'));
 
 /* bozuk kayıtlar atlanır, sağlamlar alınır */
 pdb = bosVeri(); T.setDB(pdb);

@@ -161,6 +161,11 @@ Script blokları sırayla:
 - **Konu haritasında `s.course === "*"` "Tüm dersler" görünümüdür.** Ders ayırt etmeden
   hepsini gösterir; o kipte `+ Ana konu` üst çubuktan kalkar, her ders grubunun kendi
   düğmesi olur (`data-root`). Alt konu eklerken ders **üst konudan** alınır, `s.course`'tan değil.
+- **Quiz şık sayısı serbesttir: `SIK_MIN=2`..`SIK_MAX=6`, yeni soru `SIK_VARSAYILAN=5` şıkla açılır**
+  (TUS/YKS 5 şıklı). Çözüm ekranı `x.ch` uzunluğuna göre A-F harfleriyle çizer; düzenleyicide
+  `+ Şık` / ✕ ile eklenip silinir, silince doğru şık (`a`) kayar, doğru şık silinirse 0 olur.
+  Paket alma (`paketUygula`) aralık dışı şık sayısını atlar. Yeni bir yol eklerken `4` yazma,
+  sabitleri kullan. Hazır paketler `paketler/` klasöründe (ör. `tus-romatoloji.json`).
 - **Günlük plan türetilmiştir, veriye yazılmaz.** `dailyPlan()` (3. bloğun sonunda, blok 1-3'te
   durduğu için birim testten erişilebilir) her çağrıda yeniden hesaplar; saklanan tek şey
   `settings.planDone={date,ids}` ve tarih değişince kendiliğinden sıfırlanır.

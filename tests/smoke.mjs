@@ -383,6 +383,34 @@ await p2.waitForTimeout(300);
 check("zayıf konular İstatistik'te görünüyor",
   await p2.evaluate(() => [...WINS.values()].find(w => w.appId === "stats").body.textContent.includes("Zayıf konular")));
 
+/* 5. şık (sürüm 4.1): yeni soru 5 şıkla açılır, şık eklenip silinebilir, doğru şık kayar */
+const sik = await p2.evaluate(() => {
+  DB.quizzes = [{ id: "q5", name: "Şık testi", courseId: "k1", questions: [] }]; saveNow();
+  const w = openApp("quiz");
+  w.state.quiz = "q5"; w.state.mode = "edit"; APPS.quiz.render(w);
+  w.body.querySelector('[data-a="add"]').click();                 /* yeni soru */
+  const q = DB.quizzes[0].questions[0];
+  const yeni = q.ch.length;
+  w.body.querySelector('[data-ac="0"]').click();                  /* + Şık → 6 */
+  const alti = q.ch.length;
+  const ekleKapali = w.body.querySelector('[data-ac="0"]').disabled; /* 6'da tavan */
+  q.a = 3; q.ch = q.ch.map((_, i) => "ş" + i); APPS.quiz.render(w);
+  w.body.querySelector('[data-dc="0.1"]').click();                /* doğru şıktan öncekini sil → a 3→2 */
+  const kaydi = q.a;
+  w.body.querySelector('[data-dc="0.2"]').click();                /* doğru şıkkı sil → a 0 */
+  const sifir = q.a;
+  /* çözüm ekranı 4 şıkla E harfine kadar değil D'ye kadar, 5 şıkla E'ye kadar çizer */
+  DB.quizzes[0].questions = [{ q: "s", ch: ["a", "b", "c", "d", "e"], a: 4, ex: "" }];
+  w.state.mode = "run"; w.state.i = 0; w.state.answers = []; w.state.locked = false; APPS.quiz.render(w);
+  const harfler = [...w.body.querySelectorAll("[data-ch] b")].map(b => b.textContent).join("");
+  return { yeni, alti, ekleKapali, kaydi, sifir, harfler, kalan: q.ch.length };
+});
+check("yeni soru 5 şıkla açılıyor", sik.yeni === 5);
+check("+ Şık ile 6'ya çıkıyor ve tavanda düğme kapanıyor", sik.alti === 6 && sik.ekleKapali === true);
+check("şık silinince doğru şık kayıyor", sik.kaydi === 2 && sik.kalan === 4);
+check("doğru şık silinince ilk şık doğru oluyor", sik.sifir === 0);
+check("çözüm ekranı 5 şıkı A-E ile çiziyor", sik.harfler === "ABCDE", sik.harfler);
+
 /* ---------- pencere yaslama ve çizim (sürüm 2.7) ---------- */
 await p2.goto(URL); await p2.waitForTimeout(700);
 const tut = await p2.evaluate(() => {

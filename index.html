@@ -435,7 +435,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="4.0", VERSION_DATE="2026-09-13";   /* Ayarlar ve terminalde görünür */
+const VERSION="4.1", VERSION_DATE="2026-09-14";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1972,6 +1972,9 @@ APPS.pomodoro={ name:"Pomodoro", icon:"⏱", w:420, h:520, desk:true, single:tru
    ============================================================ */
 
 /* ---------------- Quiz ---------------- */
+/* Soru başına şık sayısı: TUS gibi sınavlar 5 şıklı, o yüzden yeni soru 5 şıkla açılır.
+   Çözüm ekranı ve paket alma şık sayısına bağlı değil (SIK_MIN..SIK_MAX arası çalışır). */
+const SIK_MIN=2, SIK_MAX=6, SIK_VARSAYILAN=5;
 APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
   render(w){
     const s=w.state;
@@ -2018,14 +2021,18 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
       <div class="grow scroll pad" data-a="list"></div>
       <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
         <button class="btn pri" data-a="add">+ Soru ekle</button>
-        <span class="sub">Doğru şıkkı soldaki dairelerden seç</span></div></div>`;
+        <span class="sub">Doğru şıkkı soldaki dairelerden seç · yeni soru ${SIK_VARSAYILAN} şıkla açılır</span></div></div>`;
     $('[data-a="list"]',w.body).innerHTML=q.questions.map((x,i)=>`
       <div class="card" style="margin-bottom:10px">
         <div class="row"><b class="sub">Soru ${i+1}</b><span class="grow"></span><button class="btn sm danger" data-dq="${i}">✕</button></div>
         <input class="inp" data-q="${i}" value="${esc(x.q)}" placeholder="Soru metni" style="margin:6px 0">
         ${x.ch.map((c,j)=>`<div class="row" style="margin:4px 0">
           <input type="radio" name="a${i}" ${x.a===j?"checked":""} data-a2="${i}.${j}">
-          <input class="inp grow" data-c="${i}.${j}" value="${esc(c)}" placeholder="Şık ${String.fromCharCode(65+j)}"></div>`).join("")}
+          <input class="inp grow" data-c="${i}.${j}" value="${esc(c)}" placeholder="Şık ${String.fromCharCode(65+j)}">
+          <button class="btn sm" data-dc="${i}.${j}" title="Şıkkı sil" ${x.ch.length>SIK_MIN?"":"disabled"}>✕</button></div>`).join("")}
+        <div class="row" style="margin:4px 0">
+          <button class="btn sm" data-ac="${i}" ${x.ch.length<SIK_MAX?"":"disabled"}>+ Şık</button>
+          <span class="sub">${x.ch.length} şık</span></div>
         <div class="row" style="margin-top:6px">
           <input class="inp grow" data-ex="${i}" value="${esc(x.ex||"")}" placeholder="Açıklama (opsiyonel)">
           <select class="inp" data-tp="${i}" style="width:170px" title="Hangi konu? (zayıf konu istatistiği için)">
@@ -2038,7 +2045,15 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
     A("back").onclick=()=>{s.mode=null;saveAnd("quiz");};
     A("name").oninput=e=>{q.name=e.target.value;save();};
     A("course").onchange=e=>{q.courseId=e.target.value;saveAnd("quiz");};   /* konu seçicileri tazelensin */
-    A("add").onclick=()=>{q.questions.push({q:"",ch:["","","",""],a:0,ex:""});saveAnd("quiz");};
+    A("add").onclick=()=>{q.questions.push({q:"",ch:Array.from({length:SIK_VARSAYILAN},()=>""),a:0,ex:""});saveAnd("quiz");};
+    $$("[data-ac]",w.body).forEach(b=>b.onclick=()=>{const x=q.questions[+b.dataset.ac];
+      if(x.ch.length>=SIK_MAX)return; x.ch.push(""); saveAnd("quiz");});
+    $$("[data-dc]",w.body).forEach(b=>b.onclick=()=>{const[a,j]=b.dataset.dc.split(".").map(Number);
+      const x=q.questions[a]; if(x.ch.length<=SIK_MIN)return;
+      x.ch.splice(j,1);
+      /* doğru şık kaydırılır; silinen doğru şıksa ilk şık doğru olur */
+      if(x.a===j) x.a=0; else if(x.a>j) x.a--;
+      saveAnd("quiz");});
     $$("[data-dq]",w.body).forEach(b=>b.onclick=()=>{q.questions.splice(+b.dataset.dq,1);saveAnd("quiz");});
     $$("[data-q]",w.body).forEach(i=>i.oninput=()=>{q.questions[+i.dataset.q].q=i.value;save();});
     $$("[data-ex]",w.body).forEach(i=>i.oninput=()=>{q.questions[+i.dataset.ex].ex=i.value;save();});
@@ -2450,7 +2465,7 @@ Biçim:
   "testler": [
     { "ad": "<test adı>",
       "sorular": [
-        { "s": "<soru>", "secenekler": ["<a>","<b>","<c>","<d>"], "dogru": 1,
+        { "s": "<soru>", "secenekler": ["<a>","<b>","<c>","<d>","<e>"], "dogru": 1,
           "aciklama": "<doğru cevabın kısa gerekçesi>", "konu": "<konular listesinden biri>" }
       ] }
   ],
@@ -2459,6 +2474,7 @@ Biçim:
 
 Kurallar:
 - "dogru" sıfırdan başlayan şık sırasıdır (ilk şık için 0).
+- Şık sayısı 2-6 arası serbesttir; TUS/YKS gibi sınavlar için 5 şık yaz. Doğru şıkkın yerini sorular arasında dağıt.
 - "konu" yazacaksan "konular" listesinde harfi harfine aynı geçmeli.
 - Her kartın ön yüzü TEK bir şey sorsun; arka yüz 1-3 cümle.
 - Aynı ön yüz iki kez geçmesin.
@@ -2522,7 +2538,7 @@ function paketUygula(p){
       const metin=String(so.s??so.soru??"").trim();
       const sec=(so.secenekler||[]).map(x=>String(x??"").trim());
       const dogru=Number(so.dogru);
-      if(!metin||sec.length<2||sec.some(x=>!x)||!(dogru>=0&&dogru<sec.length)){ ek.atlanan++; continue; }
+      if(!metin||sec.length<SIK_MIN||sec.length>SIK_MAX||sec.some(x=>!x)||!(dogru>=0&&dogru<sec.length)){ ek.atlanan++; continue; }
       const kn=kucuk(so.konu);
       sorular.push({q:metin,ch:sec,a:dogru,ex:String(so.aciklama||"").trim(),
         topicId:(kn&&konuId[kn])||null});
