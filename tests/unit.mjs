@@ -399,6 +399,20 @@ es("şık sınırları: yeni soru TUS gibi 5 şıkla açılır, sınır 2-6",
   [T.SIK_VARSAYILAN, T.SIK_MIN, T.SIK_MAX], [5, 2, 6]);
 dogru("paket talimatı 5 şıklı örnek veriyor", T.PAKET_TALIMAT.includes('"<e>"'));
 
+/* notlar bölümü (4.2): konu anlatımı Notlar'a düşer, aynı başlık ikinci kez alınmaz */
+pdb = bosVeri(); T.setDB(pdb);
+const notluPaket = paket({ desteler: [], testler: [], terimler: [],
+  notlar: [{ baslik: "Hücre — özet", icerik: "# Hücre\n\n- Mitokondri ATP üretir." }, { baslik: "", icerik: "boş" }] });
+es("paket: yalnızca notlu paket geçerli", T.paketGecerli({ studyosPaket: T.PAKET_SURUM, notlar: [] }), true);
+es("paket: özet not sayısını veriyor", T.paketOzet(notluPaket).not, 2);
+ek = T.paketUygula(notluPaket);
+es("paket: not eklendi, başlıksız atlandı", [ek.not, ek.atlanan], [1, 1]);
+es("paket: not derse bağlı ve gövdesi markdown", [T.getDB().notes[0].title, T.getDB().notes[0].courseId,
+  T.getDB().notes[0].body.startsWith("# Hücre")], ["Hücre — özet", T.getDB().courses[0].id, true]);
+ek = T.paketUygula(notluPaket);
+es("paket: aynı başlıklı not ikinci alımda kopyalanmıyor", [ek.not, T.getDB().notes.length], [0, 1]);
+dogru("paket talimatı notlar bölümünü anlatıyor", T.PAKET_TALIMAT.includes('"notlar"'));
+
 /* bozuk kayıtlar atlanır, sağlamlar alınır */
 pdb = bosVeri(); T.setDB(pdb);
 ek = T.paketUygula(paket({

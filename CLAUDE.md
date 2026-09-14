@@ -36,6 +36,7 @@ Yeni oturumda önce bunu oku, sonra `README.md`'ye ve `git log`'a bak.
 | `tests/unit.mjs` | `node tests/unit.mjs` — tarayıcısız mantık testi; kendini 4 zaman diliminde çalıştırır |
 | `PLAN.md` | İnceleme sonrası parti parti yol haritası, hangi partinin bittiği işaretli |
 | `PAKET.md` | Paket biçimi + başka bir yapay zekâya verilecek talimat. **`PAKET_TALIMAT` ile birebir aynı kalmalı** (birim test sınıyor) |
+| `paketler/` | Hazır çalışma paketleri (JSON) + README. `araclar/paket-birlestir.mjs` parçaları birleştirip doğrular |
 
 ## index.html mimarisi
 
@@ -166,6 +167,12 @@ Script blokları sırayla:
   `+ Şık` / ✕ ile eklenip silinir, silince doğru şık (`a`) kayar, doğru şık silinirse 0 olur.
   Paket alma (`paketUygula`) aralık dışı şık sayısını atlar. Yeni bir yol eklerken `4` yazma,
   sabitleri kullan. Hazır paketler `paketler/` klasöründe (ör. `tus-romatoloji.json`).
+- **Paket üretimi `paket-hazirla` skill'i ile** (`.claude/skills/paket-hazirla/`): kullanıcı sınav +
+  ders + konu söyler; araştırma Opus ajanlarına dağıtılır (`brief.md`), parçalar
+  `araclar/paket-birlestir.mjs` ile birleştirilip uygulamanın kendi `paketUygula` yoluyla doğrulanır,
+  ana döngü tüm soru ve kartları okuyup düzeltir. Paket biçiminde **isteğe bağlı `notlar`** bölümü
+  var (4.2): `{baslik, icerik}` markdown, Notlar'a derse bağlı düşer, aynı başlık ikinci kez alınmaz.
+  Konu anlatımı yalnızca kullanıcı isterse üretilir.
 - **Günlük plan türetilmiştir, veriye yazılmaz.** `dailyPlan()` (3. bloğun sonunda, blok 1-3'te
   durduğu için birim testten erişilebilir) her çağrıda yeniden hesaplar; saklanan tek şey
   `settings.planDone={date,ids}` ve tarih değişince kendiliğinden sıfırlanır.

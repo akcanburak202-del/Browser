@@ -35,7 +35,8 @@ Biçim:
           "aciklama": "<doğru cevabın kısa gerekçesi>", "konu": "<konular listesinden biri>" }
       ] }
   ],
-  "terimler": [ { "terim": "<terim>", "tanim": "<1-2 cümle>", "esanlam": ["<eşanlam>"] } ]
+  "terimler": [ { "terim": "<terim>", "tanim": "<1-2 cümle>", "esanlam": ["<eşanlam>"] } ],
+  "notlar": [ { "baslik": "<not başlığı>", "icerik": "<markdown konu anlatımı>" } ]
 }
 
 Kurallar:
@@ -44,8 +45,9 @@ Kurallar:
 - "konu" yazacaksan "konular" listesinde harfi harfine aynı geçmeli.
 - Her kartın ön yüzü TEK bir şey sorsun; arka yüz 1-3 cümle.
 - Aynı ön yüz iki kez geçmesin.
-- İstemediğin bölümü boş dizi bırak (ör. "testler": []).
-- Görsel, HTML, LaTeX yok — düz metin. Satır sonu gerekiyorsa \n kullan.
+- İstemediğin bölümü boş dizi bırak (ör. "testler": []). "notlar" isteğe bağlıdır: yalnızca konu anlatımı da istenmişse yaz.
+- Not içeriği markdown'dır (#, ##, -, **kalın**, tablo). Başka bir notun başlığını [[Başlık]] ile bağlayabilirsin; sözlük terimleri notta kendiliğinden işaretlenir.
+- Kart, soru ve terimlerde görsel, HTML, LaTeX, markdown yok — düz metin. Satır sonu gerekiyorsa \n kullan.
 - Türkçe yaz.
 - Emin olmadığın bilgiyi yazma; uydurma tanım ezberlenirse zararlı olur.
 
@@ -74,13 +76,14 @@ Konu: <BURAYA KONUYU YAZ>
 | `terimler[].terim` | ✔ | Sözlükte işaretlenecek kelime. |
 | `terimler[].tanim` | ✔ | Balonda çıkan tanım. |
 | `terimler[].esanlam` | – | Aynı tanıma götüren başka yazımlar (çekimli hâller vb.). |
+| `notlar[].baslik` / `.icerik` | ✔ (bölüm isteğe bağlı) | Konu anlatımı notu; `icerik` markdown. **Aynı derste aynı başlıklı not varsa atlanır.** Notlar uygulamasında derse bağlı açılır. |
 
 ## Uygulamanın uyguladığı kurallar
 
 - **Kimlikler yeniden üretilir** — iki farklı paket çakışmaz.
 - **Ders adı eşleşirse o derse bağlanır**, yoksa yeni ders açılır.
 - **Aynı destede aynı ön yüz varsa kart atlanır** — aynı paketi iki kez almak kopya üretmez.
-- **Aynı adlı test numaralanır.**
+- **Aynı adlı test numaralanır.** Aynı başlıklı not ise atlanır (not değişmez).
 - **Eksik/bozuk kayıtlar atlanır** ve kaç tanesinin atlandığı özet ekranında yazar.
 - **Eklemeden önce anlık görüntü alınır** (`paket`); Ayarlar → Veri → 🕘 Anlık görüntüler'den geri dönülebilir.
 - Eklenen kartların hepsi **bugün vadeli yeni kart** olarak başlar; günlük yeni kart sınırına

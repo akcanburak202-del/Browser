@@ -7,6 +7,9 @@ Bu klasördeki JSON dosyaları **Ayarlar → Veri → 📦 Paket ekle** ile alı
 |---|---|---|
 | `tus-romatoloji.json` | Dahiliye | 15 deste / 509 kart · 5 test / 206 soru (5 şıklı, TUS biçimi) · 132 sözlük terimi |
 
+Yeni paket üretmek için `paket-hazirla` skill'i (sınav + ders + konu söylemek yeter). Parçaları
+birleştirip doğrulayan araç: `node araclar/paket-birlestir.mjs` (kullanım dosyanın başında).
+
 ## tus-romatoloji.json
 
 TUS Dahiliye — Romatoloji. Konular: Romatoid artrit, SLE, antifosfolipid sendromu, Sjögren,
