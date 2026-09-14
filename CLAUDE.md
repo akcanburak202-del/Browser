@@ -173,6 +173,12 @@ Script blokları sırayla:
   ana döngü tüm soru ve kartları okuyup düzeltir. Paket biçiminde **isteğe bağlı `notlar`** bölümü
   var (4.2): `{baslik, icerik}` markdown, Notlar'a derse bağlı düşer, aynı başlık ikinci kez alınmaz.
   Konu anlatımı yalnızca kullanıcı isterse üretilir.
+- **Quiz çözümü `s.order` ile yürür** (4.3): her başlangıç `quizBaslat()` ile soru dizinlerini
+  `shuffled()` karıştırır; cevaplar **soru dizinine** göre tutulur (`s.answers[qi]`), sıraya göre değil.
+  Yarım kalan çözüm `settings.quizDevam[quizId]={order,i,answers,locked,n}` olarak her adımda yazılır
+  (`quizDevamYaz`), listede düğme "▶ Devam i/N" olur, bitince ya da test silinince silinir; soru sayısı
+  değişmişse (`n`) kayıt yok sayılır. Sonuç ekranı "Yanlışları tekrar çöz" ile yalnızca yanlış
+  dizinlerden yeni tur açar; `quizRuns.total` o turun soru sayısıdır, testin değil.
 - **Günlük plan türetilmiştir, veriye yazılmaz.** `dailyPlan()` (3. bloğun sonunda, blok 1-3'te
   durduğu için birim testten erişilebilir) her çağrıda yeniden hesaplar; saklanan tek şey
   `settings.planDone={date,ids}` ve tarih değişince kendiliğinden sıfırlanır.
@@ -198,7 +204,8 @@ Quiz soruları `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,
 İstatistik'teki "zayıf konular" hesaplanır (`weakTopics()`).
 Sınavlar: `{id,name,date,courseIds:[...],courseId}` — `courseId` eski kayıtlarla uyum için
 ilk dersi tekrarlar; okuma `examCourses()` üzerinden.
-Ayarlar: `newPerDay` (varsayılan 20), `newSeen={date,n}`, `planDone={date,ids}`, `lastSnap`.
+Ayarlar: `newPerDay` (varsayılan 20), `newSeen={date,n}`, `planDone={date,ids}`, `lastSnap`,
+`quizDevam={<quizId>:{order,i,answers,locked,n}}` (yarım kalan quiz çözümleri).
 
 **Paket biçimi** (`📦 Paket ekle` — `paketUygula()`): dışarıda hazırlanmış deste/test/terim
 setini mevcut verinin **üstüne ekler**, hiçbir şeyi silmez. Anahtarlar Türkçe, dosya elle

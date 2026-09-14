@@ -435,7 +435,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="4.2", VERSION_DATE="2026-09-14";   /* Ayarlar ve terminalde görünür */
+const VERSION="4.3", VERSION_DATE="2026-09-14";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1991,7 +1991,7 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
             <span class="dotc" style="background:${ccolor(q.courseId)}"></span>
             <div class="grow"><b>${esc(q.name)}</b>
               <div class="sub">${q.questions.length} soru · ${esc(cname(q.courseId))}${best!=null?` · en iyi %${best}`:""}</div></div>
-            <button class="btn pri sm" data-r="${q.id}" ${q.questions.length?"":"disabled"}>▶ Çöz</button>
+            <button class="btn pri sm" data-r="${q.id}" ${q.questions.length?"":"disabled"}>${(d=>d?`▶ Devam ${d.i}/${d.order.length}`:"▶ Çöz")(quizDevam(q.id))}</button>
             <button class="btn sm" data-e="${q.id}">✏️</button>
             <button class="btn sm danger" data-x="${q.id}">✕</button></div>`;}).join("")
           ||`<div class="empty">Henüz test yok.<br><b>+ Yeni test</b> ile kendi soru bankanı oluştur.</div>`}
@@ -2001,11 +2001,13 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
             return `<div class="row" style="padding:6px 0"><span class="grow">${esc(q?.name||"—")} <span class="sub">${esc(r.date)}</span></span>
               <span class="tag" style="color:${pct>=70?"var(--good)":pct>=40?"var(--warn)":"var(--bad)"}">${r.correct}/${r.total} · %${pct}</span></div>`;}).join("")}`:""}
       </div></div>`;
-    $$("[data-r]",w.body).forEach(b=>b.onclick=()=>{s.quiz=b.dataset.r;s.mode="run";s.i=0;s.answers=[];s.locked=false;this.render(w);});
+    $$("[data-r]",w.body).forEach(b=>b.onclick=()=>{const q=DB.quizzes.find(x=>x.id===b.dataset.r); if(!q)return;
+      s.quiz=q.id;s.mode="run"; if(!quizSurdur(s,q)) quizBaslat(s,q); this.render(w);});
     $$("[data-e]",w.body).forEach(b=>b.onclick=()=>{s.quiz=b.dataset.e;s.mode="edit";this.render(w);});
     $$("[data-x]",w.body).forEach(b=>b.onclick=()=>{if(!confirm("Test çöp kutusuna taşınsın mı?"))return;
       const q=DB.quizzes.find(x=>x.id===b.dataset.x);
       if(q) toTrash("quiz",`${q.name} (${q.questions.length} soru)`,q);
+      quizDevamSil(b.dataset.x);
       DB.quizzes=DB.quizzes.filter(q=>q.id!==b.dataset.x);saveAnd("quiz");});
     $('[data-a="new"]',w.body).onclick=()=>{const n=prompt("Test adı:");if(!n)return;
       const q={id:uid(),name:n,courseId:DB.courses[0]?.id,questions:[]};DB.quizzes.push(q);
@@ -2063,47 +2065,60 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
   },
   run(w){
     const s=w.state, q=DB.quizzes.find(x=>x.id===s.quiz);
-    if(s.i>=q.questions.length){
-      const correct=s.answers.filter((a,i)=>a===q.questions[i].a).length;
-      const pct=Math.round(correct/q.questions.length*100);
+    if(!q){s.mode=null;return this.render(w);}
+    /* s.order: bu çözümde soruların sırası (soru dizinleri). Cevaplar SORU dizinine göre
+       tutulur, sıraya göre değil — böylece karışık sırada da sonuç ve konu dökümü doğru kalır. */
+    if(!s.order) s.order=q.questions.map((_,i)=>i);
+    if(!s.answers) s.answers=[];
+    const N=s.order.length;
+    if(s.i>=N){
+      const correct=s.order.filter(qi=>s.answers[qi]===q.questions[qi].a).length;
+      const pct=N?Math.round(correct/N*100):0;
+      const yanlis=s.order.filter(qi=>s.answers[qi]!==q.questions[qi].a);
       w.body.innerHTML=`<div class="app"><div class="grow scroll pad" style="text-align:center">
         <div style="font-size:46px;margin-top:18px">${pct>=70?"🎉":pct>=40?"💪":"📚"}</div>
-        <div class="hero">%${pct}</div><div class="sub">${correct} / ${q.questions.length} doğru</div>
+        <div class="hero">%${pct}</div><div class="sub">${correct} / ${N} doğru${N<q.questions.length?` · yalnızca ${N} soru çözüldü`:""}</div>
         <div class="row" style="justify-content:center;margin:18px 0;flex-wrap:wrap">
-          <button class="btn" data-a="again">↺ Tekrar çöz</button>
-          <button class="btn pri" data-a="tocards">Yanlışları karta çevir</button>
+          <button class="btn" data-a="again">↺ Tekrar çöz (karışık)</button>
+          <button class="btn" data-a="wrong" ${yanlis.length?"":"disabled"}>✗ Yanlışları tekrar çöz (${yanlis.length})</button>
+          <button class="btn pri" data-a="tocards" ${yanlis.length?"":"disabled"}>Yanlışları karta çevir</button>
           <button class="btn" data-a="back">Listeye dön</button></div>
-        <div style="text-align:left">${q.questions.map((x,i)=>{const ok=s.answers[i]===x.a;
+        <div style="text-align:left">${s.order.map((qi,i)=>{const x=q.questions[qi], ok=s.answers[qi]===x.a;
           return `<div class="card" data-gloss style="margin-bottom:8px;border-left:3px solid ${ok?"var(--good)":"var(--bad)"}">
             <b>${i+1}. ${esc(x.q)}</b>
-            <div class="sub" style="margin-top:4px">Senin cevabın: ${esc(x.ch[s.answers[i]]??"—")} ${ok?"✓":"✗"}</div>
+            <div class="sub" style="margin-top:4px">Senin cevabın: ${esc(x.ch[s.answers[qi]]??"—")} ${ok?"✓":"✗"}</div>
             ${ok?"":`<div class="sub">Doğru: <b>${esc(x.ch[x.a])}</b></div>`}
             ${x.ex?`<div class="sub" style="margin-top:4px">💡 ${esc(x.ex)}</div>`:""}</div>`;}).join("")}</div>
       </div></div>`;
       if(!s.logged){
         /* konusu işaretli sorular için doğru/yanlış dökümü — "zayıf konular" bundan çıkar */
         const topics={};
-        q.questions.forEach((x,i)=>{ if(!x.topicId) return;
+        s.order.forEach(qi=>{ const x=q.questions[qi]; if(!x.topicId) return;
           const a=topics[x.topicId]||(topics[x.topicId]=[0,0]);
-          a[s.answers[i]===x.a?0:1]++; });
-        DB.quizRuns.push({id:uid(),quizId:q.id,date:today(),correct,total:q.questions.length,topics});
+          a[s.answers[qi]===x.a?0:1]++; });
+        DB.quizRuns.push({id:uid(),quizId:q.id,date:today(),correct,total:N,topics});
+        quizDevamSil(q.id);   /* bitti: yarım kalan kayıt kalmasın */
         s.logged=true;save();}
       const A=a=>$(`[data-a="${a}"]`,w.body);
-      A("again").onclick=()=>{s.i=0;s.answers=[];s.logged=false;s.locked=false;this.render(w);};
+      A("again").onclick=()=>{quizBaslat(s,q);this.render(w);};
+      A("wrong").onclick=()=>{ if(!yanlis.length)return; quizBaslat(s,q,shuffled(yanlis));this.render(w);};
       A("back").onclick=()=>{s.mode=null;s.logged=false;this.render(w);};
       A("tocards").onclick=()=>{
         let dk=DB.decks.find(d=>d.name==="Yanlışlarım — "+q.name);
         if(!dk){dk={id:uid(),name:"Yanlışlarım — "+q.name,courseId:q.courseId};DB.decks.push(dk);}
-        let n=0; q.questions.forEach((x,i)=>{ if(s.answers[i]!==x.a){ n++;
-          DB.cards.push({id:uid(),deckId:dk.id,front:x.q,back:x.ch[x.a]+(x.ex?"\n\n"+x.ex:""),ef:2.5,int:0,reps:0,lapses:0,due:today()});}});
-        save(); toast(n?`${n} kart "${dk.name}" destesine eklendi`:"Yanlış yok, harika!"); rerender("cards"); updateMenubar(); };
+        let n=0; yanlis.forEach(qi=>{ const x=q.questions[qi];
+          if(DB.cards.some(c=>c.deckId===dk.id&&c.front===x.q)) return;   /* aynı soru ikinci kez karta dönmesin */
+          n++;
+          DB.cards.push({id:uid(),deckId:dk.id,front:x.q,back:x.ch[x.a]+(x.ex?"\n\n"+x.ex:""),ef:2.5,int:0,reps:0,lapses:0,due:today()});});
+        save(); toast(n?`${n} kart "${dk.name}" destesine eklendi`:"Bu yanlışlar zaten destede"); rerender("cards"); updateMenubar(); };
       return;
     }
-    const x=q.questions[s.i], picked=s.answers[s.i];
+    const qi=s.order[s.i], x=q.questions[qi], picked=s.answers[qi];
     w.body.innerHTML=`<div class="app">
       <div class="toolbar"><button class="btn sm" data-a="back">‹ Çık</button>
-        <span class="grow"></span><span class="sub">${s.i+1} / ${q.questions.length}</span></div>
-      <div class="meter" style="border-radius:0;height:4px"><i style="width:${s.i/q.questions.length*100}%"></i></div>
+        <span class="sub">Çıkınca kaldığın yerden devam edersin</span>
+        <span class="grow"></span><span class="sub">${s.i+1} / ${N}</span></div>
+      <div class="meter" style="border-radius:0;height:4px"><i style="width:${s.i/N*100}%"></i></div>
       <div class="grow scroll pad">
         <div class="h1" style="margin-bottom:16px;line-height:1.45" data-gloss>${esc(x.q)}</div>
         <div class="col" data-gloss>${x.ch.map((c,j)=>{
@@ -2112,15 +2127,32 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
         ${s.locked&&x.ex?`<div class="card" style="margin-top:12px">💡 ${esc(x.ex)}</div>`:""}
       </div>
       <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
+        <button class="btn sm" data-a="restart" title="Bu çözümü sil, karışık sırayla baştan başla">↺ Baştan</button>
         <span class="grow"></span>
-        <button class="btn pri" data-a="next">${s.locked?(s.i===q.questions.length-1?"Sonucu gör":"Sonraki ›"):"Cevapla"}</button></div></div>`;
-    $$("[data-ch]",w.body).forEach(b=>b.onclick=()=>{ if(s.locked)return; s.answers[s.i]=+b.dataset.ch; this.render(w); });
+        <button class="btn pri" data-a="next">${s.locked?(s.i===N-1?"Sonucu gör":"Sonraki ›"):"Cevapla"}</button></div></div>`;
+    $$("[data-ch]",w.body).forEach(b=>b.onclick=()=>{ if(s.locked)return; s.answers[qi]=+b.dataset.ch; quizDevamYaz(s,q); this.render(w); });
     $('[data-a="back"]',w.body).onclick=()=>{s.mode=null;this.render(w);};
+    $('[data-a="restart"]',w.body).onclick=()=>{ if(!confirm("Bu çözüm silinip baştan başlansın mı?"))return; quizBaslat(s,q); this.render(w); };
     $('[data-a="next"]',w.body).onclick=()=>{
       if(!s.locked){ if(picked==null){toast("Bir şık seç");return;} s.locked=true; }
       else { s.i++; s.locked=false; }
+      quizDevamYaz(s,q);
       this.render(w); };
   }};
+
+/* Yarım kalan çözüm settings.quizDevam[quizId] altında durur: soru sırası, kaçıncı soru,
+   cevaplar (soru dizinine göre) ve kilit. Test düzenlenirse (soru sayısı değişirse) kayıt
+   geçersiz sayılır. Her yeni başlangıç soruları karıştırır — sıradan ezber olmasın. */
+function quizDevam(id){ const d=(DB.settings.quizDevam||{})[id]; if(!d) return null;
+  const q=DB.quizzes.find(x=>x.id===id); if(!q||d.n!==q.questions.length||!Array.isArray(d.order)) return null;
+  if(d.order.some(i=>!(i>=0&&i<q.questions.length))) return null; return d; }
+function quizDevamYaz(s,q){ if(s.i>=s.order.length) return;   /* bitmiş çözüm kaydedilmez */
+  (DB.settings.quizDevam||(DB.settings.quizDevam={}))[q.id]={order:s.order,i:s.i,answers:s.answers,locked:!!s.locked,n:q.questions.length}; save(); }
+function quizDevamSil(id){ if(DB.settings.quizDevam&&DB.settings.quizDevam[id]){ delete DB.settings.quizDevam[id]; save(); } }
+function quizBaslat(s,q,order){ quizDevamSil(q.id);
+  s.order=order||shuffled(q.questions.map((_,i)=>i)); s.i=0; s.answers=[]; s.locked=false; s.logged=false; }
+function quizSurdur(s,q){ const d=quizDevam(q.id); if(!d) return false;
+  s.order=d.order.slice(); s.i=d.i; s.answers=d.answers.slice(); s.locked=!!d.locked; s.logged=false; return true; }
 
 /* ---------------- Takvim (gerçek tarihli) + Sınavlar ---------------- */
 function mondayOf(d){ const x=new Date(d+"T12:00:00"); const wd=(x.getDay()+6)%7; return addDays(d,-wd); }

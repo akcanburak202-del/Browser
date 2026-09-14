@@ -411,6 +411,46 @@ check("şık silinince doğru şık kayıyor", sik.kaydi === 2 && sik.kalan === 
 check("doğru şık silinince ilk şık doğru oluyor", sik.sifir === 0);
 check("çözüm ekranı 5 şıkı A-E ile çiziyor", sik.harfler === "ABCDE", sik.harfler);
 
+/* 4.3: yarım kalan quiz kaldığı yerden sürer, her başlangıç karışık, yanlışlar tekrar çözülür */
+const devam = await p2.evaluate(() => {
+  const qs = Array.from({ length: 12 }, (_, i) => ({ q: "s" + i, ch: ["a", "b", "c", "d", "e"], a: i % 5, ex: "" }));
+  DB.quizzes = [{ id: "qd", name: "Devam testi", courseId: "k1", questions: qs }]; DB.quizRuns = []; DB.settings.quizDevam = {}; saveNow();
+  const w = openApp("quiz"); APPS.quiz.render(w);
+  w.body.querySelector('[data-r="qd"]').click();                        /* yeni çözüm → karışık sıra */
+  const sira1 = w.state.order.slice();
+  const karisik = sira1.join() !== qs.map((_, i) => i).join();
+  /* 3 soru cevapla: ilk ikisi doğru, üçüncüsü yanlış */
+  for (let k = 0; k < 3; k++) {
+    const qi = w.state.order[w.state.i]; const dogru = qs[qi].a;
+    w.body.querySelector(`[data-ch="${k < 2 ? dogru : (dogru + 1) % 5}"]`).click();
+    w.body.querySelector('[data-a="next"]').click();                     /* cevapla */
+    w.body.querySelector('[data-a="next"]').click();                     /* sonraki */
+  }
+  w.body.querySelector('[data-a="back"]').click();                      /* yarıda çık */
+  const dugme = w.body.querySelector('[data-r="qd"]').textContent.trim();
+  const kayit = DB.settings.quizDevam.qd;
+  w.body.querySelector('[data-r="qd"]').click();                        /* geri gir */
+  const suruyor = w.state.i === 3 && w.state.order.join() === sira1.join() && w.state.answers.filter(x => x != null).length === 3;
+  /* kalanını bitir: hepsini yanlış */
+  while (w.state.i < 12) {
+    const qi = w.state.order[w.state.i]; w.body.querySelector(`[data-ch="${(qs[qi].a + 1) % 5}"]`).click();
+    w.body.querySelector('[data-a="next"]').click(); w.body.querySelector('[data-a="next"]').click(); }
+  const sonuc = w.body.textContent; const run = DB.quizRuns[0];
+  const temizlendi = !DB.settings.quizDevam.qd;
+  w.body.querySelector('[data-a="wrong"]').click();                     /* yanlışları tekrar çöz */
+  const yanlisTur = w.state.order.length;
+  w.body.querySelector('[data-a="restart"]').click();                   /* baştan (confirm kabul) */
+  const bastan = w.state.order.length === 12 && w.state.i === 0;
+  return { karisik, dugme, kayit: kayit && kayit.i, suruyor, dogru: run && run.correct, toplam: run && run.total,
+    temizlendi, yanlisTur, bastan, sonucOK: sonuc.includes("2 / 12 doğru") };
+});
+check("yeni çözümde sorular karışık geliyor", devam.karisik);
+check("yarıda çıkınca kayıt tutuluyor ve düğme Devam diyor", devam.kayit === 3 && devam.dugme.startsWith("▶ Devam 3/12"), devam.dugme);
+check("geri girince aynı sırayla kaldığı yerden sürüyor", devam.suruyor);
+check("bitince doğru sayısı ve kayıt doğru, devam kaydı silindi", devam.dogru === 2 && devam.toplam === 12 && devam.temizlendi && devam.sonucOK);
+check("yanlışları tekrar çöz yalnızca yanlışları getiriyor", devam.yanlisTur === 10, String(devam.yanlisTur));
+check("baştan düğmesi tam turu karışık yeniden başlatıyor", devam.bastan);
+
 /* ---------- pencere yaslama ve çizim (sürüm 2.7) ---------- */
 await p2.goto(URL); await p2.waitForTimeout(700);
 const tut = await p2.evaluate(() => {
