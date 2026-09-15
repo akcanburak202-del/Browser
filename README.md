@@ -27,9 +27,9 @@ Aynı yerdeki **📦 Paket ekle**, dışarıda hazırlanmış kart destesi / tes
 |---|---|---|
 | 📝 | **Notlar** | Markdown editör + canlı önizleme, ders bazlı, arama |
 | ✅ | **Görevler** | Öncelik, teslim tarihi, "bugün" filtresi; görevden doğrudan pomodoro başlatma |
-| 🗂 | **Kartlar** | SM-2 aralıklı tekrar algoritması, deste yönetimi, tekrar kuyruğu |
+| 🗂 | **Kartlar** | Ders → konu → deste; SM-2 aralıklı tekrar, toplu konu atama, bugünkü tekrarlar |
 | ⏱ | **Pomodoro** | Sayaç + otomatik mola, oturumlar derse yazılır, günlük hedef çubuğu |
-| ❓ | **Quiz** | Kendi soru bankan, test çözme, açıklamalar, **yanlışları tek tıkla karta çevirme** |
+| ❓ | **Quiz** | Ders → konu → test; kendi soru bankan, kaldığın yerden devam, açıklamalar, **yanlışları tek tıkla karta çevirme** |
 | 📅 | **Takvim** | Haftalık çalışma programı, saat bloklarını yerleştirme; sınav geri sayımı — bir sınav birden çok dersi kapsayabilir (TUS, YKS…) |
 | 🧠 | **Konu Haritası** | Ders → konu → alt konu ağacı, "başlanmadı / öğreniyorum / biliyorum" durumları; **Tüm dersler** görünümü, ders ekleme/silme |
 | 📊 | **İstatistik** | 14 günlük bar grafik, 12 haftalık ısı haritası, ders dağılımı, seri (streak) |
@@ -81,3 +81,20 @@ Görüntüleyicideki **📤 Cihazda aç**, dosyayı Android'in aç/paylaş sayfa
 ## Teknik
 
 Bağımlılık yok: vanilla JS + CSS, SVG grafikler, Web Audio ile üretilen ses. Açık/koyu tema, pencere sürükleme/boyutlandırma/büyütme, dock ve menü çubuğu elle yazıldı.
+
+## Sürüm 4.4: konu düzeni ve araştırma profilleri
+
+Quiz ve Kartlar derslerle açılır. Bir dersten ana konuya, oradan test/desteye geçilir.
+Bağlantısı olmayan eski içerikler **Konusu belirlenmemiş** altında bulunur; **Toplu konu ata**
+ile düzenlenir. Aynı ders içinde sınıflama değişikliği soru alt konularını, kart tekrar
+tarihlerini ve çözüm geçmişini korur. Yeni test/deste açık ders ve konuyu otomatik alır.
+
+`paket-hazirla` ortak kalite kuralları ve ayrı **Fable/Opus** / **Astra Pro** profilleri
+içerir. Kullanım örneği: “Astra Pro profiliyle TUS Dahiliye Romatoloji paketi hazırla.”
+Araştırma özelliği ve repo/terminal erişimi ortamda bulunmalıdır; skill bunları kendisi açmaz.
+Yeni v2 paketler öğe düzeyinde kaynak denetim dosyasıyla üretilir. Ayrıntılar `PAKET.md` ve
+`.claude/skills/paket-hazirla/SKILL.md` içindedir.
+
+Doğrulama: `node tests/unit.mjs`, `node tests/paket-konular.mjs`,
+`node tests/smoke.mjs`, `node tests/kutuphane-smoke.mjs`. Tarayıcı testleri Playwright gerektirir;
+özel Chromium kurulumu için `STUDYOS_CHROMIUM=/tam/yol/chromium` kullanılabilir.

@@ -167,12 +167,27 @@ Script blokları sırayla:
   `+ Şık` / ✕ ile eklenip silinir, silince doğru şık (`a`) kayar, doğru şık silinirse 0 olur.
   Paket alma (`paketUygula`) aralık dışı şık sayısını atlar. Yeni bir yol eklerken `4` yazma,
   sabitleri kullan. Hazır paketler `paketler/` klasöründe (ör. `tus-romatoloji.json`).
-- **Paket üretimi `paket-hazirla` skill'i ile** (`.claude/skills/paket-hazirla/`): kullanıcı sınav +
-  ders + konu söyler; araştırma Opus ajanlarına dağıtılır (`brief.md`), parçalar
-  `araclar/paket-birlestir.mjs` ile birleştirilip uygulamanın kendi `paketUygula` yoluyla doğrulanır,
-  ana döngü tüm soru ve kartları okuyup düzeltir. Paket biçiminde **isteğe bağlı `notlar`** bölümü
-  var (4.2): `{baslik, icerik}` markdown, Notlar'a derse bağlı düşer, aynı başlık ikinci kez alınmaz.
-  Konu anlatımı yalnızca kullanıcı isterse üretilir.
+- **Paket üretimi `paket-hazirla` skill'i ile** (`.claude/skills/paket-hazirla/`).
+  Ortak kurallar + Fable/Opus ve Astra Pro profilleri ayrıdır. Astra profilinde Fable
+  orkestrasyonu ve Opus çağrıları zorunlu değildir; gerçekten erişilen araştırma araçları kullanılır.
+  Her yeni içerik öğesi `brief.md` sözleşmesiyle kaynak/bölüm bağlantısı taşır. Birleştirici
+  v2 paketin yanında `.denetim.json` üretir. Son dosyayı yeniden yazmadan `--dogrula` ile denetle.
+  Düzeltmeler kaynak parçalara uygulanır; eski parçalardan üretip final düzeltmeleri ezilmez.
+- **Quiz ve Kartlar ders → ana konu → test/deste ile açılır (4.4).** Ortak arayüz
+  `kutuphaneRender`, kök çözümü `konuKoku`, yerleşim `icerikKonusu` üzerinden yürür.
+  Test/deste `topicId` taşır; sorunun kendi `topicId` alanı alt konu istatistiği içindir.
+  Eski kayıtta explicit alan yoksa bütün sorular aynı kökü gösterdiğinde yerleşim türetilir.
+  Explicit `null`, silinmiş/uyumsuz konu ve belirsiz içerik “Konusu belirlenmemiş”e gider.
+  Başlık ayrıştırarak veri göçü yapılmaz; kimlikler ve geçmiş aynen kalır. `konuAta` aynı ders
+  içinde soru alt konusunu korur, başka derse taşıma sırasında uyumsuz soru bağını temizler.
+  Toplu taşıma öncesi anlık görüntü alınır. Kartlar ana ekranında günlük tekrar kısayolu vardır.
+- **Paket v2:** `ders`, `anaKonu`, alt konu dizisi `konular`; her test/destede `konu: anaKonu`.
+  `paketSorunlari` v2 yapıyı hiçbir kayıt eklemeden doğrular. v1 alımı geriye uyumlu devam eder.
+  Konular v2'de ders+ebeveyn+ad ile eşleşir; farklı köklerin aynı adlı alt konuları karışmaz.
+  Yeni konular oluşturulur, kullanıcının eski konu ağacı otomatik yeniden ebeveynlenmez.
+  `paketler/tus-romatoloji.json` sadece sınıflama yönünden v2'ye taşındı; bilimsel içerik ve
+  kaynaklar bu revizyonda yeniden doğrulanmadı. Eski içeriği düzenlemek için yeniden alma
+  yerine Toplu konu ata kullanılır; yeniden alım testleri çoğaltabilir.
 - **Quiz çözümü `s.order` ile yürür** (4.3): her başlangıç `quizBaslat()` ile soru dizinlerini
   `shuffled()` karıştırır; cevaplar **soru dizinine** göre tutulur (`s.answers[qi]`), sıraya göre değil.
   Yarım kalan çözüm `settings.quizDevam[quizId]={order,i,answers,locked,n}` olarak her adımda yazılır
@@ -200,7 +215,7 @@ Kartlarda `seen` (son değerlendirme günü) yeni kart sayımının tek kaynağ�
 Kart görselleri yüz başına ayrı: `img` **ön yüz**, `imgB` **arka yüz** (eski kartlarda yalnızca
 `img` var, o da ön yüz sayılır — göç gerekmedi). Kartın medyasını tararken **ikisini de** al
 (`trashRefs`), yoksa çöpten kalıcı silmede görsel öksüz kalır.
-Quiz soruları `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,yanlış]}` dökümünden
+Quizler ve desteler ana konu `topicId` alanı taşıyabilir. Quiz soruları ayrıca alt konu `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,yanlış]}` dökümünden
 İstatistik'teki "zayıf konular" hesaplanır (`weakTopics()`).
 Sınavlar: `{id,name,date,courseIds:[...],courseId}` — `courseId` eski kayıtlarla uyum için
 ilk dersi tekrarlar; okuma `examCourses()` üzerinden.
@@ -241,10 +256,11 @@ Yan localStorage anahtarları (yalnızca kurtarma için, uygulama bunlardan okum
 1. `index.html` üzerinde küçük, hedefli değişiklikler (uzun blokları `node` ile
    dize değiştirerek yamalamak güvenli oldu — bulunamayan desende hata fırlat).
 2. Sözdizimi: script bloklarını çıkarıp `node --check`.
-3. `node tests/unit.mjs` — mantık; saniyeler sürer, önce bunu çalıştır.
-4. `node tests/smoke.mjs` — arayüz; hepsi geçmeli.
+3. `node tests/unit.mjs` ve `node tests/paket-konular.mjs` — mantık, eski veri ve kaynak bütünlüğü.
+4. `node tests/smoke.mjs` ve `node tests/kutuphane-smoke.mjs` — arayüz; hepsi geçmeli.
+   Playwright özel tarayıcı yolunda ise `STUDYOS_CHROMIUM=/tam/yol/chromium` kullanılabilir.
 5. `VERSION` sabitini artır; `sw.js` içindeki önbellek adını (`studyos-vN`) da artır.
-6. Commit + `git push origin main` → Pages 1-2 dakikada yayınlar.
+6. Çalışma dalına commit/push; PR aç. Kullanıcı isterse `main`e birleştir; Pages `main`den yayınlanır.
 
 ## Yapılabilecekler (konuşuldu, yapılmadı)
 

@@ -16,7 +16,10 @@ const check = (ad, kosul, detay = "") => {
   if (!kosul) fails++;
 };
 
-const b = await chromium.launch();
+const b = await chromium.launch({
+  executablePath: process.env.STUDYOS_CHROMIUM || undefined,
+  args: process.env.STUDYOS_CHROMIUM ? ["--no-sandbox", "--disable-dev-shm-usage", "--no-zygote"] : []
+});
 const p = await b.newPage({ viewport: { width: 1400, height: 900 } });
 const errs = [];
 p.on("pageerror", e => errs.push("PAGEERROR " + e.message));
@@ -415,7 +418,7 @@ check("çözüm ekranı 5 şıkı A-E ile çiziyor", sik.harfler === "ABCDE", si
 const devam = await p2.evaluate(() => {
   const qs = Array.from({ length: 12 }, (_, i) => ({ q: "s" + i, ch: ["a", "b", "c", "d", "e"], a: i % 5, ex: "" }));
   DB.quizzes = [{ id: "qd", name: "Devam testi", courseId: "k1", questions: qs }]; DB.quizRuns = []; DB.settings.quizDevam = {}; saveNow();
-  const w = openApp("quiz"); APPS.quiz.render(w);
+  const w = openApp("quiz"); w.state.mode=null;kutuphaneKonum(w.state,DB.quizzes[0]); APPS.quiz.render(w);
   w.body.querySelector('[data-r="qd"]').click();                        /* yeni çözüm → karışık sıra */
   const sira1 = w.state.order.slice();
   const karisik = sira1.join() !== qs.map((_, i) => i).join();
@@ -1217,7 +1220,7 @@ await p2.evaluate(() => [...WINS.values()].find(x => x.appId === "settings")
 await p2.waitForTimeout(250);
 check("paket talimatı gösteriliyor ve seçilebiliyor", await p2.evaluate(() => {
   const t = document.querySelector("[data-tal]");
-  return !!t && t.value.includes('"studyosPaket": 1') && t.value.includes("BURAYA KONUYU YAZ");
+  return !!t && t.value.includes('"studyosPaket": '+PAKET_SURUM) && t.value.includes("BURAYA KONUYU YAZ");
 }));
 await p2.evaluate(() => [...document.querySelectorAll(".ovl button")]
   .find(b => b.textContent.trim() === "Kapat").click());

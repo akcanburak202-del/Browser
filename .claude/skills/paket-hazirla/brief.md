@@ -1,62 +1,70 @@
-# Araştırma ajanı brief'i — StudyOS paket parçası
+# Ortak araştırma ve içerik sözleşmesi
 
-Bu dosya alt ajanlara olduğu gibi okutulur. Ana döngü mesajında şunları verir: sınav, ders, konu,
-senin alt başlık listen ve vurgu noktaları, KONULAR listesi, test ad(lar)ı, hedef sayılar, şık
-sayısı, notların istenip istenmediği ve çıktı dosyası yolu.
-
-## Rolün
-Sınav hazırlığı içerik araştırmacısısın. Verilen alt başlıklar için güncel ve güvenilir
-kaynaklardan araştırma yapıp aşağıdaki JSON biçiminde **tek bir dosya** üretirsin.
+Fable/Opus araştırmacıları ve Astra Pro aynı kalite ölçütlerini kullanır. Girdiler: sınav,
+ders, ana konu, sabit alt konu listesi, öğrenme hedefleri, test adları, şık sayısı, not tercihi.
 
 ## Araştırma
-- WebSearch/WebFetch ile araştır. Öncelik sırası: güncel sınıflama/tanı kriterleri ve tedavi
-  kılavuzları (ACR/EULAR, ESC, KDIGO, GOLD, ADA, NCCN, WHO vb. — konuya hangisi uyuyorsa) →
-  ders kitabı düzeyi (Harrison, Nelson, Williams, Sabiston vb.) → UpToDate/StatPearls/Medscape
-  özetleri → sınava özgü "spot bilgi" derlemeleri (yalnızca kılavuzla çelişmiyorsa).
-- Sınavın sevdiği kalıpları çıkar: "en sık", "en özgül", "ilk tercih", "patognomonik", eşlemeler
-  (antikor-hastalık, HLA, gen-hastalık, ilaç-yan etki), kriter eşikleri, ayırıcı tanı tuzakları,
-  "hangisi yanlıştır" için doğru bilinen yanlışlar.
-- Kaynaklar çelişiyorsa güncel kılavuzu esas al. **Emin olmadığın bilgiyi yazma**; ülkeye özgü
-  geri ödeme/ruhsat gibi değişken şeylere girme. Yazmadıklarını son mesajında listele.
-- Çıkmış soru metinlerini kopyalama. Kalıbı al, soruyu vaka ya da bilgi sorusu olarak yeniden yaz.
 
-## Çıktı biçimi (SADECE geçerli JSON)
+Konuya uygun güncel kılavuzlar, temel bilgi için güvenilir ders kaynakları ve ilgili birincil
+araştırmalar kullan. Kaynak türünü soruya göre seç: temel mekanizma için kılavuz zorunlu değildir.
+Gerçekten açılan içeriği temel al; URL, arama özeti veya kaynak adını okumayla karıştırma.
+Tam metin/özet/kullanıcı dosyası erişimini ayır; özetten desteklenmeyen ayrıntı üretme.
+
+Çelişkide nüfus, tarih, ülke, tanı–sınıflama farkı ve klinik bağlamı karşılaştır. Güncel klinik
+öneri ile geçmiş bir sınav cevabı farklıysa farkı açıkça belirt; bağlamı belirsiz bir soruda
+tek doğru dayatma. Eşik, doz, ilk tercih, en sık/en özgül ve mutlak ifadeleri özellikle doğrula.
+Sınav sıklığını gerçek soru analizi olmadan ölçülmüş veri gibi sunma. Çıkmış soruları kopyalama.
+Hedefli araştırmaya rağmen belirsiz kalanları gerekçesiyle `atlananlar` içine yaz.
+
+## İçerik kalitesi
+
+- Kart: tek öğrenme hedefi, kendi başına anlaşılır soru; kısa ama yeterli cevap.
+- Soru: çözüm için yeterli klinik bilgi, tek savunulabilir doğru şık; aynı kategoriden makul
+  çeldiriciler. Sadece kelime değiştirerek soru çoğaltma. Doğru şık kadar önemli çeldiricilerin
+  neden yanlış olduğunu açıkla; açıklamayı 1–3 cümleye sığdırmak ayrımı kaybettiriyorsa uzat.
+- Zorluk, belirsiz ifadelerden değil bilgi uygulama ve ayrım gereksiniminden gelsin.
+- Doğru şık konumlarını dağıt; dağılım için şıkları değiştirirken `dogru` ve açıklamayı birlikte
+  koru. "Hepsi/hiçbiri" seçeneklerinden kaçın. Anlamlı vaka çeşitliliğini kopya diye silme.
+- Türkçe, jenerik ilaç adları. Bağımsız kartta bilinmeyen kısaltmaya güvenme.
+- Kart/soru/terim düz metin. Not varsa markdown, yalnızca paketteki not başlıklarına `[[...]]`.
+- Öğrenme hedeflerinin kapsandığını izle; sabit sayıya ulaşmak için içerik uydurma.
+
+## Parça JSON'u
+
+`desteler`, `testler`, `terimler` dizileri; `notlar` yalnızca istenirse.
+Her test/deste `konu` alanında ana konuyu taşır. Sorunun `konu` alanı ana veya alt konudur.
+`dogru` sıfırdan başlayan **tam sayıdır**. Biçimin tamamı repo kökündeki `PAKET.md`.
+Araştırma sırasında kanıt kayıtlarını da aynı parçada taşı:
+
+```json
 {
-  "desteler": [
-    { "ad": "<Konu> — <alt başlık>",
-      "kartlar": [ { "on": "<tek bir şey soran ön yüz>", "arka": "<1-3 cümle cevap>" } ] }
-  ],
-  "testler": [
-    { "ad": "<verilen test adı>",
-      "sorular": [
-        { "s": "<sınav tarzı vaka/bilgi sorusu>",
-          "secenekler": ["<A>","<B>","<C>","<D>","<E>"],
-          "dogru": 2,
-          "aciklama": "<doğru şıkkın gerekçesi + diğerleri neden değil, 1-3 cümle>",
-          "konu": "<KONULAR listesinden harfi harfine biri>" }
-      ] }
-  ],
-  "terimler": [ { "terim": "<terim>", "tanim": "<1-2 cümle>", "esanlam": ["<çekimli/alternatif yazım>"] } ],
-  "notlar": [ { "baslik": "<Konu> — <alt başlık>", "icerik": "<markdown konu anlatımı>" } ],
-  "kaynaklar": ["<kullandığın kaynaklar, ad veya URL>"]
+  "desteler": [{"ad":"Romatoloji — Temel kavramlar","konu":"Romatoloji",
+    "kartlar":[{"on":"Özgün soru metni","arka":"Doğrulanmış cevap"}]}],
+  "testler": [],
+  "terimler": [],
+  "kaynaklar": [{
+    "id":"rom-a-1", "ad":"Erişilmiş belgenin gerçek başlığı",
+    "url":"https://example.org/belge", "yil":"2026",
+    "erisimTarihi":"2026-09-15", "erisim":"tam-metin", "konum":"Bölüm 2 / sayfa 8"
+  }],
+  "kanitlar": [{
+    "tur":"kart", "metin":"Özgün soru metni", "hedef":"H01",
+    "iddia":"Cevabı destekleyen, bağlamı ve istisnaları belirtilmiş bilgi",
+    "durum":"dogrulandi", "kaynaklar":[{"id":"rom-a-1","bolum":"Bölüm 2 / sayfa 8"}]
+  }],
+  "atlananlar": [{"hedef":"H02","neden":"Erişilen kaynaklarla doğrulanamadı"}]
 }
-`notlar` yalnızca istendiyse yazılır; istenmediyse anahtarı hiç koyma.
+```
 
-## Kurallar
-- Şık sayısı verilen sayıda ve **tam** (TUS/YKS: 5). `dogru` 0'dan başlar. Doğru şıkkın konumunu
-  sorular arasında eşit dağıt; hep aynı harf olmasın.
-- Şıklar aynı kategoriden (hepsi ilaç, hepsi antikor…) ve benzer uzunlukta. "Hepsi/hiçbiri" nadir.
-- Kart ön yüzü **tek bir şey** sorar; arka yüz 1-3 cümle, gerekirse rakamla (eşik, oran, doz).
-- Aynı ön yüz iki kez geçmez. Soru ile kart birebir kopya olmaz (soru vaka biçiminde olabilir).
-- Her sorunun `konu` alanı KONULAR listesinden harfi harfine.
-- Kart, soru ve terimlerde düz metin: görsel, HTML, LaTeX, markdown yok. Satır sonu gerekirse \n.
-- Notlarda markdown serbest: `#`/`##` başlık, listeler, `| tablo |`, **kalın**. Başka bir notun
-  başlığına `[[Başlık]]` ile bağlanabilirsin (yalnızca bu pakette var olan başlıklara).
-  Not, o alt başlığın sınav için gereken bütününü 1-3 ekranda anlatır: tanım/sınıflama → klinik →
-  tanı/kriter → tedavi → sınav tuzakları ("spot" listesi sonda).
-- Türkçe; ilaç adları jenerik; kısaltmanın açılımı ilk geçtiği yerde.
-- Hedef sayılar ana döngü mesajında; konu darsa altında kal, uydurarak doldurma.
-- Yazmadan önce `node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" <dosya>`
-  ile geçerliliği doğrula.
-- Son mesajında: kaç kart/soru/terim/not yazdığını, kaynakları ve **emin olamayıp atladığın**
-  noktaları kısaca bildir.
+Bu şema örneğidir; örnek kaynak gerçek kanıt değildir. Gerçek kayıtlara dönüştürmeden teslim etme.
+`erisim`: `tam-metin`, `ozet`, `kullanici-dosyasi`. Dosyada URL zorunlu değil; `konum`
+dosya adı/sürümü ve sayfayı belirtir. `yil` bilinemiyorsa `belirtilmemis` yaz; tarih uydurma.
+Her içerik için en az bir kanıt kaydı: `tur` kart/soru/terim/not; `metin` sırasıyla kart ön
+yüzü/soru metni/terim/not başlığı ile **birebir** eşleşir. Her önemli iddiayı destekle;
+birden çok kanıt kaydı veya kaynak kullanılabilir. Kaynak kimlikleri parça önekiyle benzersizdir.
+`durum: dogrulandi` yalnızca belirtilen kaynak gerçekten incelendiyse kullanılır.
+
+Birleştirici final dosyadaki konumu ve öğe/paket özetini denetim dosyasına yazar; bu dosya
+uygulamaya alınmaz, içeriğin hangi kanıta dayandığını ve sonradan değişip değişmediğini izler.
+Kanıt bağlantılarının mekanik olarak geçmesi kaynağın iddiayı desteklediğini tek başına kanıtlamaz.
+Parça sonunda kapsamı, sayıları ve atlananları bildir. Terminal varsa yazdıktan sonra JSON'u parse et.

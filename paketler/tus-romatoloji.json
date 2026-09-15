@@ -1,5 +1,6 @@
 {
- "studyosPaket": 1,
+ "studyosPaket": 2,
+ "anaKonu": "Romatoloji",
  "ad": "TUS Dahiliye — Romatoloji",
  "ders": "Dahiliye",
  "konular": [
@@ -22,6 +23,7 @@
  "desteler": [
   {
    "ad": "Romatoloji — Romatoid artrit",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Romatoid artritte (RA) en özgül otoantikor hangisidir?",
@@ -151,6 +153,7 @@
   },
   {
    "ad": "Romatoloji — Sistemik lupus eritematozus",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "2019 EULAR/ACR SLE sınıflama kriterlerinin giriş (entry) kriteri nedir?",
@@ -280,6 +283,7 @@
   },
   {
    "ad": "Romatoloji — Antifosfolipid sendromu",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Antifosfolipid sendromunun (APS) 2006 Sydney kriterlerine göre tanı için ne gerekir?",
@@ -397,6 +401,7 @@
   },
   {
    "ad": "Romatoloji — Sjögren sendromu",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "2016 ACR/EULAR Sjögren sınıflama kriterlerinde tanı eşiği kaç puandır?",
@@ -514,6 +519,7 @@
   },
   {
    "ad": "Romatoloji — Sistemik skleroz",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "2013 ACR/EULAR sistemik skleroz kriterlerinde tek başına tanı koyduran madde nedir?",
@@ -643,6 +649,7 @@
   },
   {
    "ad": "Romatoloji — İnflamatuvar miyopatiler",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "İdiyopatik inflamatuvar miyopatilerin başlıca alt tipleri nelerdir?",
@@ -772,6 +779,7 @@
   },
   {
    "ad": "Romatoloji — Spondiloartritler",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Spondiloartrit (SpA) ailesinin ortak özellikleri nelerdir?",
@@ -909,6 +917,7 @@
   },
   {
    "ad": "Romatoloji — Kristal artropatiler",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Gut artritinde eklem sıvısındaki kristalin polarize mikroskopi özellikleri nelerdir?",
@@ -1042,6 +1051,7 @@
   },
   {
    "ad": "Romatoloji — Osteoartrit ve yumuşak doku romatizması",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Osteoartritin dört klasik radyolojik bulgusu nedir?",
@@ -1167,6 +1177,7 @@
   },
   {
    "ad": "Romatoloji — Septik artrit",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Septik artritte genel olarak en sık etken hangi bakteridir?",
@@ -1296,6 +1307,7 @@
   },
   {
    "ad": "Romatoloji — Antiromatizmal ilaçlar",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "NSAİİ'lerin başlıca yan etkileri nelerdir?",
@@ -1517,6 +1529,7 @@
   },
   {
    "ad": "Romatoloji — Vaskülitler",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Chapel Hill 2012 sınıflaması vaskülitleri neye göre ayırır?",
@@ -1714,6 +1727,7 @@
   },
   {
    "ad": "Romatoloji — Behçet hastalığı",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Behçet hastalığı hangi damar boyutlarını tutar?",
@@ -1859,6 +1873,7 @@
   },
   {
    "ad": "Romatoloji — Ailesel Akdeniz ateşi ve otoinflamatuvar hastalıklar",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "Otoinflamatuvar hastalık ile otoimmün hastalığın temel farkı nedir?",
@@ -2020,6 +2035,7 @@
   },
   {
    "ad": "Romatoloji — Otoantikorlar ve laboratuvar",
+   "konu": "Romatoloji",
    "kartlar": [
     {
      "on": "ANA (antinükleer antikor) testinde altın standart yöntem nedir?",
@@ -2135,6 +2151,7 @@
  "testler": [
   {
    "ad": "TUS Romatoloji — Bağ dokusu hastalıkları",
+   "konu": "Romatoloji",
    "sorular": [
     {
      "s": "42 yaşında kadın hasta, 3 aydır her iki elde metakarpofalangeal ve proksimal interfalangeal eklemlerde simetrik şişlik ve 1,5 saat süren sabah tutukluğu tarifliyor. Romatoid faktör üst normal sınırın 5 katı, CRP yüksek. 2010 ACR/EULAR kriterlerine göre romatoid artrit sınıflaması için gereken toplam puan eşiği kaçtır?",
@@ -2998,6 +3015,7 @@
   },
   {
    "ad": "TUS Romatoloji — Spondiloartrit, kristal ve eklem",
+   "konu": "Romatoloji",
    "sorular": [
     {
      "s": "26 yaşında erkek, 8 aydır süren bel ağrısı ile başvuruyor. Ağrı gece ikinci yarıda uyandırıyor, sabah 45 dakika tutukluk oluyor, hareketle azalıyor. Bu hastada en olası tanı için ilk istenecek görüntüleme hangisidir?",
@@ -3601,6 +3619,7 @@
   },
   {
    "ad": "TUS Romatoloji — Antiromatizmal ilaçlar",
+   "konu": "Romatoloji",
    "sorular": [
     {
      "s": "Romatoid artrit nedeniyle metotreksat başlanan hastaya aşağıdakilerden hangisi mutlaka eklenmelidir?",
@@ -3931,6 +3950,7 @@
   },
   {
    "ad": "TUS Romatoloji — Vaskülitler ve Behçet",
+   "konu": "Romatoloji",
    "sorular": [
     {
      "s": "72 yaşında kadın hasta 3 haftadır süren zonklayıcı sağ şakak ağrısı, çiğnerken çene ağrısı ve omuz kuşağında sabah tutukluğu ile başvuruyor. ESR 98 mm/saat. Sabah kalkınca 10 dakika süren bulanık görme tarif ediyor. İlk yapılması gereken nedir?",
@@ -4456,6 +4476,7 @@
   },
   {
    "ad": "TUS Romatoloji — Otoinflamatuvar ve laboratuvar",
+   "konu": "Romatoloji",
    "sorular": [
     {
      "s": "18 yaşında erkek hasta 10 yıldır 1-2 ayda bir tekrarlayan, 1-2 gün süren ateş ve şiddetli karın ağrısı atakları tarif ediyor. Ataklar kendiliğinden düzeliyor; iki kez 'akut batın' nedeniyle ameliyat olmuş, apendiks normal bulunmuş. Ayak sırtında ataklarla gelen kızarık plaklar tarif ediyor. En olası tanı nedir?",

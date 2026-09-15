@@ -323,7 +323,7 @@ es("zayıf konu: konu işaretlenmemişse boş", T.weakTopics(), []);
 /* ---------- paket içe aktarma ---------- */
 const bosVeri = () => ({ settings: {}, trash: [], notes: [], decks: [], cards: [], tasks: [],
   sessions: [], topics: [], courses: [], exams: [], quizzes: [], quizRuns: [], terms: [] });
-const paket = (x = {}) => ({ studyosPaket: T.PAKET_SURUM, ad: "Test paketi", ders: "Biyoloji",
+const paket = (x = {}) => ({ studyosPaket: 1, ad: "Test paketi", ders: "Biyoloji",
   konular: ["Hücre"],
   desteler: [{ ad: "Organeller", kartlar: [
     { on: "Mitokondri", arka: "Enerji merkezi" }, { on: "Ribozom", arka: "Protein sentezi" }] }],
@@ -403,7 +403,7 @@ dogru("paket talimatı 5 şıklı örnek veriyor", T.PAKET_TALIMAT.includes('"<e
 pdb = bosVeri(); T.setDB(pdb);
 const notluPaket = paket({ desteler: [], testler: [], terimler: [],
   notlar: [{ baslik: "Hücre — özet", icerik: "# Hücre\n\n- Mitokondri ATP üretir." }, { baslik: "", icerik: "boş" }] });
-es("paket: yalnızca notlu paket geçerli", T.paketGecerli({ studyosPaket: T.PAKET_SURUM, notlar: [] }), true);
+es("paket: yalnızca notlu paket geçerli", T.paketGecerli({ studyosPaket: 1, notlar: [] }), true);
 es("paket: özet not sayısını veriyor", T.paketOzet(notluPaket).not, 2);
 ek = T.paketUygula(notluPaket);
 es("paket: not eklendi, başlıksız atlandı", [ek.not, ek.atlanan], [1, 1]);
