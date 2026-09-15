@@ -389,3 +389,18 @@ değiştirmeden kullanılabiliyor. Birim test ikisinin ayrışmadığını sın�
 4. `VERSION` + `VERSION_DATE` artır
 5. `sw.js` içindeki `C` sabitini artır
 6. Commit + `git push -u origin claude/proje-incelemesi-cidino`
+
+## Sürüm 4.4 — ders/konu düzeni ve çift araştırma profili
+
+- [x] Quiz ve Kartlar'da ders → ana konu → test/deste, geri gezinme ve konu içi arama.
+- [x] Eski bağlantısız kayıtların görünürlüğü, toplu konu atama ve taşıma öncesi anlık görüntü.
+- [x] Günlük kart tekrarı kısayolu; öğrenme geçmişini değiştirmeyen sınıflama.
+- [x] v2 paket ana/alt konu sözleşmesi, v1 uyumluluğu ve aynı ebeveynde konu eşleştirmesi.
+- [x] Fable/Opus akışını koruyan profil ve Astra Pro/Derin Araştırma profili.
+- [x] Öğrenme hedefi/iddia/kaynak bölümü kayıtları; final dosyayı değiştirmeyen doğrulama.
+- [x] Bozuk veri kaybını engelleyen birleştirme, çelişen kopya ve eski kanıt dosyası kontrolü.
+- [x] Romatoloji paketinin sadece sınıflama metaverisini güncelleme.
+
+Gerçek Astra Pro Derin Araştırma ve Fable/Opus üretim oturumları bu kod ortamında
+çalıştırılmadı. Teknik aktarım/kanıt sözleşmesi sentetik içerikle sınanır; mevcut Romatoloji
+içeriğinin tıbbi doğrulaması bu revizyonun kapsamı değildir.

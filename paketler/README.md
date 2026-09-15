@@ -1,11 +1,11 @@
 # Hazır paketler
 
 Bu klasördeki JSON dosyaları **Ayarlar → Veri → 📦 Paket ekle** ile alınır. Paket mevcut verinin
-üstüne eklenir, hiçbir şeyi silmez; aynı paketi ikinci kez almak kopya üretmez. Biçim `PAKET.md`'de.
+üstüne eklenir, hiçbir şeyi silmez. Tekrar alımda kartlar atlanır, testler numaralanarak çoğalabilir. Biçim `PAKET.md`'de.
 
-| Dosya | Ders | İçerik |
+| Dosya | Ders → ana konu | İçerik |
 |---|---|---|
-| `tus-romatoloji.json` | Dahiliye | 15 deste / 509 kart · 5 test / 206 soru (5 şıklı, TUS biçimi) · 132 sözlük terimi |
+| `tus-romatoloji.json` | Dahiliye → Romatoloji | 15 deste / 509 kart · 5 test / 206 soru (5 şıklı, TUS biçimi) · 132 sözlük terimi |
 
 Yeni paket üretmek için `paket-hazirla` skill'i (sınav + ders + konu söylemek yeter). Parçaları
 birleştirip doğrulayan araç: `node araclar/paket-birlestir.mjs` (kullanım dosyanın başında).
@@ -31,3 +31,15 @@ Bilerek yazılmayanlar: 2022 ANCA ve 2023 APS kriterlerinin madde madde puan tab
 geri ödeme/ruhsat koşulları, kılavuzlar arasında değişen eşikler (PEXIVAS sonrası plazmaferez sınırı,
 APS arteryel trombozda INR 3-4 hedefi). Yapay zekâ ürünüdür; bir kartı yanlış bulursan düzelt,
 aralıklı tekrar yanlışı da pekiştirir.
+
+### Sürüm 4.4 sınıflama güncellemesi
+
+Romatoloji paketi v2 biçimindedir; uygulama 4.4 gerektirir. Yalnızca ders/ana konu
+bağlantıları eklendi; 509 kart, 206 soru ve 132 terimin içeriği değiştirilmedi.
+Öğe düzeyinde kaynak denetim dosyası bu eski paket için henüz yoktur; yukarıdaki kaynak
+listesi önceki üretimin beyanıdır, bu güncellemede yeniden incelenmiş kaynak listesi değildir.
+
+Cihazında paket zaten varsa tekrar içe aktarmak yerine Quiz/Kartlar → Dahiliye →
+**Toplu konu ata** üzerinden ilgili test/desteleri seçip Romatoloji'ye taşı. Kartların tekrar
+tarihleri ve test geçmişi korunur. Yeni üretilen paketlerde Fable ve Astra profilleri aynı
+konu ve kaynak sözleşmesini kullanır; `.denetim.json` dosyaları uygulamaya alınmaz.
