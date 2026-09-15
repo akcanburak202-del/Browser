@@ -33,6 +33,8 @@ Hedefli araştırmaya rağmen belirsiz kalanları gerekçesiyle `atlananlar` iç
 
 `desteler`, `testler`, `terimler` dizileri; `notlar` yalnızca istenirse.
 Her test/deste `konu` alanında ana konuyu taşır. Sorunun `konu` alanı ana veya alt konudur.
+Notlar `baslik` ve `icerik`, terimler `terim`/`tanim`/`esanlam` taşır. Uygulama her iki
+içerik türünün ders/ana konu bağlantısını paket üst bilgisinden alır; ayrıca `konu` ekleme.
 `dogru` sıfırdan başlayan **tam sayıdır**. Biçimin tamamı repo kökündeki `PAKET.md`.
 Araştırma sırasında kanıt kayıtlarını da aynı parçada taşı:
 

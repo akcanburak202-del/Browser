@@ -445,7 +445,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="4.4", VERSION_DATE="2026-09-15";   /* Ayarlar ve terminalde görünür */
+const VERSION="4.5", VERSION_DATE="2026-09-15";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1519,10 +1519,14 @@ const APPS={};
 /* ---------------- Notlar ---------------- */
 APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
   render(w){
-    const s=w.state; const list=DB.notes.slice().sort((a,b)=>b.updated.localeCompare(a.updated));
-    if(!s.id||!DB.notes.find(n=>n.id===s.id)) s.id=list[0]?.id||null;
+    const s=w.state;
     const n=DB.notes.find(x=>x.id===s.id);
-    w.body.innerHTML=`<div class="app" style="flex-direction:row">
+    if(!n){s.id=null;return kutuphaneRender(w,this,"notes");}
+    kutuphaneKonum(s,n);
+    const list=DB.notes.filter(x=>x.courseId===n.courseId&&icerikKonusu(x)===icerikKonusu(n))
+      .sort((a,b)=>(b.updated||'').localeCompare(a.updated||''));
+    w.body.innerHTML=`<div class="app"><div class="toolbar">${kutuphaneYolu(s)}<span class="grow"></span><button class="btn sm" data-a="move">Konu değiştir</button></div>
+      <div class="app grow" style="flex-direction:row">
       <div class="sidebar">
         <button class="btn pri" style="width:100%" data-a="new">+ Yeni not</button>
         <input class="inp" data-a="q" placeholder="Ara…" style="margin:8px 0" value="${esc(s.q||"")}">
@@ -1531,7 +1535,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       <div class="app grow">
         <div class="toolbar">
           <input class="inp grow" data-a="title" placeholder="Başlık" value="${esc(n?.title||"")}" ${n?"":"disabled"}>
-          <select class="inp" data-a="course" style="width:130px">${DB.courses.map(c=>`<option value="${c.id}" ${n&&n.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+          <select class="inp" data-a="course" aria-label="Ders" style="width:130px"><option value="" disabled ${DB.courses.some(c=>c.id===n.courseId)?'':'selected'}>Dersi belirlenmemiş</option>${DB.courses.map(c=>`<option value="${c.id}" ${n.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
           <button class="btn sm" data-a="img" title="Görsel ekle">🖼</button>
           <button class="btn sm" data-a="draw" title="Çizim ekle (kalem destekli)">✏️</button>
           <button class="btn sm" data-a="file" title="Dosyayı içine göm (kopyasını alır)">📎</button>
@@ -1540,7 +1544,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
           <button class="btn" data-a="prev">${s.prev?"✏️ Yaz":"👁 Önizle"}</button>
           <button class="btn danger sm" data-a="del">Sil</button>
         </div>
-        ${n? (s.prev?`<div class="md-prev grow scroll">${md(n.body)}</div>`
+        ${n? (s.prev?`<div class="md-prev grow scroll" data-note-id="${n.id}">${md(n.body)}</div>`
                     :`<textarea class="note-ed grow" data-a="body" placeholder="Markdown yazabilirsin: # başlık, **kalın**, - liste, ==vurgu==, \`kod\`">${esc(n.body)}</textarea>`)
             :`<div class="empty">Henüz not yok.<br>Soldan <b>+ Yeni not</b> ile başla.</div>`}
         <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
@@ -1550,7 +1554,8 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
           <span>${(n?.att||[]).map((a,i)=>`<span class="att ${a.hid||a.manual?"linked":""}" data-att="${i}"
               title="${a.hid?"Cihazdaki dosyayı aç (güncel hali)":a.manual?"Dosyayı seç ve aç — içeriği saklanmıyor":"Gömülü kopyayı aç"}">${a.hid?"🔗":a.manual?"📌":"📎"} ${esc(a.name)} <b data-rmatt="${i}">✕</b></span>`).join("")}</span>
         </div>
-      </div></div>`;
+      </div></div></div>`;
+    kutuphaneGezinti(w,this);
     const q=(s.q||"").toLowerCase();
     const box=$('[data-a="list"]',w.body);
     const shown=list.filter(x=>!q||x.title.toLowerCase().includes(q)||x.body.toLowerCase().includes(q));
@@ -1560,8 +1565,9 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       || `<div class="sub" style="padding:10px">Sonuç yok</div>`;
     $$('[data-id]',box).forEach(it=>it.onclick=()=>{s.id=it.dataset.id;this.render(w);});
     const on=(a,ev,fn)=>{const e=$(`[data-a="${a}"]`,w.body); if(e)e.addEventListener(ev,fn);};
-    on("new","click",()=>{const t=today();const nn={id:uid(),courseId:DB.courses[0]?.id,title:"Yeni not",body:"",created:t,updated:t};
+    on("new","click",()=>{const t=today();const nn={id:uid(),courseId:n.courseId,topicId:icerikKonusu(n),title:"Yeni not",body:"",created:t,updated:t};
       DB.notes.push(nn);s.id=nn.id;s.prev=false;save();this.render(w);});
+    on("move","click",()=>kutuphaneTasi(w,this,[n]));
     on("q","input",e=>{s.q=e.target.value;const v=e.target.selectionStart;this.render(w);const f=$('[data-a="q"]',w.body);f.focus();f.setSelectionRange(v,v);});
     on("prev","click",()=>{s.prev=!s.prev;this.render(w);});
     on("del","click",()=>{ if(!n)return;
@@ -1571,7 +1577,7 @@ APPS.notes={ name:"Notlar", icon:"📝", w:860, h:560, desk:true,
       toast("🗑 Çöp kutusuna taşındı"); });
     on("title","input",e=>{n.title=e.target.value;n.updated=today();save();
       $$('[data-id="'+n.id+'"] span:last-child',w.body).forEach(sp=>sp.textContent=n.title||"Adsız");});
-    on("course","change",e=>{n.courseId=e.target.value;n.updated=today();save();this.render(w);});
+    on("course","change",e=>{if(konuAta([n],e.target.value,null)){n.updated=today();saveAnd("notes");}});
     on("body","input",e=>{n.body=e.target.value;n.updated=today();save();});
     on("img","click",async()=>{ if(!n)return; const f=await pickFile("image/*"); if(!f)return;
       try{ const d=await imageScaled(f); const ref=await putMedia(d);
@@ -1652,8 +1658,8 @@ function noteToCards(n){
   const pairs=noteCardPairs(n.body);
   if(!pairs.length){ toast('Bu notta "Soru :: Cevap" ya da {{c1::…}} satırı yok'); return; }
   const name="Not: "+(n.title||"Adsız");
-  let dk=DB.decks.find(d=>d.name===name);
-  if(!dk){ dk={id:uid(),name,courseId:n.courseId}; DB.decks.push(dk); }
+  let dk=DB.decks.find(d=>d.name===name&&d.courseId===n.courseId&&icerikKonusu(d)===icerikKonusu(n));
+  if(!dk){ dk={id:uid(),name,courseId:n.courseId,topicId:icerikKonusu(n)}; DB.decks.push(dk); }
   let add=0;
   pairs.forEach(({front,back})=>{ if(DB.cards.some(c=>c.deckId===dk.id&&c.front===front)) return;
     DB.cards.push({id:uid(),deckId:dk.id,front,back,ef:2.5,int:0,reps:0,lapses:0,due:today()}); add++; });
@@ -1762,7 +1768,7 @@ function sm2(card,q){
   card.due=addDays(today(),card.int);
   card.seen=today();
 }
-/* Ders → ana konu → test/deste. Eski kayıtta açık bağ yoksa yalnızca bütün
+/* Ders → ana konu → test/deste/not. Eski kayıtta açık bağ yoksa yalnızca bütün
    soruların aynı kökü göstermesi güvenilir kabul edilir; adlardan tahmin edilmez. */
 function konuKoku(id,courseId){
   const seen=new Set(); let t=DB.topics.find(t=>t.id===id&&t.courseId===courseId);
@@ -1794,7 +1800,7 @@ function kutuphaneYolu(s){
 function kutuphaneKonum(s,item){ s.libCourse=DB.courses.some(c=>c.id===item.courseId)?item.courseId:"";s.libTopic=icerikKonusu(item)||""; }
 function kutuphaneGezinti(w,app){
   $$('[data-nav]',w.body).forEach(b=>b.onclick=()=>{
-    w.state.deck=null; w.state.mode=null;
+    w.state.deck=null; w.state.mode=null;if(w.appId==='notes')w.state.id=null;if(w.appId==='glossary')w.state.edit=null;
     if(b.dataset.nav==='home'){delete w.state.libCourse;delete w.state.libTopic;}
     if(b.dataset.nav==='course')delete w.state.libTopic;
     app.render(w);
@@ -1816,18 +1822,21 @@ async function kutuphaneTasi(w,app,items){
     let t=anaKonular(v.course).find(t=>t.name.trim().toLocaleLowerCase("tr")===k.newTopic.trim().toLocaleLowerCase("tr"));
     if(!t){t={id:uid(),courseId:v.course,parentId:null,name:k.newTopic.trim(),status:"new"};DB.topics.push(t);}tid=t.id;
   }
-  if(konuAta(items,v.course,tid)){kutuphaneKonum(w.state,items[0]);saveAnd("quiz","cards","topics","stats");}
+  if(konuAta(items,v.course,tid)){kutuphaneKonum(w.state,items[0]);if(app===APPS.glossary){buildTerms();save();refreshAll();}else saveAnd("quiz","cards","notes","glossary","topics","stats");}
 }
 function kutuphaneSil(kind,item){
   if(!item)return;
-  if(!confirm(kind==='quiz'?"Test çöp kutusuna taşınsın mı?":"Deste ve kartları çöp kutusuna taşınsın mı?"))return;
+  if(!confirm(kind==='quiz'?"Test çöp kutusuna taşınsın mı?":kind==='notes'?"Not çöp kutusuna taşınsın mı?":kind==='glossary'?"Terim çöp kutusuna taşınsın mı?":"Deste ve kartları çöp kutusuna taşınsın mı?"))return;
   if(kind==='quiz'){toTrash("quiz",item.name,item);quizDevamSil(item.id);DB.quizzes=DB.quizzes.filter(x=>x.id!==item.id);}
+  else if(kind==='notes'){toTrash("note",item.title||"Adsız",item);DB.notes=DB.notes.filter(n=>n.id!==item.id);}
+  else if(kind==='glossary'){toTrash("term",item.term,item);DB.terms=DB.terms.filter(t=>t.id!==item.id);buildTerms();save();refreshAll();return;}
   else {const cards=DB.cards.filter(c=>c.deckId===item.id);toTrash("deck",item.name,{deck:item,cards});
     DB.cards=DB.cards.filter(c=>c.deckId!==item.id);DB.decks=DB.decks.filter(d=>d.id!==item.id);}
-  saveAnd("quiz","cards");
+  saveAnd("quiz","cards","notes");
 }
 function kutuphaneRender(w,app,kind){
-  const s=w.state, quiz=kind==='quiz', all=quiz?DB.quizzes:DB.decks;
+  const s=w.state, quiz=kind==='quiz', notes=kind==='notes', glossary=kind==='glossary', all=quiz?DB.quizzes:notes?DB.notes:glossary?DB.terms:DB.decks;
+  const itemName=x=>notes?(x.title||"Adsız"):glossary?(x.term||"Adsız"):x.name;
   w.keys=null;
   if(s.libCourse&& !DB.courses.some(c=>c.id===s.libCourse)){delete s.libCourse;delete s.libTopic;}
   if(s.libTopic&&!anaKonular(s.libCourse).some(t=>t.id===s.libTopic))delete s.libTopic;
@@ -1835,7 +1844,7 @@ function kutuphaneRender(w,app,kind){
   const topics=!courses&&s.libTopic===undefined;
   const inCourse=all.filter(x=>(DB.courses.some(c=>c.id===x.courseId)?x.courseId:"")===s.libCourse);
   const items=inCourse.filter(x=>(icerikKonusu(x)||"")===s.libTopic);
-  const counts=list=>quiz?`${list.length} test · ${list.reduce((n,x)=>n+x.questions.length,0)} soru`:
+  const counts=list=>glossary?`${list.length} terim`:notes?`${list.length} not`:quiz?`${list.length} test · ${list.reduce((n,x)=>n+x.questions.length,0)} soru`:
     `${list.length} deste · ${DB.cards.filter(c=>list.some(d=>d.id===c.deckId)).length} kart · ${list.reduce((n,d)=>n+dueCards(d.id).length,0)} tekrar`;
   const tile=(attr,id,name,sub)=>`<button class="card library-tile" ${attr}="${esc(id)}"><b>${esc(name)}</b><span class="sub">${esc(sub)}</span><span class="library-arrow">›</span></button>`;
   let body;
@@ -1849,16 +1858,20 @@ function kutuphaneRender(w,app,kind){
     if(unknown.length||!body)body+=tile('data-ltopic','',"Konusu belirlenmemiş",counts(unknown));
   }else{
     const search=(s.libSearch||'').toLocaleLowerCase('tr');
-    const visible=items.filter(x=>x.name.toLocaleLowerCase('tr').includes(search));
+    const visible=items.filter(x=>(itemName(x)+(notes?' '+(x.body||''):glossary?' '+x.def+' '+(x.alt||[]).join(' '):'')).toLocaleLowerCase('tr').includes(search));
+    if(glossary)visible.sort((a,b)=>a.term.localeCompare(b.term,'tr'));
+    if(notes)visible.sort((a,b)=>(b.updated||'').localeCompare(a.updated||''));
     body=capped(visible).map(x=>{
       const runs=quiz?DB.quizRuns.filter(r=>r.quizId===x.id):[];
       const best=runs.length?Math.max(...runs.map(r=>Math.round(r.correct/r.total*100))):null;
-      return `<div class="card library-entry"><div class="grow"><b>${esc(x.name)}</b><div class="sub">${counts([x])}${best!==null?` · en iyi %${best}`:''}</div></div>
+      return `<div class="card library-entry">${glossary&&x.img?mediaImg(x.img,"","width:40px;height:40px;object-fit:cover;border-radius:8px"):''}<div class="grow"><b>${esc(itemName(x))}</b>
+        ${glossary&&x.alt?.length?`<span class="sub"> (${esc(x.alt.join(', '))})</span>`:''}${glossary&&x.noteId?'<span class="tag">📝</span>':''}
+        <div class="sub">${notes?`Güncellendi ${esc(x.updated||'—')}`:glossary?esc(x.def):counts([x])}${best!==null?` · en iyi %${best}`:''}</div></div>
         ${quiz?`<button class="btn pri sm" data-r="${x.id}" ${x.questions.length?'':'disabled'}>${(d=>d?`▶ Devam ${d.i}/${d.order.length}`:'▶ Çöz')(quizDevam(x.id))}</button>
           <button class="btn sm" data-e="${x.id}" aria-label="Testi düzenle">✏️</button>`:
-          `<button class="btn pri sm" data-d="${x.id}">Desteyi aç</button>`}
+          notes?`<button class="btn pri sm" data-n="${x.id}">Notu aç</button>`:glossary?`<button class="btn pri sm" data-term-edit="${x.id}">Terimi aç</button>`:`<button class="btn pri sm" data-d="${x.id}">Desteyi aç</button>`}
         <button class="btn sm" data-move="${x.id}">Taşı</button><button class="btn sm danger" data-x="${x.id}" aria-label="Sil">✕</button></div>`;
-    }).join('')+capNote(visible,quiz?'test':'deste');
+    }).join('')+capNote(visible,quiz?'test':notes?'not':glossary?'terim':'deste');
     if(quiz){
       const recent=DB.quizRuns.filter(r=>items.some(q=>q.id===r.quizId)).slice(-8).reverse();
       if(recent.length)body+=`<div class="sep"></div><h2 class="h2">Bu konuda son denemeler</h2>`+
@@ -1866,9 +1879,9 @@ function kutuphaneRender(w,app,kind){
     }
   }
   w.body.innerHTML=`<div class="app library"><div class="toolbar">${kutuphaneYolu(s)}<span class="grow"></span>
-    ${!quiz?`<button class="btn pri sm" data-due ${dueCards().length?'':'disabled'}>Bugünkü tekrarlar (${dueCards().length})</button>`:''}</div>
-    <div class="toolbar"><b class="grow">${courses?'Dersler':topics?'Konular':quiz?'Testler':'Desteler'}</b>
-      ${courses?'<button class="btn sm" data-newcourse>+ Ders</button>':s.libCourse?`<button class="btn sm" data-newtopic>+ Konu</button><button class="btn pri sm" data-newitem>+ ${quiz?'Yeni test':'Yeni deste'}</button>`:''}
+    ${!quiz&&!notes&&!glossary?`<button class="btn pri sm" data-due ${dueCards().length?'':'disabled'}>Bugünkü tekrarlar (${dueCards().length})</button>`:''}</div>
+    <div class="toolbar"><b class="grow">${courses?'Dersler':topics?'Konular':quiz?'Testler':notes?'Notlar':glossary?'Terimler':'Desteler'}</b>
+      ${courses?'<button class="btn sm" data-newcourse>+ Ders</button>':s.libCourse?`<button class="btn sm" data-newtopic>+ Konu</button><button class="btn pri sm" data-newitem>+ ${quiz?'Yeni test':notes?'Yeni not':glossary?'Yeni terim':'Yeni deste'}</button>`:''}
       ${!courses&&inCourse.length?'<button class="btn sm" data-bulk>Toplu konu ata</button>':''}</div>
     ${!courses&&!topics?'<div class="pad" style="padding-bottom:0"><input class="inp" data-libsearch aria-label="İçerik ara" placeholder="Bu konuda ara"></div>':''}
     <div class="grow scroll pad ${courses||topics?'library-grid':''}">${body||'<div class="empty">Henüz içerik yok.</div>'}</div></div>`;
@@ -1877,6 +1890,8 @@ function kutuphaneRender(w,app,kind){
   $$('[data-ltopic]',w.body).forEach(b=>b.onclick=()=>{s.libTopic=b.dataset.ltopic;s.libSearch='';app.render(w);});
   const find=id=>all.find(x=>x.id===id);
   $$('[data-d]',w.body).forEach(b=>b.onclick=()=>{s.deck=b.dataset.d;app.render(w);});
+  $$('[data-term-edit]',w.body).forEach(b=>b.onclick=()=>{s.edit=b.dataset.termEdit;app.render(w);});
+  $$('[data-n]',w.body).forEach(b=>b.onclick=()=>{s.id=b.dataset.n;s.prev=true;s.q='';app.render(w);});
   $$('[data-r]',w.body).forEach(b=>b.onclick=()=>{const q=find(b.dataset.r);if(!q)return;s.quiz=q.id;s.mode='run';if(!quizSurdur(s,q))quizBaslat(s,q);app.render(w);});
   $$('[data-e]',w.body).forEach(b=>b.onclick=()=>{s.quiz=b.dataset.e;s.mode='edit';app.render(w);});
   $$('[data-x]',w.body).forEach(b=>b.onclick=()=>kutuphaneSil(kind,find(b.dataset.x)));
@@ -1885,17 +1900,19 @@ function kutuphaneRender(w,app,kind){
   if(A('[data-libsearch]')){const input=A('[data-libsearch]');input.value=s.libSearch||'';input.oninput=()=>{const pos=input.selectionStart;s.libSearch=input.value;app.render(w);const n=A('[data-libsearch]');n.focus();n.setSelectionRange(pos,pos);};}
   if(A('[data-newcourse]'))A('[data-newcourse]').onclick=()=>{const name=prompt('Ders adı:')?.trim();if(!name)return;
     let c=DB.courses.find(c=>c.name.toLocaleLowerCase('tr')===name.toLocaleLowerCase('tr'));
-    if(!c){c={id:uid(),name,color:COLORS[DB.courses.length%COLORS.length]};DB.courses.push(c);}s.libCourse=c.id;delete s.libTopic;saveAnd('quiz','cards','topics');};
+    if(!c){c={id:uid(),name,color:COLORS[DB.courses.length%COLORS.length]};DB.courses.push(c);}s.libCourse=c.id;delete s.libTopic;saveAnd('quiz','cards','notes','glossary','topics');};
   if(A('[data-newtopic]'))A('[data-newtopic]').onclick=()=>{const name=prompt('Ana konu adı:')?.trim();if(!name)return;
     let t=anaKonular(s.libCourse).find(t=>t.name.toLocaleLowerCase('tr')===name.toLocaleLowerCase('tr'));
-    if(!t){t={id:uid(),courseId:s.libCourse,parentId:null,name,status:'new'};DB.topics.push(t);}s.libTopic=t.id;saveAnd('quiz','cards','topics');};
-  if(A('[data-newitem]'))A('[data-newitem]').onclick=()=>{const name=prompt(quiz?'Test adı:':'Deste adı:')?.trim();if(!name)return;
+    if(!t){t={id:uid(),courseId:s.libCourse,parentId:null,name,status:'new'};DB.topics.push(t);}s.libTopic=t.id;saveAnd('quiz','cards','notes','glossary','topics');};
+  if(A('[data-newitem]'))A('[data-newitem]').onclick=()=>{const name=prompt(quiz?'Test adı:':notes?'Not başlığı:':glossary?'Terim:':'Deste adı:')?.trim();if(!name)return;
     const item={id:uid(),name,courseId:s.libCourse,topicId:s.libTopic||null};
     if(quiz){item.questions=[];DB.quizzes.push(item);s.quiz=item.id;s.mode='edit';}
+    else if(notes){delete item.name;Object.assign(item,{title:name,body:'',created:today(),updated:today()});DB.notes.push(item);s.id=item.id;s.prev=false;s.q='';}
+    else if(glossary){delete item.name;Object.assign(item,{term:name,def:'',alt:[],noteId:'',img:null});DB.terms.push(item);s.edit=item.id;buildTerms();}
     else {DB.decks.push(item);s.deck=item.id;}kutuphaneKonum(s,item);saveAnd(kind);};
   if(A('[data-bulk]'))A('[data-bulk]').onclick=async()=>{
     const candidates=topics?inCourse:items;
-    const v=await dialog('Toplu konu ata',[{k:'ids',label:quiz?'Testleri seç':'Desteleri seç',type:'multi',value:[],options:candidates.map(x=>({v:x.id,l:x.name}))}]);
+    const v=await dialog('Toplu konu ata',[{k:'ids',label:quiz?'Testleri seç':notes?'Notları seç':glossary?'Terimleri seç':'Desteleri seç',type:'multi',value:[],options:candidates.map(x=>({v:x.id,l:itemName(x)}))}]);
     if(v?.ids?.length)await kutuphaneTasi(w,app,candidates.filter(x=>v.ids.includes(x.id)));
   };
   if(A('[data-due]'))A('[data-due]').onclick=()=>{s.mode='study';s.cram=false;s.deck=null;s.queue=shuffled(dueCards().map(c=>c.id));s.show=false;s.done=0;app.render(w);};
@@ -2009,7 +2026,7 @@ APPS.cards={ name:"Kartlar", icon:"🗂", w:700, h:540, desk:true, single:true,
         <span class="grow"></span><span class="sub">kalan ${s.queue.length} · bitti ${s.done}</span></div>
       <div class="flash grow">
         <div>
-          <div class="flash-card${gorsel&&!metin?" img-only":""}" data-a="flip">
+          <div class="flash-card${gorsel&&!metin?" img-only":""}" data-a="flip" ${terimBaglami(DB.decks.find(d=>d.id===c.deckId))}>
             <div>${mediaImg(gorsel,"cardimg")}<div class="side">${s.show?"cevap":"soru"}</div>
             ${metin?`<div class="ftext">${esc(metin)}</div>`:""}
             ${s.show?"":'<div class="sub" style="margin-top:16px">çevirmek için tıkla / Boşluk</div>'}</div>
@@ -2199,7 +2216,7 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
           <button class="btn pri" data-a="tocards" ${yanlis.length?"":"disabled"}>Yanlışları karta çevir</button>
           <button class="btn" data-a="back">Listeye dön</button></div>
         <div style="text-align:left">${s.order.map((qi,i)=>{const x=q.questions[qi], ok=s.answers[qi]===x.a;
-          return `<div class="card" data-gloss style="margin-bottom:8px;border-left:3px solid ${ok?"var(--good)":"var(--bad)"}">
+          return `<div class="card" data-gloss ${terimBaglami({...q,topicId:x.topicId||icerikKonusu(q)})} style="margin-bottom:8px;border-left:3px solid ${ok?"var(--good)":"var(--bad)"}">
             <b>${i+1}. ${esc(x.q)}</b>
             <div class="sub" style="margin-top:4px">Senin cevabın: ${esc(x.ch[s.answers[qi]]??"—")} ${ok?"✓":"✗"}</div>
             ${ok?"":`<div class="sub">Doğru: <b>${esc(x.ch[x.a])}</b></div>`}
@@ -2235,8 +2252,8 @@ APPS.quiz={ name:"Quiz", icon:"❓", w:740, h:560, desk:true, single:true,
         <span class="grow"></span><span class="sub">${s.i+1} / ${N}</span></div>
       <div class="meter" style="border-radius:0;height:4px"><i style="width:${s.i/N*100}%"></i></div>
       <div class="grow scroll pad">
-        <div class="h1" style="margin-bottom:16px;line-height:1.45" data-gloss>${esc(x.q)}</div>
-        <div class="col" data-gloss>${x.ch.map((c,j)=>{
+        <div class="h1" style="margin-bottom:16px;line-height:1.45" data-gloss ${terimBaglami({...q,topicId:x.topicId||icerikKonusu(q)})}>${esc(x.q)}</div>
+        <div class="col" data-gloss ${terimBaglami({...q,topicId:x.topicId||icerikKonusu(q)})}>${x.ch.map((c,j)=>{
           let cls="choice"; if(s.locked){ if(j===x.a)cls+=" ok"; else if(j===picked)cls+=" no"; } else if(j===picked)cls+=" pick";
           return `<div class="${cls}" data-ch="${j}"><b>${String.fromCharCode(65+j)}</b><span>${esc(c)}</span></div>`;}).join("")}</div>
         ${s.locked&&x.ex?`<div class="card" style="margin-top:12px">💡 ${esc(x.ex)}</div>`:""}
@@ -2627,7 +2644,8 @@ Kurallar:
 - Ders, anaKonu ve konular zorunlu. Konular sadece alt konu adlarıdır; anaKonu bu dizide tekrarlanmaz.
 - Her test/deste "konu" alanında anaKonu değerini harfi harfine taşır.
 - Her soruda açıklama ve konu zorunlu; sorunun konusu anaKonu veya konular listesindeki bir alt konudur.
-- Ders → ana konu → test/deste düzeni bu alanlardan kurulur; adlardan çıkarım yapılmaz.
+- Ders → ana konu → test/deste/not/terim düzeni bu alanlardan kurulur; adlardan çıkarım yapılmaz.
+- Notlar ve terimler paketin ders ve anaKonu alanlarını devralır; her öğeye ayrıca konu alanı ekleme.
 - Her kartın ön yüzü TEK bir şey sorsun; arka yüz 1-3 cümle.
 - Aynı ön yüz iki kez geçmesin.
 - İstemediğin bölümü boş dizi bırak (ör. "testler": []). "notlar" isteğe bağlıdır: yalnızca konu anlatımı da istenmişse yaz.
@@ -2732,19 +2750,20 @@ function paketUygula(p){
   for(const tr of (p.terimler||[])){
     const ad=String(tr.terim||"").trim(), tanim=String(tr.tanim||"").trim();
     if(!ad||!tanim){ ek.atlanan++; continue; }
-    if((DB.terms||[]).some(x=>kucuk(x.term)===kucuk(ad))){ ek.atlanan++; continue; }
-    DB.terms.push({id:uid(),term:ad,def:tanim,courseId:dersId,noteId:"",img:null,
+    if((DB.terms||[]).some(x=>kucuk(x.term)===kucuk(ad)&&(p.studyosPaket===1||(x.courseId===dersId&&icerikKonusu(x)===anaId)))){ ek.atlanan++; continue; }
+    DB.terms.push({id:uid(),term:ad,def:tanim,courseId:dersId,topicId:anaId,noteId:"",img:null,
       alt:(tr.esanlam||[]).map(x=>String(x||"").trim()).filter(Boolean)});
     ek.terim++;
   }
 
   /* Konu anlatımı notları (isteğe bağlı bölüm). Markdown gövde; [[...]] bağlantıları ve
-     sözlük terimleri Notlar'da kendiliğinden işaretlenir. Aynı derste aynı başlık varsa atlanır. */
+     sözlük terimleri Notlar'da kendiliğinden işaretlenir. v2'de aynı ders+ana konuda,
+     v1'de aynı derste aynı başlık varsa atlanır; var olan not değiştirilmez. */
   for(const no of (p.notlar||[])){
     const baslik=String(no.baslik??no.ad??"").trim(), govde=String(no.icerik??no.metin??"").trim();
     if(!baslik||!govde){ ek.atlanan++; continue; }
-    if(DB.notes.some(x=>x.courseId===dersId&&kucuk(x.title)===kucuk(baslik))){ ek.atlanan++; continue; }
-    DB.notes.push({id:uid(),courseId:dersId,title:baslik,body:govde,created:t,updated:t});
+    if(DB.notes.some(x=>x.courseId===dersId&&kucuk(x.title)===kucuk(baslik)&&(p.studyosPaket===1||icerikKonusu(x)===anaId))){ ek.atlanan++; continue; }
+    DB.notes.push({id:uid(),courseId:dersId,topicId:anaId,title:baslik,body:govde,created:t,updated:t});
     ek.not++;
   }
   return ek;
@@ -2928,14 +2947,18 @@ function wlParse(raw){
   const m=raw.match(/^([#?!@])\s*(.+)$/);
   return m?{t:WL_PREFIX[m[1]],q:m[2].trim()}:{t:"note",q:raw};
 }
-function wlFind(p){
+function wlFind(p,origin){
   const eq=(a,b)=>String(a||"").toLowerCase().trim()===String(b||"").toLowerCase().trim();
   switch(p.t){
     case "topic": return DB.topics.find(x=>eq(x.name,p.q));
     case "quiz":  return DB.quizzes.find(x=>eq(x.name,p.q));
     case "card":  return DB.cards.find(x=>eq(x.front,p.q));
     case "exam":  return DB.exams.find(x=>eq(x.name,p.q));
-    default:      return DB.notes.find(x=>eq(x.title,p.q));
+    default: {
+      const matches=DB.notes.filter(x=>eq(x.title,p.q));
+      return (origin&&matches.find(x=>x.courseId===origin.courseId&&icerikKonusu(x)===icerikKonusu(origin)))
+        ||(origin&&matches.find(x=>x.courseId===origin.courseId))||matches[0];
+    }
   }
 }
 /* açık bir Notlar penceresi varsa onu kullan, yenisini açma */
@@ -2946,12 +2969,12 @@ function openNote(id,prev){
   w.node.classList.remove("min"); focusWin(w); APPS.notes.render(w); syncDock();
   return w;
 }
-function wlOpen(raw){
-  const p=wlParse(raw), hit=wlFind(p);
+function wlOpen(raw,origin){
+  const p=wlParse(raw), hit=wlFind(p,origin);
   if(!hit){
     if(p.t!=="note"){ toast("Bulunamadı: "+p.q); return; }
     if(!confirm(`"${p.q}" notu yok. Oluşturulsun mu?`)) return;
-    const t=today(), n={id:uid(),courseId:DB.courses[0]?.id,title:p.q,body:"",created:t,updated:t};
+    const t=today(), n={id:uid(),courseId:origin?origin.courseId:DB.courses[0]?.id,topicId:origin?icerikKonusu(origin):null,title:p.q,body:"",created:t,updated:t};
     DB.notes.push(n); save(); openNote(n.id,false); return;
   }
   if(p.t==="note"){ openNote(hit.id,true); }
@@ -2964,7 +2987,7 @@ function wlOpen(raw){
 function backlinks(n){
   if(!n||!n.title) return [];
   const rx=new RegExp("\\[\\[\\s*"+rxEsc(n.title)+"\\s*\\]\\]","i");
-  return DB.notes.filter(x=>x.id!==n.id&&rx.test(x.body));
+  return DB.notes.filter(x=>x.id!==n.id&&rx.test(x.body)&&wlFind({t:"note",q:n.title},x)?.id===n.id);
 }
 /* dış bağlantı rozetleri */
 function linkBadge(u){
@@ -2977,7 +3000,8 @@ function linkBadge(u){
 }
 /* çizimden sonra: iç linkleri bağla, terimleri işaretle */
 function decorate(root){
-  $$("[data-wl]",root).forEach(a=>{ a.onclick=e=>{ e.preventDefault(); wlOpen(a.dataset.wl); }; });
+  $$("[data-wl]",root).forEach(a=>{ a.onclick=e=>{ e.preventDefault();
+    wlOpen(a.dataset.wl,DB.notes.find(n=>n.id===a.closest('[data-note-id]')?.dataset.noteId)); }; });
   /* not önizlemesi ve sözlük görselleri büyütülebilir;
      kart yüzündeki görsele dokunmak kartı çevirmeye devam eder */
   $$(".md-prev img[data-media], .popimg img[data-media]",root).forEach(im=>{
@@ -2996,7 +3020,7 @@ function graphData(){
   DB.notes.forEach(n=>{
     [...n.body.matchAll(/\[\[([^\]\n]+)\]\]/g)].forEach(m=>{
       const p=wlParse(m[1]); if(p.t!=="note") return;
-      const tgt=wlFind(p); if(!tgt||tgt.id===n.id) return;
+      const tgt=wlFind(p,n); if(!tgt||tgt.id===n.id) return;
       const a=byId.get(n.id), b=byId.get(tgt.id); if(!a||!b) return;
       if(links.some(l=>(l.a===a&&l.b===b)||(l.a===b&&l.b===a))) return;
       links.push({a,b}); a.deg++; b.deg++;
@@ -3306,19 +3330,34 @@ function wlAutocomplete(ta,onchange){
 let TERM_RX=null, TERM_MAP=null, _popT=null;
 function buildTerms(){
   TERM_RX=null; TERM_MAP=new Map();
-  const all=[];
+  const all=new Set();
   (DB.terms||[]).forEach(t=>[t.term,...(t.alt||[])].filter(Boolean)
-    .forEach(x=>{ all.push(x.trim()); TERM_MAP.set(x.trim().toLowerCase(),t.id); }));
-  if(!all.length) return;
-  all.sort((a,b)=>b.length-a.length);
-  try{ TERM_RX=new RegExp("(?<![\\p{L}\\p{N}])("+all.map(rxEsc).join("|")+")(?![\\p{L}\\p{N}])","giu"); }
-  catch(e){ TERM_RX=new RegExp("\\b("+all.map(rxEsc).join("|")+")\\b","gi"); }
+    .forEach(x=>{const key=x.trim().toLowerCase();if(!key)return;all.add(x.trim());
+      const ids=TERM_MAP.get(key)||[];if(!ids.includes(t.id))ids.push(t.id);TERM_MAP.set(key,ids);}));
+  if(!all.size) return;
+  const names=[...all].sort((a,b)=>b.length-a.length);
+  try{ TERM_RX=new RegExp("(?<![\\p{L}\\p{N}])("+names.map(rxEsc).join("|")+")(?![\\p{L}\\p{N}])","giu"); }
+  catch(e){ TERM_RX=new RegExp("\\b("+names.map(rxEsc).join("|")+")\\b","gi"); }
+}
+function terimBaglami(item){
+  return `data-term-course="${esc(item?.courseId||'')}" data-term-topic="${esc(item?icerikKonusu(item)||'':'')}"`;
+}
+function terimAdaylari(text,origin){
+  if(!TERM_MAP)buildTerms();
+  const ids=TERM_MAP.get(text.trim().toLowerCase())||[], all=ids.map(id=>DB.terms.find(t=>t.id===id)).filter(Boolean);
+  if(!origin)return all;
+  const sameCourse=all.filter(t=>t.courseId===origin.courseId), topic=icerikKonusu(origin);
+  const sameTopic=topic?sameCourse.filter(t=>icerikKonusu(t)===topic):[];
+  const unassigned=sameCourse.filter(t=>!icerikKonusu(t));
+  return sameTopic.length?sameTopic:unassigned.length?unassigned:sameCourse.length?sameCourse:all;
 }
 function decorateTerms(root){
   if(!DB.terms||!DB.terms.length) return;
   if(!TERM_MAP) buildTerms();
   if(!TERM_RX) return;
   $$(".md-prev,.flash-card,[data-gloss]",root).forEach(cont=>{
+    const context=cont.closest('[data-term-course]'), note=cont.closest('[data-note-id]');
+    const origin=note?DB.notes.find(n=>n.id===note.dataset.noteId):context?{courseId:context.dataset.termCourse,topicId:context.dataset.termTopic}:null;
     const wk=document.createTreeWalker(cont,NodeFilter.SHOW_TEXT,{acceptNode(n){
       if(!n.nodeValue||!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
       const p=n.parentElement;
@@ -3333,7 +3372,9 @@ function decorateTerms(root){
       while((m=TERM_RX.exec(txt))){
         if(m.index>last) frag.appendChild(document.createTextNode(txt.slice(last,m.index)));
         const sp=el("span","gterm"); sp.textContent=m[1];
-        sp.dataset.term=TERM_MAP.get(m[1].toLowerCase())||"";
+        const candidates=terimAdaylari(m[1],origin);
+        sp.dataset.term=candidates.length===1?candidates[0].id:"";
+        sp.dataset.terms=JSON.stringify(candidates.map(t=>t.id));
         frag.appendChild(sp); last=m.index+m[1].length;
       }
       if(last<txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
@@ -3382,6 +3423,18 @@ let _termTok=0;                             /* geciken "göster" çağrıları e
 function hideTerm(){ _termTok++;
   const p=$("#termpop"); p.classList.remove("on"); p.style.visibility=""; }
 function showTerm(sp){
+  if(!sp.dataset.term){
+    const candidates=JSON.parse(sp.dataset.terms||'[]').map(id=>DB.terms.find(t=>t.id===id)).filter(Boolean);
+    if(!candidates.length)return;
+    hideTerm();const pop=$("#termpop");
+    pop.innerHTML=`<div class="row"><b class="grow">Hangi tanım?</b><button class="btn sm" data-term-close>✕</button></div>`+
+      candidates.map(t=>`<button class="card" style="display:block;width:100%;text-align:left;margin-top:8px;color:var(--text)" data-term-pick="${t.id}"><b>${esc(t.term)}</b><div class="sub">${esc(cname(t.courseId)||'Dersi belirlenmemiş')} · ${esc(DB.topics.find(k=>k.id===icerikKonusu(t))?.name||'Konusu belirlenmemiş')}</div><div>${esc(t.def.slice(0,120))}</div></button>`).join('');
+    pop.classList.add('on');konumlaTerm(sp);
+    $('[data-term-close]',pop).onclick=hideTerm;
+    pop.onmouseenter=()=>clearTimeout(_popT);pop.onmouseleave=()=>{if(matchMedia('(hover:hover)').matches)_popT=setTimeout(hideTerm,260);};
+    $$('[data-term-pick]',pop).forEach(b=>b.onclick=e=>{e.stopPropagation();sp.dataset.term=b.dataset.termPick;showTerm(sp);});
+    return;
+  }
   const t=(DB.terms||[]).find(x=>x.id===sp.dataset.term); if(!t) return;
   const pop=$("#termpop");
   const note=t.noteId?DB.notes.find(n=>n.id===t.noteId):null;
@@ -3428,8 +3481,8 @@ function showTerm(sp){
     const a=b.dataset.p; hideTerm();
     if(a==="note"&&note){ openNote(note.id,true); }
     else if(a==="card"){
-      let dk=DB.decks.find(d=>d.name==="Sözlük");
-      if(!dk){ dk={id:uid(),name:"Sözlük",courseId:t.courseId}; DB.decks.push(dk); }
+      let dk=DB.decks.find(d=>d.name==="Sözlük"&&d.courseId===t.courseId&&icerikKonusu(d)===icerikKonusu(t));
+      if(!dk){ dk={id:uid(),name:"Sözlük",courseId:t.courseId,topicId:icerikKonusu(t)}; DB.decks.push(dk); }
       if(DB.cards.some(c=>c.deckId===dk.id&&c.front===t.term)) { toast("Bu terim zaten kartta"); return; }
       DB.cards.push({id:uid(),deckId:dk.id,front:t.term,back:t.def,ef:2.5,int:0,reps:0,lapses:0,due:today()});
       saveAnd("cards"); toast(`"${t.term}" → Sözlük destesine eklendi`);
@@ -3441,70 +3494,44 @@ document.addEventListener("click",e=>{ if(!e.target.closest("#termpop,.gterm")) 
 
 APPS.glossary={ name:"Sözlük", icon:"📖", w:720, h:560, desk:true, single:true,
   render(w){
-    const s=w.state, q=(s.q||"").toLowerCase();
-    const list=(DB.terms||[]).filter(t=>!q||t.term.toLowerCase().includes(q)||t.def.toLowerCase().includes(q))
-      .sort((a,b)=>a.term.localeCompare(b.term,"tr"));
-    const t=s.edit?DB.terms.find(x=>x.id===s.edit):null;
+    const s=w.state, t=DB.terms.find(x=>x.id===s.edit);
+    if(!t){s.edit=null;return kutuphaneRender(w,this,"glossary");}
+    kutuphaneKonum(s,t);
     w.body.innerHTML=`<div class="app">
-      <div class="toolbar"><input class="inp grow" data-a="q" placeholder="Terim ara…" value="${esc(s.q||"")}">
-        <button class="btn pri" data-a="new">+ Terim</button></div>
-      ${t?`<div class="pad" style="border-bottom:1px solid var(--border-2)">
-        <div class="col">
-          <input class="inp" data-f="term" placeholder="Terim" value="${esc(t.term)}">
-          <input class="inp" data-f="alt" placeholder="Eş anlamlılar (virgülle ayır)" value="${esc((t.alt||[]).join(", "))}">
-          <textarea class="inp" data-f="def" rows="3" placeholder="Kısa tanım — balonda bu görünecek">${esc(t.def)}</textarea>
-          <div class="row">
-            <button class="btn sm" data-a="pic">${t.img?"🖼 Görseli değiştir":"🖼 Görsel ekle"}</button>
-            ${t.img?`<button class="btn sm danger" data-a="unpic">Görseli kaldır</button>`:""}
-            <span class="sub grow">${t.img?"":"Balonda tanımın üstünde gösterilir"}</span>
-          </div>
-          ${t.img?`<div class="popimg" style="max-width:220px">${mediaImg(t.img)}</div>`:""}
-          <div class="row">
-            <select class="inp" data-f="course">${DB.courses.map(c=>`<option value="${c.id}" ${t.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
-            <select class="inp" data-f="note"><option value="">— detay notu yok —</option>
-              ${DB.notes.map(n=>`<option value="${n.id}" ${t.noteId===n.id?"selected":""}>${esc(n.title||"Adsız")}</option>`).join("")}</select>
-          </div>
-          <div class="row"><button class="btn pri" data-a="save">Kaydet</button>
-            <button class="btn" data-a="cancel">Kapat</button>
-            <span class="grow"></span><button class="btn sm danger" data-a="del">Sil</button></div>
-        </div></div>`:""}
-      <div class="grow scroll pad">
-        ${capped(list).map(x=>`<div class="card" style="margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
-          <span class="dotc" style="background:${ccolor(x.courseId)};margin-top:6px"></span>
-          ${x.img?mediaImg(x.img,"","width:40px;height:40px;object-fit:cover;border-radius:8px"):""}
-          <div class="grow"><b>${esc(x.term)}</b>
-            ${x.alt&&x.alt.length?`<span class="sub"> (${esc(x.alt.join(", "))})</span>`:""}
-            <div class="sub" style="margin-top:3px">${esc(x.def)}</div></div>
-          ${x.noteId?`<span class="tag">📝</span>`:""}
-          <button class="btn sm" data-e="${x.id}">✏️</button></div>`).join("")+capNote(list,"terim")
-        ||`<div class="empty">Sözlük boş.<br>Eklediğin terimler <b>tüm notlarda, kartlarda ve testlerde</b><br>otomatik altı çizili görünür; üstüne gelince tanım balonu açılır.</div>`}
-      </div>
-      <div class="toolbar" style="border-top:1px solid var(--border-2);border-bottom:none">
-        <span class="sub">${(DB.terms||[]).length} terim tanımlı</span></div></div>`;
-    const A=a=>$(`[data-a="${a}"]`,w.body);
-    A("q").oninput=e=>{ s.q=e.target.value; const p=e.target.selectionStart; this.render(w);
-      const f=$('[data-a="q"]',w.body); f.focus(); f.setSelectionRange(p,p); };
-    A("new").onclick=()=>{ const nt={id:uid(),term:"",alt:[],def:"",courseId:DB.courses[0]?.id,noteId:""};
-      (DB.terms=DB.terms||[]).push(nt); s.edit=nt.id; save(); this.render(w); };
-    $$("[data-e]",w.body).forEach(b=>b.onclick=()=>{ s.edit=b.dataset.e; this.render(w); });
-    if(t){
-      const F=f=>$(`[data-f="${f}"]`,w.body);
-      A("pic").onclick=async()=>{ const f=await pickFile("image/*"); if(!f)return;
-        const old=t.img; t.img=await putMedia(await imageScaled(f,900,.82)); if(old)dropMedia(old);
-        save(); this.render(w); toast("Görsel eklendi"); };
-      const un=A("unpic"); if(un) un.onclick=()=>{ dropMedia(t.img); t.img=null; save(); this.render(w); };
-      A("save").onclick=()=>{
-        t.term=F("term").value.trim();
-        t.alt=F("alt").value.split(",").map(x=>x.trim()).filter(Boolean);
-        t.def=F("def").value.trim(); t.courseId=F("course").value; t.noteId=F("note").value;
-        if(!t.term){ toast("Terim boş olamaz"); return; }
-        s.edit=null; buildTerms(); save(); refreshAll(); toast("Kaydedildi");
-      };
-      A("cancel").onclick=()=>{ if(!t.term) DB.terms=DB.terms.filter(x=>x.id!==t.id); s.edit=null; save(); this.render(w); };
-      A("del").onclick=()=>{ if(!confirm("Terim çöp kutusuna taşınsın mı?"))return;
-        toTrash("term",t.term,t);
-        DB.terms=DB.terms.filter(x=>x.id!==t.id); s.edit=null; buildTerms(); save(); refreshAll(); };
-    }
+      <div class="toolbar">${kutuphaneYolu(s)}</div>
+      <div class="grow scroll pad"><div class="col">
+        <label>Terim<input class="inp" data-f="term" value="${esc(t.term)}"></label>
+        <label>Eş anlamlılar<input class="inp" data-f="alt" placeholder="Virgülle ayır" value="${esc((t.alt||[]).join(", "))}"></label>
+        <label>Tanım<textarea class="inp" data-f="def" rows="4" placeholder="Kısa tanım — balonda bu görünecek">${esc(t.def)}</textarea></label>
+        <div class="row">
+          <button class="btn sm" data-a="pic">${t.img?"🖼 Görseli değiştir":"🖼 Görsel ekle"}</button>
+          ${t.img?`<button class="btn sm danger" data-a="unpic">Görseli kaldır</button>`:""}
+        </div>
+        ${t.img?`<div class="popimg" style="max-width:220px">${mediaImg(t.img)}</div>`:""}
+        <label>Ders<select class="inp" data-f="course"><option value="" ${DB.courses.some(c=>c.id===t.courseId)?'':'selected'}>Dersi belirlenmemiş</option>${DB.courses.map(c=>`<option value="${c.id}" ${t.courseId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></label>
+        <label>Ana konu<select class="inp" data-f="topic"></select></label>
+        <label>Detay notu<select class="inp" data-f="note"><option value="">— detay notu yok —</option>
+          ${DB.notes.map(n=>`<option value="${n.id}" ${t.noteId===n.id?"selected":""}>${esc(n.title||"Adsız")} · ${esc(cname(n.courseId))} · ${esc(DB.topics.find(x=>x.id===icerikKonusu(n))?.name||'Konusu belirlenmemiş')}</option>`).join("")}</select></label>
+      </div></div>
+      <div class="toolbar"><button class="btn pri" data-a="save">Kaydet</button>
+        <button class="btn" data-a="cancel">Kapat</button><span class="grow"></span><button class="btn sm danger" data-a="del">Sil</button></div>
+    </div>`;
+    kutuphaneGezinti(w,this);
+    const A=a=>$(`[data-a="${a}"]`,w.body), F=f=>$(`[data-f="${f}"]`,w.body);
+    const topics=id=>{F("topic").innerHTML='<option value="">Konusu belirlenmemiş</option>'+anaKonular(F("course").value).map(k=>`<option value="${k.id}" ${id===k.id?'selected':''}>${esc(k.name)}</option>`).join('');};
+    topics(icerikKonusu(t));F("course").onchange=()=>topics(null);
+    /* Görsel eklerken yeniden çizim yazılan metni kaybetmesin. */
+    const capture=()=>{t.term=F("term").value.trim();t.alt=F("alt").value.split(',').map(x=>x.trim()).filter(Boolean);
+      t.def=F("def").value.trim();t.courseId=F("course").value||null;t.topicId=F("topic").value||null;t.noteId=F("note").value;};
+    A("pic").onclick=async()=>{const f=await pickFile("image/*");if(!f)return;
+      const img=await putMedia(await imageScaled(f,900,.82));capture();const old=t.img;t.img=img;if(old)dropMedia(old);
+      buildTerms();save();this.render(w);toast("Görsel eklendi");};
+    if(A("unpic"))A("unpic").onclick=()=>{capture();dropMedia(t.img);t.img=null;buildTerms();save();this.render(w);};
+    A("save").onclick=()=>{
+      if(!F("term").value.trim()||!F("def").value.trim()){toast("Terim ve tanım boş olamaz");return;}
+      capture();kutuphaneKonum(s,t);s.edit=null;buildTerms();save();refreshAll();toast("Kaydedildi");};
+    A("cancel").onclick=()=>{s.edit=null;this.render(w);};
+    A("del").onclick=()=>kutuphaneSil('glossary',t);
   }};
 
 APPS.settings={ name:"Ayarlar", icon:"⚙️", w:560, h:560, single:true,

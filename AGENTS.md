@@ -11,4 +11,4 @@ araştırma oturumuna ekle. Depoyu okumak model/abonelik/araştırma aracı eri�
 
 Değişiklikleri çalışma dalına kaydet ve PR ile sun. Kullanıcı istemeden `main`e birleştirme.
 Test komutları: `node tests/unit.mjs`, `node tests/paket-konular.mjs`,
-`node tests/smoke.mjs`, `node tests/kutuphane-smoke.mjs`.
+`node tests/smoke.mjs`, `node tests/kutuphane-smoke.mjs`, `node tests/notlar-smoke.mjs`, `node tests/sozluk-smoke.mjs`.

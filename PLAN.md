@@ -404,3 +404,19 @@ değiştirmeden kullanılabiliyor. Birim test ikisinin ayrışmadığını sın�
 Gerçek Astra Pro Derin Araştırma ve Fable/Opus üretim oturumları bu kod ortamında
 çalıştırılmadı. Teknik aktarım/kanıt sözleşmesi sentetik içerikle sınanır; mevcut Romatoloji
 içeriğinin tıbbi doğrulaması bu revizyonun kapsamı değildir.
+
+## Sürüm 4.5 — Notlar ve Sözlükte ders/konu düzeni
+
+- [x] Notlar'da ortak ders → ana konu → not gezinmesi, konu içi başlık/gövde araması.
+- [x] Seçili konuya yeni not; doğrudan bağlantıyla editör açma ve aynı konuya geri dönüş.
+- [x] Eski notlara toplu konu atama; taşıma öncesi anlık görüntü, metin/ek/kimlik koruması.
+- [x] v2 paket notlarının ana konuyu devralması; ders+ana konu içinde başlık eşleştirmesi.
+- [x] Konu içindeki aynı adlı not bağlantılarının ve nottan kart üretiminin doğru yere gitmesi.
+- [x] Paket skill'i, ortak brief ve uygulamadaki paket talimatının eşlenmesi.
+- [x] 196 birim testi × 4 zaman dilimi, 28 paket/konu testi, mevcut smoke ve 20 kütüphane
+  kontrolü; 32 yeni not arayüz kontrolü (iki tema, iki tablet yönü) geçti.
+
+- [x] Sözlükte ders → ana konu → terim; eş anlamlı araması, toplu taşıma ve geri gezinme.
+- [x] v2 terimlerinin paketten ana konu devralması; v1 genel ad eşleştirmesi korunur.
+- [x] Aynı adlı terimlerin not/kart/quiz bağlamına göre seçilmesi, belirsizlikte tanım seçimi.
+- [x] Terimden üretilen kartlarda ders/konu koruması ve 35 sözlük arayüz kontrolü.

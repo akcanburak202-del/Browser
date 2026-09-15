@@ -6,8 +6,8 @@ description: "StudyOS için sınav, ders ve konuya özel kaynaklı kart/test/ter
 # Konuya özel çalışma paketi
 
 Çıktı: `paketler/<sinav>-<ders>-<konu>.json` ve eşlik eden `.denetim.json`.
-Uygulamada **Ayarlar → Veri → Paket ekle** ile JSON alınır; Quiz ve Kartlar'da
-**ders → ana konu → test/deste** altında görünür. Biçim sözleşmesi `PAKET.md`.
+Uygulamada **Ayarlar → Veri → Paket ekle** ile JSON alınır; Quiz, Kartlar, Notlar ve Sözlük'te
+**ders → ana konu → test/deste/not/terim** altında görünür. Biçim sözleşmesi `PAKET.md`.
 
 ## Girdi ve profil
 
@@ -36,7 +36,8 @@ ve abonelik ayarlarını değiştirmez; olmayan araçları kullanmış gibi davr
    kullan. Her kart, soru, terim ve not için kaynak bağlantısı gerekir.
 3. **Üretim:** bölünebilir işte alt konulara göre parça dosyaları yaz. Testler birkaç alt
    konuyu birleştirebilir. Bütün test ve desteler `konu: <ana konu>` taşır; sorunun `konu`
-   alanı ana konu veya sabitlenmiş alt konu olabilir. Tek parçada da aynı sözleşme geçerli.
+   alanı ana konu veya sabitlenmiş alt konu olabilir. Notlar ve terimler paketin `ders` ve `anaKonu`
+   alanlarını devralır; bu öğelere ayrı `konu` alanı ekleme. Tek parçada da aynı sözleşme geçerli.
 4. **İçerik incelemesi:** bütün kartları, soruları, terimleri ve varsa notları incele.
    Tek doğru şık, yeterli vaka bilgisi, makul çeldiriciler, açıklama–anahtar tutarlılığı,
    kaynağın gerçekten iddiayı desteklemesi ve kapsam boşluklarını kontrol et.
