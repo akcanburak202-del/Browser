@@ -25,7 +25,7 @@ Aynı yerdeki **📦 Paket ekle**, dışarıda hazırlanmış kart destesi / tes
 
 | | Uygulama | Ne yapar |
 |---|---|---|
-| 📝 | **Notlar** | Markdown editör + canlı önizleme, ders bazlı, arama |
+| 📝 | **Notlar** | Ders → konu → not; Markdown editör + önizleme, konu içi arama ve toplu konu atama |
 | ✅ | **Görevler** | Öncelik, teslim tarihi, "bugün" filtresi; görevden doğrudan pomodoro başlatma |
 | 🗂 | **Kartlar** | Ders → konu → deste; SM-2 aralıklı tekrar, toplu konu atama, bugünkü tekrarlar |
 | ⏱ | **Pomodoro** | Sayaç + otomatik mola, oturumlar derse yazılır, günlük hedef çubuğu |
@@ -34,7 +34,7 @@ Aynı yerdeki **📦 Paket ekle**, dışarıda hazırlanmış kart destesi / tes
 | 🧠 | **Konu Haritası** | Ders → konu → alt konu ağacı, "başlanmadı / öğreniyorum / biliyorum" durumları; **Tüm dersler** görünümü, ders ekleme/silme |
 | 📊 | **İstatistik** | 14 günlük bar grafik, 12 haftalık ısı haritası, ders dağılımı, seri (streak) |
 | 🗒 | **Günlük** | Günün özeti + ruh hali kaydı |
-| 📖 | **Sözlük** | Terim tanımları; terimler tüm metinlerde otomatik işaretlenir, üstüne gelince görselli tanım balonu açılır |
+| 📖 | **Sözlük** | Ders → konu → terim; toplu konu atama, metinlerde konuya uygun görselli tanım balonları |
 | 🕸 | **Bağlantı Haritası** | Notlar arası bağlantıların ağ görünümü |
 | >_ | **Terminal** | `gorev`, `kart`, `calis`, `durum`, `yedek`… komutlarıyla hızlı giriş |
 | 🌙 | **Odak modu** | Tam ekran sayaç, ekran karartma, üretilen pembe gürültü |

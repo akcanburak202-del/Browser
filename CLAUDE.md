@@ -181,6 +181,21 @@ Script blokları sırayla:
   Başlık ayrıştırarak veri göçü yapılmaz; kimlikler ve geçmiş aynen kalır. `konuAta` aynı ders
   içinde soru alt konusunu korur, başka derse taşıma sırasında uyumsuz soru bağını temizler.
   Toplu taşıma öncesi anlık görüntü alınır. Kartlar ana ekranında günlük tekrar kısayolu vardır.
+- **Notlar da ders → ana konu → not ile açılır (4.5).** `kutuphaneRender` ortak kullanılır;
+  `state.id` varsa doğrudan düzenleyici açılır, geri gezinme bunu temizler. Düzenleyicinin
+  yan listesi aynı ders/ana konuyla sınırlıdır. Yeni notlar seçili konuyu devralır.
+  v2 paket notları `anaId` ile kaydolur; aynı ders+ana konuda başlık eşleşirse atlanır.
+  v1 notlarında eski ders+başlık kuralı korunur. Bağlantısız eski notlar tahminle taşınmaz.
+  `wlFind(p,origin)` önce kaynak notun ders/ana konusunu, sonra dersini tercih eder;
+  bulunamazsa eski genel aramayı kullanır. Bağlantı haritası ve geri bağlantılar da bunu kullanır.
+  Nottan üretilen desteler ders ve ana konuyu devralır.
+- **Sözlük de ortak ders → ana konu → terim kütüphanesini kullanır (4.5).**
+  v2 terim alımı ders+ana konu+terim adıyla, v1 eski genel ad kuralıyla eşleşir.
+  `TERM_MAP` artık bir kelimeyi birden fazla terim kimliğine bağlar. `terimAdaylari` önce
+  içeriğin ana konusunu, sonra aynı dersteki bağlantısız terimleri, sonra aynı dersi, en son
+  genel sözlüğü seçer. Kalan aday birden fazlaysa balon seçim gösterir. Notlarda `data-note-id`,
+  kart ve quiz metinlerinde `terimBaglami` bağlam sağlar. Balondan üretilen deste aynı ders/konudadır.
+  Terim değişince `buildTerms()` ve `refreshAll()` ile işaretlemeleri yenile.
 - **Paket v2:** `ders`, `anaKonu`, alt konu dizisi `konular`; her test/destede `konu: anaKonu`.
   `paketSorunlari` v2 yapıyı hiçbir kayıt eklemeden doğrular. v1 alımı geriye uyumlu devam eder.
   Konular v2'de ders+ebeveyn+ad ile eşleşir; farklı köklerin aynı adlı alt konuları karışmaz.
@@ -215,7 +230,7 @@ Kartlarda `seen` (son değerlendirme günü) yeni kart sayımının tek kaynağ�
 Kart görselleri yüz başına ayrı: `img` **ön yüz**, `imgB` **arka yüz** (eski kartlarda yalnızca
 `img` var, o da ön yüz sayılır — göç gerekmedi). Kartın medyasını tararken **ikisini de** al
 (`trashRefs`), yoksa çöpten kalıcı silmede görsel öksüz kalır.
-Quizler ve desteler ana konu `topicId` alanı taşıyabilir. Quiz soruları ayrıca alt konu `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,yanlış]}` dökümünden
+Quizler, desteler, notlar ve terimler ana konu `topicId` alanı taşıyabilir. Quiz soruları ayrıca alt konu `topicId` taşıyabilir; `quizRuns[].topics = {<topicId>:[doğru,yanlış]}` dökümünden
 İstatistik'teki "zayıf konular" hesaplanır (`weakTopics()`).
 Sınavlar: `{id,name,date,courseIds:[...],courseId}` — `courseId` eski kayıtlarla uyum için
 ilk dersi tekrarlar; okuma `examCourses()` üzerinden.
@@ -257,7 +272,7 @@ Yan localStorage anahtarları (yalnızca kurtarma için, uygulama bunlardan okum
    dize değiştirerek yamalamak güvenli oldu — bulunamayan desende hata fırlat).
 2. Sözdizimi: script bloklarını çıkarıp `node --check`.
 3. `node tests/unit.mjs` ve `node tests/paket-konular.mjs` — mantık, eski veri ve kaynak bütünlüğü.
-4. `node tests/smoke.mjs` ve `node tests/kutuphane-smoke.mjs` — arayüz; hepsi geçmeli.
+4. `node tests/smoke.mjs`, `node tests/kutuphane-smoke.mjs` `node tests/notlar-smoke.mjs` ve `node tests/sozluk-smoke.mjs` — arayüz; hepsi geçmeli.
    Playwright özel tarayıcı yolunda ise `STUDYOS_CHROMIUM=/tam/yol/chromium` kullanılabilir.
 5. `VERSION` sabitini artır; `sw.js` içindeki önbellek adını (`studyos-vN`) da artır.
 6. Çalışma dalına commit/push; PR aç. Kullanıcı isterse `main`e birleştir; Pages `main`den yayınlanır.

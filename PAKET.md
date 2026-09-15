@@ -46,7 +46,8 @@ Kurallar:
 - Ders, anaKonu ve konular zorunlu. Konular sadece alt konu adlarıdır; anaKonu bu dizide tekrarlanmaz.
 - Her test/deste "konu" alanında anaKonu değerini harfi harfine taşır.
 - Her soruda açıklama ve konu zorunlu; sorunun konusu anaKonu veya konular listesindeki bir alt konudur.
-- Ders → ana konu → test/deste düzeni bu alanlardan kurulur; adlardan çıkarım yapılmaz.
+- Ders → ana konu → test/deste/not/terim düzeni bu alanlardan kurulur; adlardan çıkarım yapılmaz.
+- Notlar ve terimler paketin ders ve anaKonu alanlarını devralır; her öğeye ayrıca konu alanı ekleme.
 - Her kartın ön yüzü TEK bir şey sorsun; arka yüz 1-3 cümle.
 - Aynı ön yüz iki kez geçmesin.
 - İstemediğin bölümü boş dizi bırak (ör. "testler": []). "notlar" isteğe bağlıdır: yalnızca konu anlatımı da istenmişse yaz.
@@ -79,17 +80,17 @@ Konu: <BURAYA KONUYU YAZ>
 | `testler[].sorular[].dogru` | ✔ | Doğru şıkkın sırası, 0'dan başlar. v2'de aralık dışıysa paket reddedilir (v1'de soru atlanır). |
 | `testler[].sorular[].aciklama` | ✔ (v2) | Cevaptan sonra gösterilir. |
 | `testler[].sorular[].konu` | ✔ (v2) | `anaKonu` veya `konular` içindeki bir ad. İstatistik → "zayıf konular" bunu kullanır. |
-| `terimler[].terim` | ✔ | Sözlükte işaretlenecek kelime. |
+| `terimler[].terim` | ✔ | Sözlükte işaretlenecek kelime. v2'de paketin ders/ana konusunu devralır; aynı yerde aynı terim varsa atlanır. v1'de eski genel eşleştirme korunur. |
 | `terimler[].tanim` | ✔ | Balonda çıkan tanım. |
 | `terimler[].esanlam` | – | Aynı tanıma götüren başka yazımlar (çekimli hâller vb.). |
-| `notlar[].baslik` / `.icerik` | ✔ (bölüm isteğe bağlı) | Konu anlatımı notu; `icerik` markdown. **Aynı derste aynı başlıklı not varsa atlanır.** Notlar uygulamasında derse bağlı açılır. |
+| `notlar[].baslik` / `.icerik` | ✔ (bölüm isteğe bağlı) | Konu anlatımı notu; `icerik` markdown. **v2: aynı ders ve ana konuda aynı başlıklı not varsa atlanır.** v1: aynı derste başlık eşleşmesi korunur. Notlar paketin `anaKonu` değerini devralır; ek alan gerekmez. |
 
 ## Uygulamanın uyguladığı kurallar
 
 - **Kimlikler yeniden üretilir** — iki farklı paket çakışmaz.
 - **Ders adı eşleşirse o derse bağlanır**, yoksa yeni ders açılır.
 - **Aynı destede aynı ön yüz varsa kart atlanır** — kartlar kopyalanmaz; testler aşağıdaki gibi numaralanır.
-- **Aynı adlı test numaralanır.** Aynı başlıklı not ise atlanır (not değişmez).
+- **Aynı adlı test numaralanır.** Aynı başlıklı not v2'de aynı ders ve ana konuda, v1'de aynı derste atlanır (not değişmez).
 - **v2 paketlerinde bozuk yapı içe aktarmadan önce reddedilir.** v1 eski esnek alma yolunu korur. Zaten var olan kart/not/terim yine atlanabilir; sayı raporlanır.
 - **Eklemeden önce anlık görüntü alınır** (`paket`); Ayarlar → Veri → 🕘 Anlık görüntüler'den geri dönülebilir.
 - Eklenen kartların hepsi **bugün vadeli yeni kart** olarak başlar; günlük yeni kart sınırına
@@ -166,3 +167,24 @@ Bu komut var olan paketi **değiştirmeden yalnızca biçim ve içe aktarma** y�
 Yeni araştırılmış paketlerin tesliminde `--yalniz-bicim` kullanılmaz; normal `--dogrula`
 kanıt dosyasının final içerikle eşleşmesini de denetler. Kaynak bağlantılarının geçmesi,
 tıbbi iddiaların bağımsız doğrulaması değildir.
+
+## Notların konu düzeni (4.5)
+
+Notlar da **ders → ana konu → not** sırasıyla açılır. v2 paketindeki notlar ek bir alan
+olmadan paketin ana konusuna bağlanır. v1 notları ve önceden içe alınmış bağlantısız
+notlar **Konusu belirlenmemiş** altında kalır; **Toplu konu ata** ile düzenlenir. Eski
+notları sınıflamak için paketi yeniden yüklemeyin: yeni konu altında kopyası oluşabilir.
+Notun içeriği, kimliği, görselleri ve ekleri taşıma sırasında korunur.
+
+## Sözlüğün konu düzeni (4.5)
+
+Sözlük **ders → ana konu → terim** sırasıyla açılır. Notlar gibi terimler de v2 paketin
+`ders` ve `anaKonu` alanlarını devralır; terim başına yeni bir alan gerekmez. Aynı kelime
+farklı ders/ana konularda farklı tanımlarla saklanabilir. v1 paketlerinin genel terim
+adı eşleştirmesi değişmez. Mevcut bağlantısız terimler **Konusu belirlenmemiş** altında
+kalır; **Toplu konu ata** ile metin, eş anlamlılar, görsel ve detay notu korunarak taşınır.
+
+Tanım balonu önce okunan içeriğin ana konusundaki kaydı, yoksa aynı dersteki bağlantısız
+kaydı, sonra aynı dersteki kayıtları tercih eder. Bu kapsamda kayıt yoksa genel sözlüğe
+bakar. Birden fazla aday varsa ders/konu bilgisiyle seçim gösterir. Terimden oluşturulan
+kartın destesi de terimin ders ve ana konusunu devralır.

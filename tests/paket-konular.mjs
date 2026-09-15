@@ -26,6 +26,48 @@ test('Silinmiş konu bağı görünmez içerik üretmez; geri yükleme bağı ge
 test('Dersi silinmiş içerik sınıflandırılmamış olarak erişilebilir kalır',()=>assert.equal(T.icerikKonusu({courseId:'silinmis',topicId:root.id}),null));
 test('Döngülü konu ağacı kilitlenmez',()=>{db.topics.push({id:'loop',courseId:'c2',parentId:'loop'});assert.equal(T.konuKoku('loop','c2'),null);});
 
+test('V2 notları ek konu alanı olmadan ana konuyu devralır',()=>{
+ const p=pkg();p.desteler=[];p.testler=[];p.notlar=[{baslik:'Özet',icerik:'# Sentetik not'}];
+ assert.equal(T.paketUygula(p).not,1);const n=db.notes.at(-1);
+ assert.equal(n.courseId,root.courseId);assert.equal(n.topicId,root.id);assert.equal(n.body,'# Sentetik not');
+ const before=JSON.stringify(n);assert.equal(T.paketUygula(p).not,0);assert.equal(JSON.stringify(db.notes.at(-1)),before);
+});
+test('Aynı başlıklı not farklı ana konuda ayrı kaydolur',()=>{
+ const p=pkg();p.anaKonu='Başka';p.desteler=[];p.testler=[];p.notlar=[{baslik:'Özet',icerik:'Başka konunun özeti'}];
+ assert.equal(T.paketUygula(p).not,1);assert.notEqual(db.notes[0].topicId,db.notes[1].topicId);
+ assert.equal(db.notes[0].body,'# Sentetik not');
+});
+test('V1 ve bağlantısız eski notlar değişmeden erişilebilir kalır',()=>{
+ const p={studyosPaket:1,ders:'Test dersi',notlar:[{baslik:'Eski not',icerik:'Eski içerik'}]};
+ assert.equal(T.paketUygula(p).not,1);assert.equal(T.icerikKonusu(db.notes.at(-1)),null);
+ assert.equal(T.paketUygula(p).not,0);
+ p.notlar=[{baslik:'Özet',icerik:'Üzerine yazılmamalı'}];assert.equal(T.paketUygula(p).not,0);
+});
+test('Not taşıma kimlik, metin, ekler ve tarihleri korur',()=>{
+ const n=db.notes.at(-1);n.body+=' ![şema](idb:abc)';n.att=[{ref:'idb:def',name:'ek.pdf'}];
+ const before=JSON.stringify(n);assert.equal(T.konuAta([n],root.courseId,root.id),true);
+ const expected=JSON.parse(before);expected.topicId=root.id;assert.equal(JSON.stringify(n),JSON.stringify(expected));
+ const old=db.topics;db.topics=[];assert.equal(T.icerikKonusu(n),null);db.topics=old;assert.equal(T.icerikKonusu(n),root.id);
+});
+test('V2 terimleri ana konuyu devralır; aynı kelime farklı konularda saklanır',()=>{
+ const p=pkg();p.desteler=[];p.testler=[];p.terimler=[{terim:'Sentetik',tanim:'Ana konu tanımı',esanlam:['Deney']}];
+ assert.equal(T.paketUygula(p).terim,1);const term=db.terms.at(-1);assert.equal(term.topicId,root.id);
+ const before=JSON.stringify(term);assert.equal(T.paketUygula(p).terim,0);assert.equal(JSON.stringify(db.terms.at(-1)),before);
+ p.anaKonu='Başka';p.terimler[0].tanim='Başka konu tanımı';assert.equal(T.paketUygula(p).terim,1);
+ assert.notEqual(db.terms[0].topicId,db.terms[1].topicId);assert.equal(db.terms[0].def,'Ana konu tanımı');
+ p.ders='Başka ders';assert.equal(T.paketUygula(p).terim,1);
+});
+test('V1 terim alımında genel ad eşleştirmesi korunur',()=>{
+ const p={studyosPaket:1,ders:'Eski ders',terimler:[{terim:'Sentetik',tanim:'Ezilmemeli'}]};
+ assert.equal(T.paketUygula(p).terim,0);p.terimler[0].terim='Eski terim';assert.equal(T.paketUygula(p).terim,1);
+ assert.equal(T.icerikKonusu(db.terms.at(-1)),null);
+});
+test('Terim taşıma tanım, eş anlam, görsel ve detay notunu korur',()=>{
+ const t=db.terms[0];t.img='idb:term-image';t.noteId='detay-notu';const before=JSON.stringify(t);
+ assert.equal(T.konuAta([t],'c2',null),true);const expected=JSON.parse(before);expected.courseId='c2';expected.topicId=null;
+ assert.equal(JSON.stringify(t),JSON.stringify(expected));
+});
+
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'studyos-paket-test-'));
 const put=(name,data)=>{const f=path.join(dir,name);fs.writeFileSync(f,JSON.stringify(data));return f;};
 const output=path.join(dir,'out.json'),part=path.join(dir,'part.json'),topics=put('topics.json',['Alt']);
