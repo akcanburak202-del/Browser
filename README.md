@@ -41,6 +41,11 @@ Aynı yerdeki **📦 Paket ekle**, dışarıda hazırlanmış kart destesi / tes
 
 ### İç bağlantılar
 
+Not önizlemesi Markdown tablolarını satır ve sütunlarla gösterir. Başlık satırından
+sonra `|---|---|` gibi bir ayraç kullanılır; geniş tablolar yatay kaydırılır.
+Önceden yüklenen paketlerdeki tablolar da otomatik görüntülenir, yeniden yüklemek gerekmez.
+Hücre içinde düz `|` işareti için `\|` yazılabilir; kod örnekleri tabloya dönüştürülmez.
+
 Not içinde `[[Başlık]]` yazınca otomatik tamamlama açılır ve bağlantı oluşur:
 
 | Yazım | Nereye gider |

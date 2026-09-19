@@ -189,6 +189,11 @@ Script blokları sırayla:
   `wlFind(p,origin)` önce kaynak notun ders/ana konusunu, sonra dersini tercih eder;
   bulunamazsa eski genel aramayı kullanır. Bağlantı haritası ve geri bağlantılar da bunu kullanır.
   Nottan üretilen desteler ders ve ana konuyu devralır.
+- **Markdown tabloları önizlemede çizilir (4.5.1).** `mdTableRow` boru ayracını ve `\|`
+  kaçışını okur; başlıkla aynı sütun sayılı `---`/`:---:`/`---:` ayraç satırı gerekir.
+  `mdInline` hücrelerde de kullanılır. Kod blokları/satır içi kod önce korunur; ham HTML
+  kaçırılır. Fazla sütunlu satır kesilmez, metin olarak kalır. `.md-table-wrap` geniş
+  tabloları kendi alanında kaydırır. Not gövdesi ve paket biçimi değişmez; yeniden alım gerekmez.
 - **Sözlük de ortak ders → ana konu → terim kütüphanesini kullanır (4.5).**
   v2 terim alımı ders+ana konu+terim adıyla, v1 eski genel ad kuralıyla eşleşir.
   `TERM_MAP` artık bir kelimeyi birden fazla terim kimliğine bağlar. `terimAdaylari` önce

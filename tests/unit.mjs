@@ -665,6 +665,17 @@ dogru("md satır içi kod", T.md("`kod`").includes("<code>kod</code>"));
 dogru("md liste", T.md("- bir\n- iki").includes("<li>bir</li>"));
 dogru("md HTML kaçışı", T.md("<script>x</script>").includes("&lt;script&gt;"));
 dogru("md alıntı", T.md("> söz").includes("<blockquote>söz</blockquote>"));
+const tablo=T.md('| Özellik | A | B |\n|---|:---:|---:|\n| **Sıklık** | %20 | <30 |\n| Boş | |');
+dogru("md tablo başlık, hücre, hizalama ve boş hücre", tablo.includes('<thead><tr><th scope="col" style="text-align:left">Özellik</th>')&&tablo.includes('<td style="text-align:center">%20</td>')&&tablo.includes('<td style="text-align:right">&lt;30</td>')&&tablo.includes('<b>Sıklık</b>')&&tablo.includes('<td style="text-align:right"></td>'));
+dogru("md dış borusuz tablo ve CRLF", T.md('A | B\r\n--- | ---\r\nx | y').includes('<table>'));
+dogru("md kaçırılmış boru ve kod içindeki boru sütun açmaz", T.md('| A | B |\n|---|---|\n| a\\|b | `x|y` |').includes('<td style="text-align:left">a|b</td><td style="text-align:left"><code>x|y</code></td>'));
+dogru("md normal borulu metin tablo olmaz", !T.md('TUSDATA | Başlık\nBir | cümle').includes('<table>'));
+dogru("md geçersiz ayraç tablo olmaz", !T.md('| A | B |\n|---|kelime|\n|x|y|').includes('<table>'));
+dogru("md fazla sütun kaybolmaz", T.md('| A | B |\n|---|---|\n|x|y|z|').includes('|x|y|z|'));
+dogru("md başlık-ayraç sütun farkı tablo olmaz", !T.md('| A | B |\n|---|---|---|').includes('<table>'));
+const kodOrnegi='| A | B |\n|---|---|\n| **x** | y |';
+es("md çitli kod tabloya veya kalına dönüşmez, satırlar korunur", T.md('```\n'+kodOrnegi+'\n```'), '<pre><code>'+kodOrnegi+'</code></pre>');
+dogru("md hücrede HTML çalıştırılmaz", T.md('| A | B |\n|---|---|\n| <img src=x onerror=alert(1)> | güvenli |').includes('&lt;img src=x onerror=alert(1)&gt;'));
 
 console.log(`  ${gecen} geçti${dusen ? `, ${dusen} DÜŞTÜ` : ""}`);
 process.exit(dusen ? 1 : 0);

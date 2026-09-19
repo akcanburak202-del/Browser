@@ -8,6 +8,8 @@ const p=await browser.newPage({viewport:{width:1024,height:768}}),errors=[];
 p.on('pageerror',e=>errors.push(e.message));
 let count=0;const check=(name,value)=>{assert.ok(value,name);console.log('✓ '+name);count++;};
 const state=()=>p.evaluate(()=>[...WINS.values()].find(w=>w.appId==='notes').state);
+const table='| Özellik | A | B | C | D |\n|---|:---:|---:|---|---|\n| **Karşılaştırma** | %20 | <30 | [[Özet]] | a\\|b |\n| İkinci satır | `x|y` | 2 | 3 | <img src=x onerror=alert(1)> |';
+const editedBody='# Düzenlendi\n\nSoru :: Cevap\n[[Özet]]\n\n'+table;
 try{
  await p.goto(new URL('../index.html',import.meta.url).href);
  await p.waitForFunction(()=>typeof openApp==='function');
@@ -33,9 +35,13 @@ try{
  await p.click('[data-wl="Özet"]');check('Aynı adlı not bağlantısı kendi konusuna gider',(await state()).id==='target');
  check('Geri bağlantı doğru notta görünür',await p.locator('[data-bl="note"]').count()===1);
  await p.click('[data-bl="note"]');await p.click('[data-a="prev"]');
- await p.fill('[data-a="body"]','# Düzenlendi\n\nSoru :: Cevap\n[[Özet]]');await p.click('[data-nav="topic"]');
+ await p.fill('[data-a="body"]',editedBody);await p.click('[data-nav="topic"]');
  check('Editörden geri dönünce aynı not listesi açılır',await p.locator('[data-n="note"]').count()===1&&(await state()).id===null);
  await p.click('[data-n="note"]');check('Düzenlenen metin korunur',await p.locator('.md-prev').innerText().then(x=>x.includes('Düzenlendi')));
+ check('Önizlemede tablo gerçek başlık ve hücrelerle çizilir',await p.locator('.md-prev thead th').count()===5&&await p.locator('.md-prev tbody td').count()===10);
+ check('Tablo hücrelerinde biçim ve not bağlantısı korunur',await p.locator('.md-prev td b').innerText()==='Karşılaştırma'&&await p.locator('.md-prev td [data-wl="Özet"]').count()===1&&await p.locator('.md-prev td code').innerText()==='x|y');
+ check('Tablo hücresindeki HTML metin olarak kalır',await p.locator('.md-prev td img').count()===0&&await p.locator('.md-prev tbody tr').last().innerText().then(x=>x.includes('<img src=x onerror=alert(1)>')));
+ await p.click('.md-prev td [data-wl="Özet"]');check('Tablodaki bağlantı hedef notu açar',(await state()).id==='target');await p.click('[data-bl="note"]');
  await p.click('[data-a="tocards"]');check('Nottan üretilen deste ders ve konuyu devralır',await p.evaluate(()=>DB.decks[0].courseId==='d'&&DB.decks[0].topicId==='r'&&DB.cards.length===1));
  await p.click('[data-nav="topic"]');p.once('dialog',d=>d.accept('Yeni konu notu'));await p.click('[data-newitem]');
  check('Yeni not seçili ders ve ana konuyu devralır',await p.evaluate(()=>DB.notes.at(-1).courseId==='d'&&DB.notes.at(-1).topicId==='r')&&await p.locator('[data-a="body"]').count()===1);
@@ -63,11 +69,14 @@ try{
   check(`${theme} ${width}×${height}: not listesi ve gezinme sığar`,await p.evaluate(()=>[...document.querySelectorAll('.library-path button,[data-n],[data-bulk]')].every(b=>{const r=b.getBoundingClientRect();return r.x>=0&&r.right<=innerWidth&&r.y>=0&&r.bottom<=innerHeight;})));
   await p.click('[data-n="note"]');
   check(`${theme} ${width}×${height}: editör ve eylemler sığar`,await p.evaluate(()=>[...document.querySelectorAll('.library-path button,[data-a="prev"],[data-a="move"],.md-prev')].every(b=>{const r=b.getBoundingClientRect();return r.width>0&&r.x>=0&&r.right<=innerWidth&&r.y>=0&&r.bottom<=innerHeight;})));
+  check(`${theme} ${width}×${height}: tablo önizlemeyi taşırmaz ve kendi alanında kayar`,await p.evaluate(()=>{const t=document.querySelector('.md-table-wrap'),v=document.querySelector('.md-prev');t.scrollLeft=100;return t.getBoundingClientRect().right<=v.getBoundingClientRect().right&&v.scrollWidth<=v.clientWidth+1&&(t.scrollWidth<=t.clientWidth||t.scrollLeft>0)&&(innerWidth>768||t.scrollWidth>t.clientWidth);}));
+  check(`${theme} ${width}×${height}: tablo başlığı tema renklerini kullanır`,await p.evaluate(()=>{const t=getComputedStyle(document.querySelector('.md-prev th'));return t.backgroundColor!=='rgba(0, 0, 0, 0)'&&t.color!==t.backgroundColor;}));
   if(process.env.STUDYOS_SCREENSHOTS){fs.mkdirSync(process.env.STUDYOS_SCREENSHOTS,{recursive:true});await p.screenshot({path:`${process.env.STUDYOS_SCREENSHOTS}/notlar-${theme}-${width}.png`});}
   await p.click('[data-nav="topic"]');
  }
  await p.evaluate(()=>saveNow());await p.reload();await p.waitForFunction(()=>typeof openApp==='function');
  check('Yeniden açılışta notun konusu ve metni korunur',await p.evaluate(()=>DB.notes.find(n=>n.id==='old').topicId==='r'&&DB.notes.find(n=>n.id==='note').body.includes('Düzenlendi')));
+ check('Tablo önizlemesi kaynak notu değiştirmez',await p.evaluate(body=>DB.notes.find(n=>n.id==='note').body===body,editedBody));
  check('JavaScript hatası yok',errors.length===0);
  console.log(`\n${count} not arayüz testi geçti`);
 }finally{await browser.close();}

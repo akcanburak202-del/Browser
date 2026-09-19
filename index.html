@@ -215,7 +215,11 @@ textarea.inp{resize:none;line-height:1.6}
 .md-prev mark{background:color-mix(in srgb,var(--s4) 45%,transparent);color:inherit;padding:0 3px;border-radius:3px}
 .md-prev ul,.md-prev ol{padding-left:22px}
 .md-prev hr{border:none;border-top:1px solid var(--border);margin:1em 0}
-.md-prev table{border-collapse:collapse}.md-prev td,.md-prev th{border:1px solid var(--border);padding:5px 9px}
+.md-prev .md-table-wrap{max-width:100%;overflow-x:auto;margin:.8em 0;border-radius:8px}
+.md-prev .md-table-wrap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.md-prev table{border-collapse:collapse;min-width:100%;line-height:1.5}
+.md-prev td,.md-prev th{border:1px solid var(--border);padding:8px 12px;min-width:8rem;max-width:24rem;overflow-wrap:anywhere;vertical-align:top;text-align:left}
+.md-prev th{background:var(--surface-3);font-weight:600}.md-prev tbody tr:nth-child(even){background:var(--surface-2)}
 /* Kartlar */
 .flash{flex:1;display:grid;place-items:center;padding:22px;text-align:center}
 .flash-card{width:100%;max-width:520px;min-height:190px;display:grid;place-items:center;padding:26px;
@@ -445,7 +449,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="4.5", VERSION_DATE="2026-09-15";   /* Ayarlar ve terminalde görünür */
+const VERSION="4.5.1", VERSION_DATE="2026-09-19";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1335,12 +1339,8 @@ const bytesFmt=n=>n>1048576?(n/1048576).toFixed(1)+" MB":n>1024?Math.round(n/102
 function storageUsed(){ try{ return new Blob([JSON.stringify(DB)]).size; }catch(e){ return JSON.stringify(DB).length; } }
 
 /* --------- markdown (mini) --------- */
-function md(src){
-  let s=esc(src);
-  s=s.replace(/```([\s\S]*?)```/g,(m,c)=>`<pre><code>${c.trim()}</code></pre>`);
-  s=s.replace(/^### (.*)$/gm,"<h3>$1</h3>").replace(/^## (.*)$/gm,"<h2>$1</h2>").replace(/^# (.*)$/gm,"<h1>$1</h1>");
-  s=s.replace(/^&gt; (.*)$/gm,"<blockquote>$1</blockquote>");
-  s=s.replace(/^---$/gm,"<hr>");
+/* Girdi önceden esc() ile kaçırılmıştır; tablo hücreleri aynı satır içi biçimi kullanır. */
+function mdInline(s){
   s=s.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/(^|\W)\*([^*\n]+)\*/g,"$1<i>$2</i>");
   s=s.replace(/==([^=]+)==/g,"<mark>$1</mark>");
   s=s.replace(/\[\[([^\]\n]+)\]\]/g,(m,raw)=>{
@@ -1349,12 +1349,52 @@ function md(src){
   s=s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,(m,a,u)=>
     u.startsWith("idb:")?`<img data-media="${u}" alt="${a}">`
     :/^(data:image|https?:)/.test(u)?`<img src="${u}" alt="${a}">`:m);
-  s=s.replace(/`([^`\n]+)`/g,"<code>$1</code>");
-  s=s.replace(/^\s*[-*] (.*)$/gm,"<li>$1</li>").replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g,"<ul>$1</ul>");
   s=s.replace(/(^|[^("'=\w])(https?:\/\/[^\s<]+)/g,(m,pre,u)=>{
     const [ic,host]=linkBadge(u); return `${pre}<a class="lnk" href="${u}" target="_blank" rel="noopener">${ic} ${host||"bağlantı"}</a>`;});
+  return s;
+}
+function mdTableRow(line){
+  const s=line.trim(),cells=[];let cell="",first=-1,last=-1;
+  for(let i=0;i<s.length;i++){
+    if(s[i]==="\\"&&(s[i+1]==="|"||s[i+1]==="\\")){cell+=s[++i];continue;}
+    if(s[i]==="|"){if(first<0)first=i;last=i;cells.push(cell.trim());cell="";}
+    else cell+=s[i];
+  }
+  if(first<0)return null;
+  cells.push(cell.trim());if(first===0)cells.shift();if(last===s.length-1)cells.pop();
+  return cells;
+}
+function md(src){
+  let s=esc(src).replace(/\r\n?/g,"\n"),prefix="\u0000MD";
+  while(s.includes(prefix))prefix+="_";
+  const blocks=[],hold=html=>{const key=prefix+blocks.length+"\u0000";blocks.push([key,html]);return key;};
+  // Kod örneklerinin içindeki borular, yıldızlar ve satır sonları yorumlanmaz.
+  s=s.replace(/```([\s\S]*?)```/g,(m,c)=>hold(`<pre><code>${c.trim()}</code></pre>`));
+  s=s.replace(/`([^`\n]+)`/g,(m,c)=>hold(`<code>${c}</code>`));
+  const lines=s.split("\n"),out=[];
+  for(let i=0;i<lines.length;i++){
+    const head=mdTableRow(lines[i]),sep=mdTableRow(lines[i+1]||"");
+    if(!head?.length||head.length!==sep?.length||!sep.every(x=>/^:?-{3,}:?$/.test(x))){out.push(lines[i]);continue;}
+    const align=sep.map(x=>x.startsWith(":")?(x.endsWith(":")?"center":"left"):(x.endsWith(":")?"right":"left"));
+    const row=(cells,tag)=>`<tr>${head.map((_,j)=>`<${tag}${tag==="th"?' scope="col"':""} style="text-align:${align[j]}">${mdInline(cells[j]||"")}</${tag}>`).join("")}</tr>`;
+    const body=[];i++;
+    while(i+1<lines.length){
+      const cells=mdTableRow(lines[i+1]);
+      // Fazla sütunları sessizce atmak yerine uyumsuz satırı normal metin olarak koru.
+      if(!cells||cells.length>head.length)break;
+      body.push(row(cells,"td"));i++;
+    }
+    out.push(hold(`<div class="md-table-wrap" role="region" aria-label="Tablo" tabindex="0"><table><thead>${row(head,"th")}</thead><tbody>${body.join("")}</tbody></table></div>`));
+  }
+  s=out.join("\n");
+  s=s.replace(/^### (.*)$/gm,"<h3>$1</h3>").replace(/^## (.*)$/gm,"<h2>$1</h2>").replace(/^# (.*)$/gm,"<h1>$1</h1>");
+  s=s.replace(/^&gt; (.*)$/gm,"<blockquote>$1</blockquote>");
+  s=s.replace(/^---$/gm,"<hr>");
+  s=mdInline(s);
+  s=s.replace(/^\s*[-*] (.*)$/gm,"<li>$1</li>").replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g,"<ul>$1</ul>");
   s=s.replace(/\n{2,}/g,"<br><br>").replace(/\n/g,"<br>");
   s=s.replace(/<br>(<\/?(h1|h2|h3|ul|li|pre|blockquote|hr))/g,"$1");
+  for(let i=blocks.length-1;i>=0;i--)s=s.split(blocks[i][0]).join(blocks[i][1]);
   return s;
 }
 
