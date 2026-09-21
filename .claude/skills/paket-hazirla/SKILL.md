@@ -1,6 +1,6 @@
 ---
 name: paket-hazirla
-description: "StudyOS için sınav, ders ve konuya özel kaynaklı kart/test/terim paketi üretir ve doğrular. 'Paket hazırla', 'quiz/kart destesi hazırla' veya sınav+ders+konu ile içerik istendiğinde kullan. Fable/Opus ve Astra Pro araştırma profillerini destekler. Skill değerlendirmesi veya uygulama kodu değişikliği, içerik üretimini başlatmaz."
+description: "StudyOS için sınav, ders ve konuya özel kaynaklı kart/test/terim paketi üretir ve doğrular. 'Paket hazırla', 'quiz/kart destesi hazırla' veya sınav+ders+konu ile içerik istendiğinde kullan. Kullanıcı kitap kaynağı verirse önce kitap-paket-hazirla skill’ine yönlendir. Kaynaksız araştırmada Fable/Opus ve Astra Pro profillerini destekler. Skill değerlendirmesi veya uygulama kodu değişikliği, içerik üretimini başlatmaz."
 ---
 
 # Konuya özel çalışma paketi
@@ -8,6 +8,16 @@ description: "StudyOS için sınav, ders ve konuya özel kaynaklı kart/test/ter
 Çıktı: `paketler/<sinav>-<ders>-<konu>.json` ve eşlik eden `.denetim.json`.
 Uygulamada **Ayarlar → Veri → Paket ekle** ile JSON alınır; Quiz, Kartlar, Notlar ve Sözlük'te
 **ders → ana konu → test/deste/not/terim** altında görünür. Biçim sözleşmesi `PAKET.md`.
+
+## Önce kaynak türünü seç
+
+Kullanıcı kitap fotoğrafı, PDF, tarama veya kitap metni verdiyse ya da "kitaptan/bu
+sayfalardan" diyorsa **doğrudan [kitap-paket-hazirla](../kitap-paket-hazirla/SKILL.md)**
+akışına geç. Aşağıdaki araştırma adımlarını, `brief.md` veya model profillerini yükleme.
+Kitap akışı bağımsızdır; notlar varsayılan olarak kapsamlıdır ve rutin web denetimi yapmaz.
+Kullanıcı ayrıca güncellik araştırması istiyorsa bunu kaynak aktarımından ayrı yürüt.
+
+Aşağıdaki kurallar kaynaksız konu araştırması içindir.
 
 ## Girdi ve profil
 

@@ -1,5 +1,9 @@
 # Ortak araştırma ve içerik sözleşmesi
 
+Bu sözleşme kaynaksız araştırma içindir. Verilen kitap sayfalarını dönüştürürken
+`../kitap-paket-hazirla/SKILL.md` ve onun kapsam/kanıt sözleşmesini kullan; aşağıdaki
+internet doğrulaması ve bilgi eleme kurallarını kitap akışına taşıma.
+
 Fable/Opus araştırmacıları ve Astra Pro aynı kalite ölçütlerini kullanır. Girdiler: sınav,
 ders, ana konu, sabit alt konu listesi, öğrenme hedefleri, test adları, şık sayısı, not tercihi.
 

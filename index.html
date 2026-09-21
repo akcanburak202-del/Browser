@@ -449,7 +449,7 @@ textarea.inp{resize:none;line-height:1.6}
    ÇEKİRDEK: depolama, yardımcılar, pencere yöneticisi
    ============================================================ */
 const KEY="studyos.v1";
-const VERSION="4.5.1", VERSION_DATE="2026-09-19";   /* Ayarlar ve terminalde görünür */
+const VERSION="4.5.2", VERSION_DATE="2026-09-21";   /* Ayarlar ve terminalde görünür */
 const uid=()=>Math.random().toString(36).slice(2,10);
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -2654,7 +2654,17 @@ const PAKET_SURUM=2;
    kopyalanabilsin diye uygulamanın içinde duruyor. */
 const PAKET_TALIMAT=`StudyOS paketi hazırla.
 
-Çıktı: SADECE tek bir JSON nesnesi. Açıklama, başlık, markdown kod bloğu ekleme.
+Uygulamaya alınacak çıktı dosyası yalnız tek bir JSON nesnesi içersin; içine açıklama veya markdown kod bloğu ekleme. Kaynak/kanıt ve kapsam raporlarını ayrı tut.
+
+Kaynak türü:
+- Kitap fotoğrafı/PDF/metni verdiysem veya "kitaptan" dediysem kitap akışını kullan. Repo erişimin varsa .claude/skills/kitap-paket-hazirla/SKILL.md oku; eski araştırma brief/profillerini yükleme. Kaynaksız araştırmada paket-hazirla kullan.
+- Kitap akışında rutin internet doğrulaması yapma. Ayrıca istediğim güncellik/ek araştırmayı ayrı tut; bağlayıcı üst talimatın gerektirdiği kontrolü yalnız ilgili bilgiyle sınırla.
+- Önce verilen her sayfanın tüm anlamlı bilgilerini çıkar; sonra notlara aktar. Tablo hücreleri, dipnotlar, listelerin tüm üyeleri, koşullar, istisnalar, eşikler, birimler, olumsuzluklar, şema dalları ve mnemonikler kaybolmasın. Görseli arşivlemek notlara aktarımın yerine geçmez.
+- Kitap kaynaklı tam pakette ayrıntılı notlar + seçilmiş kart/quiz + yararlı terimler varsayılandır. Açıkça yalnız quiz/kart veya dar kapsam istemişsem buna uy ve tam kaynak aktarımı yaptığını söyleme.
+- Kitabın sınava yönelik genellemelerini, klasik eşleşmelerini ve "en sık/ilk tercih" ifadelerini sırf istisnası olabilir diye eleme. Kaynak bağlamını koru; sıradan sınav kuralını sürekli uyarılarla ağırlaştırma.
+- Okunamayanı tahmin etme. Somut baskı hatasını veya gerçek kaynak içi çelişkiyi notta konumuyla işaretle; sessizce silme/düzeltme veya doğru cevap diye ezberletme. Kaynak dışı ek bilgiyi açıkça ayır.
+- Kart/quiz için ayırt ettirici ve hatırlanmaya değer hedefleri seç; her ayrıntıyı soruya dönüştürme. Tek savunulabilir cevap, makul çeldirici ve kaynak destekli açıklama kullan; zorla vaka veya sayıyı dolduran tekrar üretme.
+- Üretim sonunda kaynak → bilgi → not eşleşmesini kontrol et. Başlık/sayfa/kart sayısını eksiksizlik kanıtı sayma. Yapılmış kontrolü gereksiz tekrarlama; okunamayan veya seçime göre dışarıda kalan yerleri açıkça bildir. Biçim doğrulaması kaynak kapsamını veya önizleme görünümünü kanıtlamaz.
 
 Biçim:
 {
@@ -2686,13 +2696,13 @@ Kurallar:
 - Her soruda açıklama ve konu zorunlu; sorunun konusu anaKonu veya konular listesindeki bir alt konudur.
 - Ders → ana konu → test/deste/not/terim düzeni bu alanlardan kurulur; adlardan çıkarım yapılmaz.
 - Notlar ve terimler paketin ders ve anaKonu alanlarını devralır; her öğeye ayrıca konu alanı ekleme.
-- Her kartın ön yüzü TEK bir şey sorsun; arka yüz 1-3 cümle.
+- Her kartın ön yüzü tek bir hatırlama hedefi sorsun; arka yüz kısa ama yeterli olsun. Cümle kotası yüzünden koşul veya istisna kaybetme.
 - Aynı ön yüz iki kez geçmesin.
-- İstemediğin bölümü boş dizi bırak (ör. "testler": []). "notlar" isteğe bağlıdır: yalnızca konu anlatımı da istenmişse yaz.
+- Kullanıcının istemediği bölümü boş dizi bırak (ör. "testler": []). Notlar şemada isteğe bağlıdır; kitap kaynaklı tam pakette varsayılan olarak kapsamlı not üret. Kaynaksız araştırmada notları istenmişse yaz.
 - Not içeriği markdown'dır (#, ##, -, **kalın**, tablo). Başka bir notun başlığını [[Başlık]] ile bağlayabilirsin; sözlük terimleri notta kendiliğinden işaretlenir.
 - Kart, soru ve terimlerde görsel, HTML, LaTeX, markdown yok — düz metin. Satır sonu gerekiyorsa \\n kullan.
 - Türkçe yaz.
-- Emin olmadığın bilgiyi yazma; uydurma tanım ezberlenirse zararlı olur.
+- Bilgi uydurma. Kitap akışında okuma belirsizliğini normal sınav genellemesinden ayır; somut sorunlu ifadeyi etiketli notta koru ve kesin kart/soruya dönüştürme. Kaynaksız araştırmada desteklenmeyen iddiayı çıkarıp nedenini bildir.
 
 Konu: <BURAYA KONUYU YAZ>
 İstediğim: <ör. 30 kart + 15 çoktan seçmeli soru>`;
