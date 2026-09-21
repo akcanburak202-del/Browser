@@ -94,7 +94,13 @@ Bağlantısı olmayan eski içerikler **Konusu belirlenmemiş** altında bulunur
 ile düzenlenir. Aynı ders içinde sınıflama değişikliği soru alt konularını, kart tekrar
 tarihlerini ve çözüm geçmişini korur. Yeni test/deste açık ders ve konuyu otomatik alır.
 
-`paket-hazirla` ortak kalite kuralları ve ayrı **Fable/Opus** / **Astra Pro** profilleri
+**Kitap kaynağı verildiğinde** bağımsız `kitap-paket-hazirla` kullanılır. Örnek:
+“Bu kitap fotoğraflarından TUS Dahiliye paketi hazırla.” Anlamlı ayrıntılar konu
+notlarında korunur; seçilmiş bilgiler kart ve quiz olur. Rutin internet doğrulaması
+yapılmaz. Sayfa/bilgi/not bağlantıları ayrıca denetlenir; okunamayan yerler bildirilir.
+Ayrıntılar `.claude/skills/kitap-paket-hazirla/SKILL.md` içindedir.
+
+**Kaynaksız araştırmada** `paket-hazirla` ortak kalite kuralları ve ayrı **Fable/Opus** / **Astra Pro** profilleri
 içerir. Kullanım örneği: “Astra Pro profiliyle TUS Dahiliye Romatoloji paketi hazırla.”
 Araştırma özelliği ve repo/terminal erişimi ortamda bulunmalıdır; skill bunları kendisi açmaz.
 Yeni v2 paketler öğe düzeyinde kaynak denetim dosyasıyla üretilir. Ayrıntılar `PAKET.md` ve

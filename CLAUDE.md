@@ -167,7 +167,12 @@ Script blokları sırayla:
   `+ Şık` / ✕ ile eklenip silinir, silince doğru şık (`a`) kayar, doğru şık silinirse 0 olur.
   Paket alma (`paketUygula`) aralık dışı şık sayısını atlar. Yeni bir yol eklerken `4` yazma,
   sabitleri kullan. Hazır paketler `paketler/` klasöründe (ör. `tus-romatoloji.json`).
-- **Paket üretimi `paket-hazirla` skill'i ile** (`.claude/skills/paket-hazirla/`).
+- **Kitaptan paket üretimi `kitap-paket-hazirla` ile** (`.claude/skills/kitap-paket-hazirla/`).
+  Verilen fotoğraf/PDF/metni kapsamlı notlara, seçilmiş kart ve quizlere dönüştürür.
+  Rutin web doğrulaması yapmaz; araştırma brief/profillerini miras almaz. Kaynak → bilgi
+  → not bağlantısını kendi kapsam/kanıt sözleşmesiyle denetler. Denetleyici testi:
+  `python3 tests/kitap-kapsam.py`. Kullanıcının açık ürün/kapsam seçimi önceliklidir.
+- **Kaynaksız araştırmayla paket üretimi `paket-hazirla` ile** (`.claude/skills/paket-hazirla/`).
   Ortak kurallar + Fable/Opus ve Astra Pro profilleri ayrıdır. Astra profilinde Fable
   orkestrasyonu ve Opus çağrıları zorunlu değildir; gerçekten erişilen araştırma araçları kullanılır.
   Her yeni içerik öğesi `brief.md` sözleşmesiyle kaynak/bölüm bağlantısı taşır. Birleştirici
